@@ -107,6 +107,7 @@ lsm/
 
 # Results from network monitoring test.
 results/
+Accuracy_Results.txt
 
 # Results from network monitoring test.
 examples/saved_checkpoints

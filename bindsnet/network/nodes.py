@@ -14,12 +14,12 @@ class Nodes(torch.nn.Module):
 
     def __init__(
         self,
-        n: Optional[int] = None,#这一层的神经��的个数
-        shape: Optional[Iterable[int]] = None,#这一层的维度
-        traces: bool = False,#是否记录spike traces
-        traces_additive: bool = False,#是否额外� 上去spike trace
-        tc_trace: Union[float, torch.Tensor] = 20.0,#时间常数
-        trace_scale: Union[float, torch.Tensor] = 1.0,#spike trace的缩放系�?        
+        n: Optional[int] = None,
+        shape: Optional[Iterable[int]] = None,
+        traces: bool = False,
+        traces_additive: bool = False,
+        tc_trace: Union[float, torch.Tensor] = 20.0,
+        trace_scale: Union[float, torch.Tensor] = 1.0,
         sum_input: bool = False,
         learning: bool = True,
         **kwargs,
@@ -97,28 +97,28 @@ class Nodes(torch.nn.Module):
         :param x: Inputs to the layer.
         """
         import torch;
-# Ideal
-        P_on = 1
-        P_off = 1
-        Gon = 100
-        Goff = 1000
-        alpha_on = 1
-        alpha_off = 1
-        v_on = -1
-        v_off = 1
-        k_on = -100
-        k_off = 100
-        delta_t = 1e-3
-        
-        trans_ratio_z_New= 1/(Goff-Gon)
-        pos = torch.ones_like(self.s)
-        neg = torch.ones_like(self.s)
-        pos = pos * 100.00
-        kz = 1-self.trace_decay
-        neg = neg * ((1-kz/(delta_t*k_on))*v_on)
-        
-        sigma_relative = 1e10 #0.0 #0.023409696857178863 #0.2*3 #
-        sigma_absolute = 0.0 #0.01 #0.0034577612128620715 #0.03*3 #
+# # Ideal
+#         P_on = 1
+#         P_off = 1
+#         Gon = 100
+#         Goff = 1000
+#         alpha_on = 1
+#         alpha_off = 1
+#         v_on = -1
+#         v_off = 1
+#         k_on = -100
+#         k_off = 100
+#         delta_t = 1e-3
+#
+#         trans_ratio_z_New= 1/(Goff-Gon)
+#         pos = torch.ones_like(self.s)
+#         neg = torch.ones_like(self.s)
+#         pos = pos * 100.00
+#         kz = 1-self.trace_decay
+#         neg = neg * ((1-kz/(delta_t*k_on))*v_on)
+#
+#         sigma_relative = 1e10 #0.0 #0.023409696857178863 #0.2*3 #
+#         sigma_absolute = 0.0 #0.01 #0.0034577612128620715 #0.03*3 #
         
 # nio
         # D = 10;
@@ -150,13 +150,13 @@ class Nodes(torch.nn.Module):
 #         k_on = -737387387.39
 #         k_off = 113513.51
 #         delta_t = 1e-7
-        
+#
 #         trans_ratio_z_New= 1/(Goff-Gon)
 #         pos = torch.ones_like(self.s)
 #         neg = torch.ones_like(self.s)
 #         pos = pos * 6.00
-#         neg = neg * -2.55    
-        
+#         neg = neg * -2.55
+#
 #         sigma_relative = 0.10155065368435409
 #         sigma_absolute = 0.001842624587483208
         
@@ -181,62 +181,57 @@ class Nodes(torch.nn.Module):
   
 #         sigma_relative = 0.08 #0.023409696857178863 #0.2*3 #
 #         sigma_absolute = 0 # 0.0034577612128620715 #0.03*3 #
-        
-        self.s1 = self.s.float()
-        # x = np.array(x)
-        self.s1 = torch.where(self.s1==0, neg, self.s1)
-        self.s1 = torch.where(self.s1==1, pos, self.s1)
-        # print(self.s)               
-                        
-        self.x1 = torch.where(self.s1>0, \
-                              self.x1+delta_t*(k_off*(self.s1/v_off-1)**alpha_off)*(1-self.x1)**(P_off), \
-                              self.x1+delta_t*(k_on*(self.s1/v_on-1)**alpha_on)*(self.x1)**(P_on))
-        
-        lower_limit = torch.ones_like(self.s) * 0.00
-        upper_limit = torch.ones_like(self.s) * 1.00
-            
-        self.x1 = torch.where(self.x1<0, lower_limit, self.x1)
-        self.x1 = torch.where(self.x1>1, upper_limit, self.x1)
-        
-        ############## Add device variation
 
-        normal_relative = torch.normal(0., sigma_relative, size = self.x1.size()).to(self.x1.device)
-        normal_absolute = torch.normal(0., sigma_absolute, size = self.x1.size()).to(self.x1.device)
-        
-        device_v = torch.mul(self.x1, normal_relative) + normal_absolute
-        
-        self.x2 = self.x1 + device_v
-        
-        self.x2 = torch.where(self.x2<0, lower_limit, self.x2)
-        self.x2 = torch.where(self.x2>1, upper_limit, self.x2)
-        
-        self.x = Goff*self.x2 + Gon*(1-self.x2)
-        # self.x = Goff*self.x1 + Gon*(1-self.x1)
-        self.x = (self.x-Gon)*trans_ratio_z_New                       
-                        
-                
-        if self.sum_input:
-            # Add current input to running sum
-            self.summed += x.float()
-                      
-        #   # language=rst
-        # print('memristor test')
-        # """
-        # Abstract base class method for a single simulation step.
-        # :param x: Inputs to the layer.
-        # """
-        # if self.traces:
-        #     # Decay and set spike traces.
-        #     self.x *= self.trace_decay
-
-        #     if self.traces_additive:
-        #         self.x += self.trace_scale * self.s.float()
-        #     else:
-        #         self.x.masked_fill_(self.s.bool(), self.trace_scale)
-
+        #########################################################
+        # self.s1 = self.s.float()
+        # # x = np.array(x)
+        # self.s1 = torch.where(self.s1==0, neg, self.s1)
+        # self.s1 = torch.where(self.s1==1, pos, self.s1)
+        # # print(self.s)
+        #
+        # self.x1 = torch.where(self.s1>0, \
+        #                       self.x1+delta_t*(k_off*(self.s1/v_off-1)**alpha_off)*(1-self.x1)**(P_off), \
+        #                       self.x1+delta_t*(k_on*(self.s1/v_on-1)**alpha_on)*(self.x1)**(P_on))
+        #
+        # lower_limit = torch.ones_like(self.s) * 0.00
+        # upper_limit = torch.ones_like(self.s) * 1.00
+        #
+        # self.x1 = torch.where(self.x1<0, lower_limit, self.x1)
+        # self.x1 = torch.where(self.x1>1, upper_limit, self.x1)
+        #
+        # ############## Add device variation
+        #
+        # normal_relative = torch.normal(0., sigma_relative, size = self.x1.size()).to(self.x1.device)
+        # normal_absolute = torch.normal(0., sigma_absolute, size = self.x1.size()).to(self.x1.device)
+        #
+        # device_v = torch.mul(self.x1, normal_relative) + normal_absolute
+        #
+        # self.x2 = self.x1 + device_v
+        #
+        # self.x2 = torch.where(self.x2<0, lower_limit, self.x2)
+        # self.x2 = torch.where(self.x2>1, upper_limit, self.x2)
+        #
+        # self.x = Goff*self.x2 + Gon*(1-self.x2)
+        # # self.x = Goff*self.x1 + Gon*(1-self.x1)
+        # self.x = (self.x-Gon)*trans_ratio_z_New
+        #
+        #
         # if self.sum_input:
-        #     # Add current input to running sum.
-            # self.summed += x.float()
+        #     # Add current input to running sum
+        #     self.summed += x.float()
+
+        if self.traces:
+            # Decay and set spike traces.
+            self.x *= self.trace_decay
+
+            if self.traces_additive:
+                self.x += self.trace_scale * self.s.float()
+            else:
+                self.x.masked_fill_(self.s.bool(), self.trace_scale)
+
+        if self.sum_input:
+            # Add current input to running sum.
+            self.summed += x.float()
 
 
     def reset_state_variables(self) -> None:
@@ -358,8 +353,6 @@ class Input(Nodes, AbstractInput):
         :param x: Inputs to the layer.
         """
         # Set spike occurrences to input values.
-        # print('\ninput x.shape')
-        # print(x.shape)
         self.s = x
 
         super().forward(x)
@@ -1134,9 +1127,9 @@ class DiehlAndCookNodes(Nodes):
         n: Optional[int] = None,
         shape: Optional[Iterable[int]] = None,
         traces: bool = False,
-        traces_additive: bool = False
+        traces_additive: bool = False,
         tc_trace: Union[float, torch.Tensor] = 20.0,
-        trace_scale: Union[float, torch.Tensor] = 1
+        trace_scale: Union[float, torch.Tensor] = 1,
         sum_input: bool = False,
         thresh: Union[float, torch.Tensor] = -52.0,
         rest: Union[float, torch.Tensor] = -65.0,
@@ -1218,9 +1211,6 @@ class DiehlAndCookNodes(Nodes):
         :param x: Inputs to the layer.
         """
         # Decay voltages and adaptive thresholds.
-        # print('\nexc x.shape')
-        # print(self.x.shape)
-        
         self.v = self.decay * (self.v - self.rest) + self.rest
         if self.learning:
             self.theta *= self.theta_decay
