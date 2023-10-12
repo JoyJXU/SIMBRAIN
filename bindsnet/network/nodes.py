@@ -22,6 +22,7 @@ class Nodes(torch.nn.Module):
         trace_scale: Union[float, torch.Tensor] = 1.0,
         sum_input: bool = False,
         learning: bool = True,
+        mem_device: dict = {},
         **kwargs,
     ) -> None:
         # language=rst
@@ -36,6 +37,7 @@ class Nodes(torch.nn.Module):
         :param trace_scale: Scaling factor for spike trace.
         :param sum_input: Whether to sum all inputs.
         :param learning: Whether to be in learning or testing.
+        :param mem_device: Memristor device to be used in learning.
         """
         super().__init__()
 
@@ -65,6 +67,9 @@ class Nodes(torch.nn.Module):
         self.register_buffer("s1", torch.ByteTensor())
 
         self.sum_input = sum_input  # Whether to sum all inputs.
+
+        self.device_name = mem_device['device_name']
+        self.c2c_variation = mem_device['c2c_variation']
 
         if self.traces:
             self.register_buffer("x1", torch.Tensor()) #xinjia
@@ -221,13 +226,14 @@ class Nodes(torch.nn.Module):
         #     self.summed += x.float()
 
         if self.traces:
-            # Decay and set spike traces.
-            self.x *= self.trace_decay
+            if self.device_name == 'trace':
+                # Decay and set spike traces.
+                self.x *= self.trace_decay
 
-            if self.traces_additive:
-                self.x += self.trace_scale * self.s.float()
-            else:
-                self.x.masked_fill_(self.s.bool(), self.trace_scale)
+                if self.traces_additive:
+                    self.x += self.trace_scale * self.s.float()
+                else:
+                    self.x.masked_fill_(self.s.bool(), self.trace_scale)
 
         if self.sum_input:
             # Add current input to running sum.
@@ -319,8 +325,9 @@ class Input(Nodes, AbstractInput):
         traces: bool = False,
         traces_additive: bool = False,
         tc_trace: Union[float, torch.Tensor] = 20.0,
-        trace_scale: Union[float, torch.Tensor] = 1,#1
+        trace_scale: Union[float, torch.Tensor] = 1,
         sum_input: bool = False,
+        mem_device: dict = {},
         **kwargs,
     ) -> None:
         # language=rst
@@ -334,6 +341,7 @@ class Input(Nodes, AbstractInput):
         :param tc_trace: Time constant of spike trace decay.
         :param trace_scale: Scaling factor for spike trace.
         :param sum_input: Whether to sum all inputs.
+        :param mem_device: Memristor device to be used in learning.
         """
         super().__init__(
             n=n,
@@ -343,6 +351,7 @@ class Input(Nodes, AbstractInput):
             tc_trace=tc_trace,
             trace_scale=trace_scale,
             sum_input=sum_input,
+            mem_device=mem_device
         )
 
     def forward(self, x: torch.Tensor) -> None:
@@ -1131,6 +1140,7 @@ class DiehlAndCookNodes(Nodes):
         tc_trace: Union[float, torch.Tensor] = 20.0,
         trace_scale: Union[float, torch.Tensor] = 1,
         sum_input: bool = False,
+        mem_device: dict = {},
         thresh: Union[float, torch.Tensor] = -52.0,
         rest: Union[float, torch.Tensor] = -65.0,
         reset: Union[float, torch.Tensor] = -65.0,
@@ -1153,6 +1163,7 @@ class DiehlAndCookNodes(Nodes):
         :param tc_trace: Time constant of spike trace decay.
         :param trace_scale: Scaling factor for spike trace.
         :param sum_input: Whether to sum all inputs.
+        :param mem_device: Memristor device to be used in learning.
         :param thresh: Spike threshold voltage.
         :param rest: Resting membrane voltage.
         :param reset: Post-spike reset voltage.
@@ -1171,6 +1182,7 @@ class DiehlAndCookNodes(Nodes):
             tc_trace=tc_trace,
             trace_scale=trace_scale,
             sum_input=sum_input,
+            mem_device=mem_device
         )
 
         self.register_buffer("rest", torch.tensor(rest))  # Rest voltage.

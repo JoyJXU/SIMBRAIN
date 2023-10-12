@@ -55,6 +55,8 @@ parser.add_argument("--update_inhibation_weights", type=int, default=500)
 parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
+parser.add_argument("--memristor_device", type=str, default='trace') #trace: original trace
+parser.add_argument("--c2c_variation", type=bool, default=True)
 parser.set_defaults(plot=False, gpu=True)
 
 args = parser.parse_args()
@@ -77,10 +79,11 @@ update_interval = args.update_interval
 plot = args.plot
 gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
+device_params = {'device_name': args.memristor_device, 'c2c_variation': args.c2c_variation}
 
 
 # %% Sets up Gpu use
-# os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
@@ -117,7 +120,8 @@ for test_cnt in range(multiple_test_no):
         theta_plus=0.05,
         tc_theta_decay=1e7,
         inpt_shape=(1, 28, 28),
-        nu=(1e-4, 1e-2), 
+        nu=(1e-4, 1e-2),
+        mem_device=device_params,
         batch_size=train_batch_size
     )
     

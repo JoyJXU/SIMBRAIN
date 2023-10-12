@@ -84,6 +84,7 @@ class Network(torch.nn.Module):
     def __init__(
         self,
         dt: float = 1.0,
+        mem_device: dict = {},
         batch_size: int = 1,
         learning: bool = True,
         reward_fn: Optional[Type[AbstractReward]] = None,
@@ -93,6 +94,7 @@ class Network(torch.nn.Module):
         Initializes network object.
 
         :param dt: Simulation timestep.
+        :param mem_device: Memristor device to be used in learning.
         :param batch_size: Mini-batch size.
         :param learning: Whether to allow connection updates. True by default.
         :param reward_fn: Optional class allowing for modification of reward in case of
@@ -101,6 +103,7 @@ class Network(torch.nn.Module):
         super().__init__()
 
         self.dt = dt
+        self.mem_device = mem_device
         self.batch_size = batch_size
 
         self.layers = {}
