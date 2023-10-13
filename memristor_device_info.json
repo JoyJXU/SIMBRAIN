@@ -1,0 +1,78 @@
+{
+    "ideal":
+    {
+        "P_on":1,
+        "P_off":1,
+        "G_on":100,
+        "G_off":1000,
+        "alpha_on":1,
+        "alpha_off":1,
+        "v_on":-1,
+        "v_off":1,
+        "k_on":-100,
+        "k_off":100,
+        "delta_t":1e-3,
+        "trans_ratio":1.1111e-3,
+        "vinput_pos": 100,
+        "vinput_neg": -1.4877,
+        "sigma_relative":0,
+        "sigma_absolute":0
+    },
+    "ferro":
+    {
+        "P_on":1.8,
+        "P_off":0.9,
+        "G_on":7.0e-8,
+        "G_off":9.0e-6,
+        "alpha_on":5,
+        "alpha_off":5,
+        "v_on":-2.0,
+        "v_off":1.4,
+        "k_on":-737387387.39,
+        "k_off":113513.51,
+        "delta_t":1.0e-7,
+        "trans_ratio":1.1198e5,
+        "vinput_pos": 6.0,
+        "vinput_neg": -2.55,
+        "sigma_relative":0.1032073708277878,
+        "sigma_absolute":0.005783083695110348
+    },
+    "hu":
+    {
+        "P_on":0.65,
+        "P_off":5,
+        "G_on":2.5e-10,
+        "G_off":1.85e-9,
+        "alpha_on":5,
+        "alpha_off":5,
+        "v_on":-2,
+        "v_off":2,
+        "k_on":-3.36,
+        "k_off":19.52,
+        "delta_t":3.0e-2,
+        "trans_ratio":6.25e8,
+        "vinput_pos": 12,
+        "vinput_neg": -3.63,
+        "sigma_relative":0.02438171519582677,
+        "sigma_absolute":0.005490197724238527
+    },
+    "ferro_resistance_abandon":
+    {
+        "P_on":1.48,
+        "P_off":1.79,
+        "G_on":1.6e5,
+        "G_off":1.4e7,
+        "alpha_on":5,
+        "alpha_off":5,
+        "v_on":-2,
+        "v_off":1.4,
+        "k_on":-1.30e9,
+        "k_off":1.64e5,
+        "delta_t":1.0e-7,
+        "trans_ratio":7.2254e-8,
+        "vinput_pos": 12,
+        "vinput_neg": -2.44,
+        "sigma_relative":0.1544,
+        "sigma_absolute":0.0166
+    }
+}
