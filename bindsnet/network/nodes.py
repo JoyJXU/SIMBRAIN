@@ -111,81 +111,8 @@ class Nodes(torch.nn.Module):
 
         :param x: Inputs to the layer.
         """
-        # import torch;
-# # Ideal
-#         P_on = 1
-#         P_off = 1
-#         Gon = 100
-#         Goff = 1000
-#         alpha_on = 1
-#         alpha_off = 1
-#         v_on = -1
-#         v_off = 1
-#         k_on = -100
-#         k_off = 100
-#         delta_t = 1e-3
-#
-#         trans_ratio_z_New= 1/(Goff-Gon)
-#         pos = torch.ones_like(self.s)
-#         neg = torch.ones_like(self.s)
-#         pos = pos * 100.00
-#         kz = 1-self.trace_decay
-#         neg = neg * ((1-kz/(delta_t*k_on))*v_on)
-#
-#         sigma_relative = 1e10 #0.0 #0.023409696857178863 #0.2*3 #
-#         sigma_absolute = 0.0 #0.01 #0.0034577612128620715 #0.03*3 #
-        
-# nio
-        # D = 10;
-        # Roff = 3.15e4;
-        # Ron = 2.6e4;
-        # alpha_on = 1;
-        # alpha_off = 1;
-        # v_on=-0.1;
-        # v_off=0.1;
-        # delta_t=2e-3;
-        # k_on= -110.9;
-        # k_off = 52.8;
-        # P_coeff_New=1.1;
-        # trans_ratio_z_New=0.004
-        # pos = torch.ones_like(self.s)
-        # neg = torch.ones_like(self.s)
-        # pos = pos * 0.5621
-        # neg = neg * -0.45
-        
-# fer
-        P_on = 1.8
-        P_off = 0.9
-        Gon = 7.0e-8
-        Goff = 9.0e-6
-        alpha_on = 5
-        alpha_off = 5
-        v_on = -2
-        v_off = 1.4
-        k_on = -737387387.39
-        k_off = 113513.51
-        delta_t = 1e-7
 
 
-        sigma_relative = 0.1032073708277878 #0.10155065368435409
-        sigma_absolute = 0.005783083695110348 #0.001842624587483208
-
-        mem_info = self.memristor_info_dict[self.device_name]
-        delta_t = mem_info['delta_t']
-        k_off = mem_info['k_off']
-        k_on = mem_info['k_on']
-        v_off = mem_info['v_off']
-        v_on = mem_info['v_on']
-        alpha_off = mem_info['alpha_off']
-        alpha_on = mem_info['alpha_on']
-        P_off = mem_info['P_off']
-        P_on = mem_info['P_on']
-        G_off = mem_info['G_off']
-        G_on = mem_info['G_on']
-        sigma_relative = mem_info['sigma_relative']
-        sigma_absolute = mem_info['sigma_absolute']
-
-        trans_ratio = 1 / (G_off - G_on)
         
 # # Hu
 #         P_on = 0.65
@@ -212,8 +139,6 @@ class Nodes(torch.nn.Module):
         # #########################################################
         if self.traces:
             if self.device_name == 'trace':
-                raise Exception('NOT MEMRISTOR')
-
                 # Decay and set spike traces.
                 self.x *= self.trace_decay
 
@@ -224,6 +149,21 @@ class Nodes(torch.nn.Module):
 
             else:
                 mem_info = self.memristor_info_dict[self.device_name]
+                delta_t = mem_info['delta_t']
+                k_off = mem_info['k_off']
+                k_on = mem_info['k_on']
+                v_off = mem_info['v_off']
+                v_on = mem_info['v_on']
+                alpha_off = mem_info['alpha_off']
+                alpha_on = mem_info['alpha_on']
+                P_off = mem_info['P_off']
+                P_on = mem_info['P_on']
+                G_off = mem_info['G_off']
+                G_on = mem_info['G_on']
+                sigma_relative = mem_info['sigma_relative']
+                sigma_absolute = mem_info['sigma_absolute']
+
+                trans_ratio = 1 / (G_off - G_on)
 
                 self.mem_v = self.s.float()
 
@@ -236,79 +176,26 @@ class Nodes(torch.nn.Module):
 
                 self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
 
-                self.normal_relative.normal_(mean=0., std=sigma_relative)
-                self.normal_absolute.normal_(mean=0., std=sigma_absolute)
+                if self.c2c_variation:
+                    self.normal_relative.normal_(mean=0., std=sigma_relative)
+                    self.normal_absolute.normal_(mean=0., std=sigma_absolute)
 
-                device_v = torch.mul(self.mem_x, self.normal_relative) + self.normal_absolute
+                    device_v = torch.mul(self.mem_x, self.normal_relative) + self.normal_absolute
+                    self.x2 = self.mem_x + device_v
 
-                self.x2 = self.mem_x + device_v
+                    self.x2 = torch.clamp(self.x2, min=0, max=1)
 
-                self.x2 = torch.clamp(self.x2, min=0, max=1)
+                    self.x = G_off * self.x2 + G_on * (1 - self.x2)
 
-                self.x = G_off*self.x2 + G_on*(1-self.x2)
-                # self.x = Goff*self.x1 + Gon*(1-self.x1)
-                self.x = (self.x-G_on)*trans_ratio
+                else:
+                    self.x = G_off * self.mem_x + G_on * (1 - self.mem_x)
 
-        else:
-            raise Exception('NOT TRACE')
+                self.x = (self.x - G_on) * trans_ratio
 
 
         if self.sum_input:
             # Add current input to running sum
             self.summed += x.float()
-        # ###############################
-
-        # if self.traces:
-        #     if self.device_name == 'trace':
-        #         # Decay and set spike traces.
-        #         self.x *= self.trace_decay
-        #
-        #         if self.traces_additive:
-        #             self.x += self.trace_scale * self.s.float()
-        #         else:
-        #             self.x.masked_fill_(self.s.bool(), self.trace_scale)
-        #
-        #     else:
-        #         mem_info = self.memristor_info_dict[self.device_name]
-        #         self.mem_v = self.s.float()
-        #         self.mem_v[self.mem_v == 0] = mem_info['vinput_neg']
-        #         self.mem_v[self.mem_v == 1] = mem_info['vinput_pos']
-        #
-        #         delta_t = mem_info['delta_t']
-        #         k_off = mem_info['k_off']
-        #         k_on = mem_info['k_on']
-        #         v_off = mem_info['v_off']
-        #         v_on = mem_info['v_on']
-        #         alpha_off = mem_info['alpha_off']
-        #         alpha_on = mem_info['k_off']
-        #         P_off = mem_info['P_off']
-        #         P_on = mem_info['P_on']
-        #         G_off = mem_info['G_off']
-        #         G_on = mem_info['G_on']
-        #         self.mem_x = torch.where(self.mem_v > 0, \
-        #                                  self.mem_x + delta_t * (k_off * (self.mem_v / v_off - 1) ** alpha_off) * (
-        #                                              1 - self.mem_x) ** P_off, \
-        #                                  self.mem_x + delta_t * (k_on * (self.mem_v / v_on - 1) ** alpha_on) * (
-        #                                      self.mem_x) ** P_on)
-        #
-        #         self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
-        #
-        #         normal_relative = torch.normal(0., mem_info['sigma_relative'], size=self.mem_x.size()).to(self.mem_x.device)
-        #         normal_absolute = torch.normal(0., mem_info['sigma_absolute'], size=self.mem_x.size()).to(self.mem_x.device)
-        #
-        #         device_v = torch.mul(self.mem_x, normal_relative) + normal_absolute
-        #
-        #         x2 = self.mem_x + device_v
-        #         x2 = torch.clamp(x2, min=0, max=1)
-        #
-        #         self.x = G_off * x2 + G_on * (1 - x2)
-        #
-        #         # self.x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-        #         self.x = (self.x - G_on) * mem_info['trans_ratio']
-        #
-        # if self.sum_input:
-        #     # Add current input to running sum.
-        #     self.summed += x.float()
 
 
     def reset_state_variables(self) -> None:
