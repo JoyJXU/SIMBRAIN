@@ -191,6 +191,10 @@ class Nodes(torch.nn.Module):
                     self.x = G_off * self.mem_x + G_on * (1 - self.mem_x)
 
                 self.x = (self.x - G_on) * trans_ratio
+                
+                
+                # Retention Loss
+                # tau^beta * G(t)/dt = - beta * G(t) * t ^ (beta - 1)
 
 
         if self.sum_input:
