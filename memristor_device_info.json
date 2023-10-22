@@ -15,6 +15,8 @@
         "trans_ratio":1.1111e-3,
         "vinput_pos": 100,
         "vinput_neg": -1.4877,
+        "retention_loss_tau": 0,
+        "retention_loss_beta": 1,
         "sigma_relative":0,
         "sigma_absolute":0
     },
@@ -34,6 +36,8 @@
         "trans_ratio":1.1198e5,
         "vinput_pos": 6.0,
         "vinput_neg": -2.55,
+        "retention_loss_tau": 0,
+        "retention_loss_beta": 1,
         "sigma_relative":0.1032073708277878,
         "sigma_absolute":0.005783083695110348
     },
@@ -53,6 +57,8 @@
         "trans_ratio":6.25e8,
         "vinput_pos": 12,
         "vinput_neg": -3.63,
+        "retention_loss_tau": 0.012478,
+        "retention_loss_beta": 1.066,
         "sigma_relative":0.02438171519582677,
         "sigma_absolute":0.005490197724238527
     },
@@ -72,6 +78,8 @@
         "trans_ratio":7.2254e-8,
         "vinput_pos": 12,
         "vinput_neg": -2.44,
+        "retention_loss_tau": 0,
+        "retention_loss_beta": 1,
         "sigma_relative":0.1544,
         "sigma_absolute":0.0166
     }

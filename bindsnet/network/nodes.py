@@ -5,6 +5,7 @@ from typing import Iterable, Optional, Union
 
 import torch
 import json
+import math
 
 
 class Nodes(torch.nn.Module):
@@ -71,6 +72,8 @@ class Nodes(torch.nn.Module):
 
         self.device_name = mem_device['device_name']
         self.c2c_variation = mem_device['c2c_variation']
+        self.retention_loss = mem_device['retention_loss']
+        
 
         if self.traces:
             self.register_buffer("x", torch.Tensor()) # Firing traces.
@@ -98,7 +101,7 @@ class Nodes(torch.nn.Module):
         self.learning = learning
 
         if self.device_name != 'trace':
-            with open('/home/jwxu/bindsnet_xjw/mem-brain-bindsnet/memristor_device_info.json', 'r') as f:
+            with open('/home/zhengyi_/mem-brain-bindsnet/memristor_device_info.json', 'r') as f:
                 self.memristor_info_dict = json.load(f)
 
             assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
@@ -162,6 +165,8 @@ class Nodes(torch.nn.Module):
                 G_on = mem_info['G_on']
                 sigma_relative = mem_info['sigma_relative']
                 sigma_absolute = mem_info['sigma_absolute']
+                retention_loss_tau = mem_info['retention_loss_tau']
+                retention_loss_beta = mem_info['retention_loss_beta']
 
                 trans_ratio = 1 / (G_off - G_on)
 
@@ -189,13 +194,15 @@ class Nodes(torch.nn.Module):
 
                 else:
                     self.x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-
+                    
+                # Retention Loss
+                # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)
+                # G(t) = G(0) * e^(- t*tau)^beta  
+                if self.retention_loss:
+                    self.x *= math.exp(-(1/2 * delta_t * retention_loss_tau) ** retention_loss_beta)
+                    self.x = torch.where(self.x < G_on, G_on, self.x)
                 self.x = (self.x - G_on) * trans_ratio
                 
-                
-                # Retention Loss
-                # tau^beta * G(t)/dt = - beta * G(t) * t ^ (beta - 1)
-
 
         if self.sum_input:
             # Add current input to running sum
