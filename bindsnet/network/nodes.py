@@ -71,6 +71,7 @@ class Nodes(torch.nn.Module):
 
         self.device_name = mem_device['device_name']
         self.c2c_variation = mem_device['c2c_variation']
+        self.d2d_variation = mem_device['d2d_variation']
 
         if self.traces:
             self.register_buffer("x", torch.Tensor()) # Firing traces.
@@ -88,6 +89,10 @@ class Nodes(torch.nn.Module):
             if self.c2c_variation:
                 self.register_buffer("normal_absolute", torch.Tensor())
                 self.register_buffer("normal_relative", torch.Tensor())
+
+            if self.d2d_variation:
+                self.register_buffer("Gon_d2d", torch.Tensor())
+                self.register_buffer("Goff_d2d", torch.Tensor())
 
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
@@ -111,32 +116,6 @@ class Nodes(torch.nn.Module):
 
         :param x: Inputs to the layer.
         """
-
-
-        
-# # Hu
-#         P_on = 0.65
-#         P_off = 5
-#         Gon = 2.5e-10
-#         Goff = 1.85e-9
-#         alpha_on = 5
-#         alpha_off = 5
-#         v_on = -2
-#         v_off = 2
-#         k_on = -3.36
-#         k_off = 19.52
-#         delta_t = 30*1e-3
-        
-#         trans_ratio_z_New=6.25e8
-#         pos = torch.ones_like(self.s)
-#         neg = torch.ones_like(self.s)
-#         pos = pos * 12.00
-#         neg = neg * -3.63   
-  
-#         sigma_relative = 0.08 #0.023409696857178863 #0.2*3 #
-#         sigma_absolute = 0 # 0.0034577612128620715 #0.03*3 #
-
-        # #########################################################
         if self.traces:
             if self.device_name == 'trace':
                 # Decay and set spike traces.
@@ -185,10 +164,13 @@ class Nodes(torch.nn.Module):
 
                     self.x2 = torch.clamp(self.x2, min=0, max=1)
 
-                    self.x = G_off * self.x2 + G_on * (1 - self.x2)
-
                 else:
-                    self.x = G_off * self.mem_x + G_on * (1 - self.mem_x)
+                    self.x2 = self.mem_x
+
+                if self.d2d_variation:
+                    self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
+                else:
+                    self.x = G_off * self.x2 + G_on * (1 - self.x2)
 
                 self.x = (self.x - G_on) * trans_ratio
 
@@ -252,6 +234,22 @@ class Nodes(torch.nn.Module):
             if self.c2c_variation:
                 self.normal_relative = torch.zeros(batch_size, *self.shape, device=self.normal_relative.device)
                 self.normal_absolute = torch.zeros(batch_size, *self.shape, device=self.normal_absolute.device)
+
+            if self.d2d_variation:
+                G_off = self.memristor_info_dict[self.device_name]['G_off']
+                G_on = self.memristor_info_dict[self.device_name]['G_on']
+                Gon_sigma = self.memristor_info_dict[self.device_name]['Gon_sigma']
+                Goff_sigma = self.memristor_info_dict[self.device_name]['Goff_sigma']
+
+                # Initialize
+                self.Gon_d2d = torch.zeros(*self.shape, device=self.Gon_d2d.device)
+                self.Goff_d2d = torch.zeros(*self.shape, device=self.Goff_d2d.device)
+                # Add d2d variation
+                self.Gon_d2d.normal_(mean=G_on, std=Gon_sigma)
+                self.Goff_d2d.normal_(mean=G_off, std=Goff_sigma)
+
+                self.Gon_d2d = torch.stack([self.Gon_d2d] * batch_size)
+                self.Goff_d2d = torch.stack([self.Goff_d2d] * batch_size)
 
         if self.sum_input:
             self.summed = torch.zeros(
