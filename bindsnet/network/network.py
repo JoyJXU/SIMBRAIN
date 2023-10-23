@@ -244,7 +244,8 @@ class Network(torch.nn.Module):
                 if c == ('Y', 'Y'):
                     all_false = torch.all(source.s == False)
                     if all_false == False:
-                        print(source.s)
+                        all_false = all_false
+                        #print(source.s)
                         
                 # Add to input: source's spikes multiplied by connection weights.
                 if isinstance(target, CSRMNodes):

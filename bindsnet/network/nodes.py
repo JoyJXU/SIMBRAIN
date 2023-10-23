@@ -5,7 +5,6 @@ from typing import Iterable, Optional, Union
 
 import torch
 import json
-import math
 
 
 class Nodes(torch.nn.Module):
@@ -199,8 +198,9 @@ class Nodes(torch.nn.Module):
                 # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)
                 # G(t) = G(0) * e^(- t*tau)^beta  
                 if self.retention_loss:
-                    self.x *= math.exp(-(1/2 * delta_t * retention_loss_tau) ** retention_loss_beta)
-                    self.x = torch.where(self.x < G_on, G_on, self.x)
+                    self.x *=  torch.exp(torch.tensor(-(1/2 * delta_t * retention_loss_tau) ** retention_loss_beta))
+                    self.x = torch.clamp(self.x, min = G_on, max = G_off)
+                    # tau = 0.12478 , beta = 1.066  or  tau = 0.1245 , beta = 1.073
                 self.x = (self.x - G_on) * trans_ratio
                 
 
