@@ -90,9 +90,12 @@ class Nodes(torch.nn.Module):
                 self.register_buffer("normal_absolute", torch.Tensor())
                 self.register_buffer("normal_relative", torch.Tensor())
 
-            if self.d2d_variation:
+            if self.d2d_variation in [1, 2]:
                 self.register_buffer("Gon_d2d", torch.Tensor())
                 self.register_buffer("Goff_d2d", torch.Tensor())
+            if self.d2d_variation in [1, 3]:
+                self.register_buffer("Pon_d2d", torch.Tensor())
+                self.register_buffer("Poff_d2d", torch.Tensor())
 
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
@@ -149,9 +152,18 @@ class Nodes(torch.nn.Module):
                 self.mem_v[self.mem_v == 0] = mem_info['vinput_neg']
                 self.mem_v[self.mem_v == 1] = mem_info['vinput_pos']
 
-                self.mem_x = torch.where(self.mem_v>0, \
-                                      self.mem_x+delta_t*(k_off*(self.mem_v/v_off-1)**alpha_off)*(1-self.mem_x)**(P_off), \
-                                      self.mem_x+delta_t*(k_on*(self.mem_v/v_on-1)**alpha_on)*(self.mem_x)**(P_on))
+                if self.d2d_variation in [1, 3]:
+                    self.mem_x = torch.where(self.mem_v > 0, \
+                                             self.mem_x + delta_t * (k_off * (self.mem_v / v_off - 1) ** alpha_off) * ( \
+                                                         1 - self.mem_x) ** (self.Poff_d2d), \
+                                             self.mem_x + delta_t * (k_on * (self.mem_v / v_on - 1) ** alpha_on) * ( \
+                                                 self.mem_x) ** (self.Pon_d2d))
+                else:
+                    self.mem_x = torch.where(self.mem_v > 0, \
+                                             self.mem_x + delta_t * (k_off * (self.mem_v / v_off - 1) ** alpha_off) * ( \
+                                                     1 - self.mem_x) ** (P_off), \
+                                             self.mem_x + delta_t * (k_on * (self.mem_v / v_on - 1) ** alpha_on) * ( \
+                                                 self.mem_x) ** (P_on))
 
                 self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
 
@@ -167,7 +179,7 @@ class Nodes(torch.nn.Module):
                 else:
                     self.x2 = self.mem_x
 
-                if self.d2d_variation:
+                if self.d2d_variation in [1, 2]:
                     self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
                 else:
                     self.x = G_off * self.x2 + G_on * (1 - self.x2)
@@ -235,7 +247,7 @@ class Nodes(torch.nn.Module):
                 self.normal_relative = torch.zeros(batch_size, *self.shape, device=self.normal_relative.device)
                 self.normal_absolute = torch.zeros(batch_size, *self.shape, device=self.normal_absolute.device)
 
-            if self.d2d_variation:
+            if self.d2d_variation in [1, 2]:
                 G_off = self.memristor_info_dict[self.device_name]['G_off']
                 G_on = self.memristor_info_dict[self.device_name]['G_on']
                 Gon_sigma = self.memristor_info_dict[self.device_name]['Gon_sigma']
@@ -247,9 +259,31 @@ class Nodes(torch.nn.Module):
                 # Add d2d variation
                 self.Gon_d2d.normal_(mean=G_on, std=Gon_sigma)
                 self.Goff_d2d.normal_(mean=G_off, std=Goff_sigma)
+                # Clipping
+                self.Gon_d2d = torch.clamp(self.Gon_d2d, min=0)
+                self.Goff_d2d = torch.clamp(self.Goff_d2d, min=0)
 
                 self.Gon_d2d = torch.stack([self.Gon_d2d] * batch_size)
                 self.Goff_d2d = torch.stack([self.Goff_d2d] * batch_size)
+
+            if self.d2d_variation in [1, 3]:
+                P_off = self.memristor_info_dict[self.device_name]['P_off']
+                P_on = self.memristor_info_dict[self.device_name]['P_on']
+                Pon_sigma = self.memristor_info_dict[self.device_name]['Pon_sigma']
+                Poff_sigma = self.memristor_info_dict[self.device_name]['Poff_sigma']
+
+                # Initialize
+                self.Pon_d2d = torch.zeros(*self.shape, device=self.Pon_d2d.device)
+                self.Poff_d2d = torch.zeros(*self.shape, device=self.Poff_d2d.device)
+                # Add d2d variation
+                self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma)
+                self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma)
+                # Clipping
+                self.Pon_d2d = torch.clamp(self.Pon_d2d, min=0)
+                self.Poff_d2d = torch.clamp(self.Poff_d2d, min=0)
+
+                self.Pon_d2d = torch.stack([self.Pon_d2d] * batch_size)
+                self.Poff_d2d = torch.stack([self.Poff_d2d] * batch_size)
 
         if self.sum_input:
             self.summed = torch.zeros(

@@ -18,7 +18,9 @@
         "sigma_relative":0,
         "sigma_absolute":0,
         "Gon_sigma":0,
-        "Goff_sigma":0
+        "Goff_sigma":0,
+        "Pon_sigma":0,
+        "Poff_sigma":0
     },
     "ferro":
     {
@@ -38,8 +40,10 @@
         "vinput_neg": -2.55,
         "sigma_relative":0.1032073708277878,
         "sigma_absolute":0.005783083695110348,
-        "Gon_sigma":0.5e-6,
-        "Goff_sigma":0.5e-4
+        "Gon_sigma":0.7e-8,
+        "Goff_sigma":0.9e-6,
+        "Pon_sigma":0.2,
+        "Poff_sigma":0.1
     },
     "hu":
     {
