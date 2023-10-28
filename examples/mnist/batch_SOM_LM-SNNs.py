@@ -38,7 +38,7 @@ from bindsnet.analysis.plotting import (
 # %% Argument
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("--n_neurons", type=int, default=4)
+parser.add_argument("--n_neurons", type=int, default=625)
 parser.add_argument("--train_batch_size", type=int, default=50)
 parser.add_argument("--test_batch_size", type=int, default=128)
 parser.add_argument("--n_epochs", type=int, default=2)
