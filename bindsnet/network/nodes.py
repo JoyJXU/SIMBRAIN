@@ -90,6 +90,10 @@ class Nodes(torch.nn.Module):
             if self.c2c_variation:
                 self.register_buffer("normal_absolute", torch.Tensor())
                 self.register_buffer("normal_relative", torch.Tensor())
+                
+            if self.retention_loss == 2:
+                self.register_buffer("mem_v_threshold", torch.Tensor())
+                self.register_buffer("mem_loss_time", torch.Tensor())                
 
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
@@ -174,9 +178,12 @@ class Nodes(torch.nn.Module):
                 self.mem_v[self.mem_v == 0] = mem_info['vinput_neg']
                 self.mem_v[self.mem_v == 1] = mem_info['vinput_pos']
 
-                self.mem_x = torch.where(self.mem_v>0, \
-                                      self.mem_x+delta_t*(k_off*(self.mem_v/v_off-1)**alpha_off)*(1-self.mem_x)**(P_off), \
-                                      self.mem_x+delta_t*(k_on*(self.mem_v/v_on-1)**alpha_on)*(self.mem_x)**(P_on))
+                #self.mem_x = torch.where(self.mem_v>0, \
+                                      #self.mem_x+delta_t*(k_off*(self.mem_v/v_off-1)**alpha_off)*(1-self.mem_x)**(P_off), \
+                                      #self.mem_x+delta_t*(k_on*(self.mem_v/v_on-1)**alpha_on)*(self.mem_x)**(P_on))
+                    
+                self.mem_x[self.mem_v >= v_off] = self.mem_x[self.mem_v >= v_off]+delta_t*(k_off*(self.mem_v[self.mem_v >= v_off]/v_off-1)**alpha_off)*(1-self.mem_x[self.mem_v >= v_off])**(P_off)
+                self.mem_x[self.mem_v <= v_on] = self.mem_x[self.mem_v <= v_on]+delta_t*(k_on*(self.mem_v[self.mem_v <= v_on]/v_on-1)**alpha_on)*(self.mem_x[self.mem_v <= v_on])**(P_on)
 
                 self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
 
@@ -195,12 +202,21 @@ class Nodes(torch.nn.Module):
                     self.x = G_off * self.mem_x + G_on * (1 - self.mem_x)
                     
                 # Retention Loss
-                # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)
-                # G(t) = G(0) * e^(- t*tau)^beta  
-                if self.retention_loss:
+                if self.retention_loss == 1:
+                    # G(t) = G(0) * e^(- t*tau)^beta                      
                     self.x *=  torch.exp(torch.tensor(-(1/2 * delta_t * retention_loss_tau) ** retention_loss_beta))
                     self.x = torch.clamp(self.x, min = G_on, max = G_off)
                     # tau = 0.12478 , beta = 1.066  or  tau = 0.1245 , beta = 1.073
+                    
+    
+                if self.retention_loss == 2:
+                    # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)                    
+                    self.mem_v_threshold = torch.where((self.mem_v > v_on) & (self.mem_v < v_off), torch.zeros_like(self.mem_v), torch.ones_like(self.mem_v))
+                    self.mem_loss_time[self.mem_v_threshold == 0] += delta_t
+                    self.mem_loss_time[self.mem_v_threshold == 1] = 0
+                    self.x -= self.x * delta_t * retention_loss_tau ** retention_loss_tau * retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
+                    self.x = torch.clamp(self.x, min = G_on, max = G_off)
+                    
                 self.x = (self.x - G_on) * trans_ratio
                 
 
@@ -263,7 +279,11 @@ class Nodes(torch.nn.Module):
             if self.c2c_variation:
                 self.normal_relative = torch.zeros(batch_size, *self.shape, device=self.normal_relative.device)
                 self.normal_absolute = torch.zeros(batch_size, *self.shape, device=self.normal_absolute.device)
-
+            
+            if self.retention_loss == 2:
+                self.mem_v_threshold = torch.zeros(batch_size, *self.shape, device=self.mem_v_threshold.device)
+                self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
+                
         if self.sum_input:
             self.summed = torch.zeros(
                 batch_size, *self.shape, device=self.summed.device

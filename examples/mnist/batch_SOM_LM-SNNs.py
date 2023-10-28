@@ -38,7 +38,7 @@ from bindsnet.analysis.plotting import (
 # %% Argument
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("--n_neurons", type=int, default=625)
+parser.add_argument("--n_neurons", type=int, default=4)
 parser.add_argument("--train_batch_size", type=int, default=50)
 parser.add_argument("--test_batch_size", type=int, default=128)
 parser.add_argument("--n_epochs", type=int, default=2)
@@ -57,7 +57,7 @@ parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_device", type=str, default='hu') #trace: original trace
 parser.add_argument("--c2c_variation", type=bool, default=False)
-parser.add_argument("--retention_loss", type=bool, default=True)
+parser.add_argument("--retention_loss", type=int, default=0) #retention loss: 0, without it ; 1, during pulse ; 2, no pluse for a long time
 parser.set_defaults(plot=False, gpu=True)
 
 args = parser.parse_args()
