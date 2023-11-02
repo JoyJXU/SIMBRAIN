@@ -174,6 +174,9 @@ class Connection(AbstractConnection):
 
         self.w = Parameter(w, requires_grad=False)
 
+        self.fake_w = torch.zeros(source.n, target.n)
+        self.fake_w = self.w
+
         b = kwargs.get("b", None)
         if b is not None:
             self.b = Parameter(b, requires_grad=False)

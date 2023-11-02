@@ -188,23 +188,49 @@ class PostPre(LearningRule):
         """
         batch_size = self.source.batch_size
 
-        # Pre-synaptic update.
-        if self.nu[0]:
-            source_s = self.source.s.view(batch_size, -1).unsqueeze(2).float()
-            target_x = self.target.x.view(batch_size, -1).unsqueeze(1) * self.nu[0]
-            self.connection.w -= self.reduction(torch.bmm(source_s, target_x), dim=0)
-            del source_s, target_x
+        fake_update = kwargs.get("fake_update", 0)  # 0: Original update, 1:fake_update, 2:defake_update
 
-        # Post-synaptic update.
-        if self.nu[1]:
-            target_s = (
-                self.target.s.view(batch_size, -1).unsqueeze(1).float() * self.nu[1]
-            )
-            source_x = self.source.x.view(batch_size, -1).unsqueeze(2)
-            self.connection.w += self.reduction(torch.bmm(source_x, target_s), dim=0)
-            del source_x, target_s
+        if fake_update == 0:
+            # Pre-synaptic update.
+            if self.nu[0]:
+                source_s = self.source.s.view(batch_size, -1).unsqueeze(2).float()
+                target_x = self.target.x.view(batch_size, -1).unsqueeze(1) * self.nu[0]
+                self.connection.w -= self.reduction(torch.bmm(source_s, target_x), dim=0)
+                del source_s, target_x
 
-        super().update()
+            # Post-synaptic update.
+            if self.nu[1]:
+                target_s = (
+                    self.target.s.view(batch_size, -1).unsqueeze(1).float() * self.nu[1]
+                )
+                source_x = self.source.x.view(batch_size, -1).unsqueeze(2)
+                self.connection.w += self.reduction(torch.bmm(source_x, target_s), dim=0)
+                del source_x, target_s
+
+            super().update()
+
+        if fake_update == 1:
+            # Pre-synaptic update.
+            print("Start Fake Update!")
+            if self.nu[0]:
+                source_s = self.source.s.view(batch_size, -1).unsqueeze(2).float()
+                target_x = self.target.x.view(batch_size, -1).unsqueeze(1) * self.nu[0]
+                self.connection.fake_w -= self.reduction(torch.bmm(source_s, target_x), dim=0)
+                del source_s, target_x
+
+            # Post-synaptic update.
+            if self.nu[1]:
+                target_s = (
+                    self.target.s.view(batch_size, -1).unsqueeze(1).float() * self.nu[1]
+                )
+                source_x = self.source.x.view(batch_size, -1).unsqueeze(2)
+                self.connection.fake_w += self.reduction(torch.bmm(source_x, target_s), dim=0)
+                del source_x, target_s
+
+        if fake_update == 2:
+            print("Start DeFake Update!")
+            self.connection.w = self.connection.fake_w
+            super().update()
 
     def _conv2d_connection_update(self, **kwargs) -> None:
         # language=rst

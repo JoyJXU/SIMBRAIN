@@ -405,7 +405,7 @@ class Network(torch.nn.Module):
             # Run synapse updates.
             for c in self.connections:
                 self.connections[c].update(
-                    mask=masks.get(c, None), learning=self.learning, **kwargs
+                    mask=masks.get(c, None), learning=self.learning, fake_update=1, **kwargs
                 )
 
             # # Get input to all layers.
@@ -417,6 +417,9 @@ class Network(torch.nn.Module):
 
         # Re-normalize connections.
         for c in self.connections:
+            self.connections[c].update(
+                mask=masks.get(c, None), learning=self.learning, fake_update=2, **kwargs
+            )
             self.connections[c].normalize()
 
     def reset_state_variables(self) -> None:
