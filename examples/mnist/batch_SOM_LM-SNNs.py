@@ -58,6 +58,7 @@ parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_device", type=str, default='ferro') #trace: original trace
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
+parser.add_argument("--stuck_at_fault", type=bool, default=True)
 parser.set_defaults(plot=False, gpu=True)
 
 args = parser.parse_args()
@@ -81,11 +82,11 @@ plot = args.plot
 gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
 device_params = {'device_name': args.memristor_device, 'c2c_variation': args.c2c_variation, \
-                 'd2d_variation': args.d2d_variation}
+                 'd2d_variation': args.d2d_variation, 'stuck_at_fault': args.stuck_at_fault}
 
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)

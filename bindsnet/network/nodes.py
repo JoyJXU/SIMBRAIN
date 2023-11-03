@@ -72,6 +72,7 @@ class Nodes(torch.nn.Module):
         self.device_name = mem_device['device_name']
         self.c2c_variation = mem_device['c2c_variation']
         self.d2d_variation = mem_device['d2d_variation']
+        self.stuck_at_fault = mem_device['stuck_at_fault']
 
         if self.traces:
             self.register_buffer("x", torch.Tensor()) # Firing traces.
@@ -97,6 +98,10 @@ class Nodes(torch.nn.Module):
                 self.register_buffer("Pon_d2d", torch.Tensor())
                 self.register_buffer("Poff_d2d", torch.Tensor())
 
+            if self.stuck_at_fault:
+                self.register_buffer("SAF0_mask", torch.Tensor())
+                self.register_buffer("SAF1_mask", torch.Tensor())
+
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
 
@@ -106,7 +111,7 @@ class Nodes(torch.nn.Module):
         self.learning = learning
 
         if self.device_name != 'trace':
-            with open('/home/jwxu/bindsnet_xjw/mem-brain-bindsnet/memristor_device_info.json', 'r') as f:
+            with open('../../memristor_device_info.json', 'r') as f:
                 self.memristor_info_dict = json.load(f)
 
             assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
@@ -178,6 +183,13 @@ class Nodes(torch.nn.Module):
 
                 else:
                     self.x2 = self.mem_x
+
+                if self.stuck_at_fault:
+                    self.x2.masked_fill_(self.SAF0_mask, 0)
+                    self.mem_x.masked_fill_(self.SAF0_mask, 0)
+
+                    self.x2.masked_fill_(self.SAF1_mask, 1)
+                    self.mem_x.masked_fill_(self.SAF1_mask, 1)
 
                 if self.d2d_variation in [1, 2]:
                     self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
@@ -284,6 +296,16 @@ class Nodes(torch.nn.Module):
 
                 self.Pon_d2d = torch.stack([self.Pon_d2d] * batch_size)
                 self.Poff_d2d = torch.stack([self.Poff_d2d] * batch_size)
+
+            if self.stuck_at_fault:
+                SAF_lambda = self.memristor_info_dict[self.device_name]['SAF_lambda']
+                SAF_ratio = self.memristor_info_dict[self.device_name]['SAF_ratio'] # SAF0:SAF1
+                SAF_delta = self.memristor_info_dict[self.device_name]['SAF_delta'] # measured %/h????
+
+                # Add pre-deployment SAF #TODO:Change to architectural SAF with Poisson-distributed intra-crossbar and uniform-distributed inter-crossbar SAF
+                random_tensor = torch.rand(*self.shape, device=self.SAF0_mask.device)
+                self.SAF0_mask = random_tensor < ((SAF_ratio / (SAF_ratio + 1)) * SAF_lambda)
+                self.SAF1_mask = (random_tensor >= ((SAF_ratio / (SAF_ratio + 1)) * SAF_lambda)) & (random_tensor < SAF_lambda)
 
         if self.sum_input:
             self.summed = torch.zeros(
