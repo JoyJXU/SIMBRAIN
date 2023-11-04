@@ -84,6 +84,7 @@ class Network(torch.nn.Module):
     def __init__(
         self,
         dt: float = 1.0,
+        mem_step: int = 0,
         mem_device: dict = {},
         batch_size: int = 1,
         learning: bool = True,
@@ -103,8 +104,10 @@ class Network(torch.nn.Module):
         super().__init__()
 
         self.dt = dt
+        self.mem_step= mem_step
         self.mem_device = mem_device
         self.batch_size = batch_size
+        self.mem_t = torch.zeros([50,250],dtype=torch.float)
 
         self.layers = {}
         self.connections = {}
@@ -249,7 +252,7 @@ class Network(torch.nn.Module):
         return inputs
 
     def run(
-        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, **kwargs
+        self, inputs: Dict[str, torch.Tensor], time: int, step:int, aging_effect:int, one_step=False, **kwargs
     ) -> None:
         # language=rst
         """
@@ -344,6 +347,7 @@ class Network(torch.nn.Module):
                     self.batch_size = inputs[key].size(1)
 
                     for l in self.layers:
+                        self.layers[l].aging_effect = aging_effect
                         self.layers[l].set_batch_size(self.batch_size)
 
                     for m in self.monitors:
@@ -356,12 +360,19 @@ class Network(torch.nn.Module):
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
+            if aging_effect !=0:
+                for mem_i in range(50):
+                    self.mem_t[mem_i][t] = float((t+1) + 250 * mem_i + step * time * 50)
             # Get input to all layers (synchronous mode).
             current_inputs = {}
             if not one_step:
                 current_inputs.update(self._get_inputs())
 
             for l in self.layers:
+                if aging_effect !=0:
+                    self.layers[l].mem_t = self.mem_t * 1e-7
+                    self.layers[l].network_timesteps = t
+
                 # Update each layer of nodes.
                 if l in inputs:
                     if l in current_inputs:

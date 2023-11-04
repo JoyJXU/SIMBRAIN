@@ -5,7 +5,7 @@ from typing import Iterable, Optional, Union
 
 import torch
 import json
-
+import math
 
 class Nodes(torch.nn.Module):
     # language=rst
@@ -72,6 +72,9 @@ class Nodes(torch.nn.Module):
         self.device_name = mem_device['device_name']
         self.c2c_variation = mem_device['c2c_variation']
         self.d2d_variation = mem_device['d2d_variation']
+        self.aging_effect = mem_device['aging_effect']
+        self.mem_t = torch.zeros([50,250],dtype=torch.float)
+        self.network_timesteps = 0
 
         if self.traces:
             self.register_buffer("x", torch.Tensor()) # Firing traces.
@@ -94,6 +97,10 @@ class Nodes(torch.nn.Module):
                 self.register_buffer("Gon_d2d", torch.Tensor())
                 self.register_buffer("Goff_d2d", torch.Tensor())
 
+            if self.aging_effect !=0:
+                self.register_buffer("Gon_aging", torch.Tensor())
+                self.register_buffer("Goff_aging", torch.Tensor())
+
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
 
@@ -103,7 +110,7 @@ class Nodes(torch.nn.Module):
         self.learning = learning
 
         if self.device_name != 'trace':
-            with open('/home/jwxu/bindsnet_xjw/mem-brain-bindsnet/memristor_device_info.json', 'r') as f:
+            with open('memristor_device_info.json', 'r') as f:
                 self.memristor_info_dict = json.load(f)
 
             assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
@@ -141,7 +148,8 @@ class Nodes(torch.nn.Module):
                 G_on = mem_info['G_on']
                 sigma_relative = mem_info['sigma_relative']
                 sigma_absolute = mem_info['sigma_absolute']
-
+                self.R_on = mem_info['R_on']
+                self.R_off = mem_info['R_off']
                 trans_ratio = 1 / (G_off - G_on)
 
                 self.mem_v = self.s.float()
@@ -167,10 +175,23 @@ class Nodes(torch.nn.Module):
                 else:
                     self.x2 = self.mem_x
 
+                #if self.d2d_variation:
+                #    self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
+                #else:
+                #    self.x = G_off * self.x2 + G_on * (1 - self.x2)
+
                 if self.d2d_variation:
-                    self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
+                    if self.aging_effect != 0:
+                        self.cal_Gon_Goff()
+                        self.x = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
+                    else:
+                        self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
                 else:
-                    self.x = G_off * self.x2 + G_on * (1 - self.x2)
+                    if self.aging_effect != 0:
+                        self.cal_Gon_Goff()
+                        self.x = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
+                    else:
+                        self.x = G_off * self.x2 + G_on * (1 - self.x2)
 
                 self.x = (self.x - G_on) * trans_ratio
 
@@ -251,6 +272,18 @@ class Nodes(torch.nn.Module):
                 self.Gon_d2d = torch.stack([self.Gon_d2d] * batch_size)
                 self.Goff_d2d = torch.stack([self.Goff_d2d] * batch_size)
 
+            if self.aging_effect !=0 :
+                # Initialize
+                self.Gon_aging = torch.zeros(*self.shape, device=self.Gon_aging.device)
+                self.Goff_aging = torch.zeros(*self.shape, device=self.Goff_aging.device)
+                self.Gon_aging = torch.stack([self.Goff_aging] * self.batch_size)
+                self.Goff_aging = torch.stack([self.Goff_aging] * self.batch_size)
+
+                self.G_on_0 = self.memristor_info_dict[self.device_name]['G_on']*torch.ones(*self.shape)
+                self.G_on_0 = torch.stack([self.G_on_0] * self.batch_size)
+                self.G_off_0 = self.memristor_info_dict[self.device_name]['G_off']*torch.ones(*self.shape)
+                self.G_off_0 = torch.stack([self.G_off_0] * self.batch_size)
+
         if self.sum_input:
             self.summed = torch.zeros(
                 batch_size, *self.shape, device=self.summed.device
@@ -266,6 +299,32 @@ class Nodes(torch.nn.Module):
         """
         self.learning = mode
         return super().train(mode)
+    
+    def cal_Gon_Goff(self) -> None:
+        r_on = self.R_on 
+        r_off = self.R_off
+        k = 1
+        b = 1
+
+        indices = torch.tensor([self.network_timesteps])
+        temp_a = torch.index_select(self.mem_t, 1, indices)
+        if self.aging_effect == 1:
+            temp_a_on = (1-r_on)**temp_a                                   #equation 1 : G=G_0*((1-r)^t)
+            temp_a_off = (1-r_off)**temp_a
+        elif self.aging_effect == 2:
+            temp_a_on = k*math.log10(temp_a)+b                             #equation 2 : G=G_0*(k*lg(t)+b)
+            temp_a_off = k*math.log10(temp_a)+b
+        elif self.aging_effect == 3:
+            temp_a_on = k*temp_a+b                                         #equation 3 : G=G_0*(k*t+b)
+            temp_a_off = k*temp_a+b
+
+        for i in range (self.batch_size): 
+            if self.d2d_variation:
+                self.Gon_aging[i] = temp_a_on[i] * self.Gon_d2d[i]
+                self.Goff_aging[i] = temp_a_off[i] * self.Goff_d2d[i]
+            else:
+                self.Gon_aging[i] = temp_a_on[i] * self.G_on_0[i]
+                self.Goff_aging[i] = temp_a_off[i] * self.G_off_0[i]
 
 
 class AbstractInput(ABC):
