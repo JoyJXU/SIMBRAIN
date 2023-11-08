@@ -57,8 +57,8 @@ parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_device", type=str, default='ferro') #trace: original trace
 parser.add_argument("--c2c_variation", type=bool, default=False)
-parser.add_argument("--d2d_variation", type=bool, default=True)
-parser.add_argument("--aging_effect", type=int, default=1)#aging_effect, value = 0, 1, 2, 3
+parser.add_argument("--d2d_variation", type=bool, default=False)
+parser.add_argument("--aging_effect", type=int, default=1) # 0: No aging effect, 1: equation 1, 2: equation 2, 3: equation 3
 parser.set_defaults(plot=False, gpu=True)
 
 args = parser.parse_args()
@@ -83,7 +83,7 @@ gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
 aging_effect = args.aging_effect
 device_params = {'device_name': args.memristor_device, 'c2c_variation': args.c2c_variation, \
-                 'd2d_variation': args.d2d_variation,'aging_effect': args.aging_effect}
+                 'd2d_variation': args.d2d_variation, 'aging_effect': args.aging_effect}
 
 
 # %% Sets up Gpu use
@@ -248,7 +248,7 @@ for test_cnt in range(multiple_test_no):
             
             # Run the network on the input.
             temp_spikes = 0
-            network.run(inputs=inputs, time=time, step=step, aging_effect=aging_effect, input_time_dim=1)
+            network.run(inputs=inputs, time=time, input_time_dim=1)
             temp_spikes = spikes["Y"].get("s").permute((1, 0, 2))
 
             # Get voltage recording.
@@ -299,7 +299,7 @@ for test_cnt in range(multiple_test_no):
         inputs = {"X": batch["encoded_image"].transpose(0, 1).to(device)}
     
         # Run the network on the input.
-        network.run(inputs=inputs, time=time, step=step, aging_effect=0, input_time_dim=1)
+        network.run(inputs=inputs, time=time, input_time_dim=1)
     
         spike_record = spikes["Y"].get("s").transpose(0, 1)
 

@@ -73,8 +73,6 @@ class Nodes(torch.nn.Module):
         self.c2c_variation = mem_device['c2c_variation']
         self.d2d_variation = mem_device['d2d_variation']
         self.aging_effect = mem_device['aging_effect']
-        self.mem_t = torch.zeros([50,250],dtype=torch.float)
-        self.network_timesteps = 0
 
         if self.traces:
             self.register_buffer("x", torch.Tensor()) # Firing traces.
@@ -97,9 +95,12 @@ class Nodes(torch.nn.Module):
                 self.register_buffer("Gon_d2d", torch.Tensor())
                 self.register_buffer("Goff_d2d", torch.Tensor())
 
-            if self.aging_effect !=0:
+            if self.aging_effect:
                 self.register_buffer("Gon_aging", torch.Tensor())
                 self.register_buffer("Goff_aging", torch.Tensor())
+                self.register_buffer("Gon_0", torch.Tensor())
+                self.register_buffer("Goff_0", torch.Tensor())
+                self.register_buffer("mem_t", torch.Tensor())
 
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
@@ -108,9 +109,10 @@ class Nodes(torch.nn.Module):
         self.batch_size = None
         self.trace_decay = None
         self.learning = learning
+        self.register_buffer("mem_step", torch.Tensor())
 
         if self.device_name != 'trace':
-            with open('memristor_device_info.json', 'r') as f:
+            with open('../../memristor_device_info.json', 'r') as f:
                 self.memristor_info_dict = json.load(f)
 
             assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
@@ -146,10 +148,6 @@ class Nodes(torch.nn.Module):
                 P_on = mem_info['P_on']
                 G_off = mem_info['G_off']
                 G_on = mem_info['G_on']
-                sigma_relative = mem_info['sigma_relative']
-                sigma_absolute = mem_info['sigma_absolute']
-                self.R_on = mem_info['R_on']
-                self.R_off = mem_info['R_off']
                 trans_ratio = 1 / (G_off - G_on)
 
                 self.mem_v = self.s.float()
@@ -164,6 +162,9 @@ class Nodes(torch.nn.Module):
                 self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
 
                 if self.c2c_variation:
+                    sigma_relative = mem_info['sigma_relative']
+                    sigma_absolute = mem_info['sigma_absolute']
+
                     self.normal_relative.normal_(mean=0., std=sigma_relative)
                     self.normal_absolute.normal_(mean=0., std=sigma_absolute)
 
@@ -175,23 +176,20 @@ class Nodes(torch.nn.Module):
                 else:
                     self.x2 = self.mem_x
 
-                #if self.d2d_variation:
-                #    self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
-                #else:
-                #    self.x = G_off * self.x2 + G_on * (1 - self.x2)
+                if self.aging_effect:
+                    Aging_k_on = mem_info['Aging_k_on']
+                    Aging_k_off = mem_info['Aging_k_off']
+                    Aging_b_on = mem_info['Aging_b_on']
+                    Aging_b_off = mem_info['Aging_b_off']
+                    self.cal_Gon_Goff(delta_t, Aging_k_on, Aging_k_off, Aging_b_on, Aging_b_off)
 
-                if self.d2d_variation:
-                    if self.aging_effect != 0:
-                        self.cal_Gon_Goff()
-                        self.x = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
-                    else:
-                        self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
+                    self.x = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
+
+                elif self.d2d_variation:
+                    self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
+
                 else:
-                    if self.aging_effect != 0:
-                        self.cal_Gon_Goff()
-                        self.x = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
-                    else:
-                        self.x = G_off * self.x2 + G_on * (1 - self.x2)
+                   self.x = G_off * self.x2 + G_on * (1 - self.x2)
 
                 self.x = (self.x - G_on) * trans_ratio
 
@@ -272,17 +270,23 @@ class Nodes(torch.nn.Module):
                 self.Gon_d2d = torch.stack([self.Gon_d2d] * batch_size)
                 self.Goff_d2d = torch.stack([self.Goff_d2d] * batch_size)
 
-            if self.aging_effect !=0 :
-                # Initialize
+            if self.aging_effect:
+                # Initialize the time-dependent Gon/Goff
                 self.Gon_aging = torch.zeros(*self.shape, device=self.Gon_aging.device)
                 self.Goff_aging = torch.zeros(*self.shape, device=self.Goff_aging.device)
                 self.Gon_aging = torch.stack([self.Goff_aging] * self.batch_size)
                 self.Goff_aging = torch.stack([self.Goff_aging] * self.batch_size)
 
-                self.G_on_0 = self.memristor_info_dict[self.device_name]['G_on']*torch.ones(*self.shape)
-                self.G_on_0 = torch.stack([self.G_on_0] * self.batch_size)
-                self.G_off_0 = self.memristor_info_dict[self.device_name]['G_off']*torch.ones(*self.shape)
-                self.G_off_0 = torch.stack([self.G_off_0] * self.batch_size)
+                # Initialize the mem_t
+                self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+
+                # Initialize the start point Gon/Goff
+                if self.d2d_variation:
+                    self.Gon_0 = self.Gon_d2d
+                    self.Goff_0 = self.Goff_d2d
+                else:
+                    self.Gon_0 = self.memristor_info_dict[self.device_name]['G_on'] * torch.ones(batch_size, *self.shape, device=self.Gon_0.device)
+                    self.Goff_0 = self.memristor_info_dict[self.device_name]['G_off'] * torch.ones(batch_size, *self.shape, device=self.Goff_0.device)
 
         if self.sum_input:
             self.summed = torch.zeros(
@@ -300,31 +304,23 @@ class Nodes(torch.nn.Module):
         self.learning = mode
         return super().train(mode)
     
-    def cal_Gon_Goff(self) -> None:
-        r_on = self.R_on 
-        r_off = self.R_off
-        k = 1
-        b = 1
+    def cal_Gon_Goff(self, dt, k_on, k_off, b_on, b_off) -> None:
+        if self.mem_t.dim() == 4:
+            self.mem_t[:, 0, :, :] = self.mem_step.view(-1, 1, 1)
+        elif self.mem_t.dim() == 2:
+            self.mem_t[:, :] = self.mem_step.view(-1, 1)
+        else:
+            print("Wrong mem_t shape!!!!!!!!")
 
-        indices = torch.tensor([self.network_timesteps])
-        temp_a = torch.index_select(self.mem_t, 1, indices)
         if self.aging_effect == 1:
-            temp_a_on = (1-r_on)**temp_a                                   #equation 1 : G=G_0*((1-r)^t)
-            temp_a_off = (1-r_off)**temp_a
-        elif self.aging_effect == 2:
-            temp_a_on = k*math.log10(temp_a)+b                             #equation 2 : G=G_0*(k*lg(t)+b)
-            temp_a_off = k*math.log10(temp_a)+b
-        elif self.aging_effect == 3:
-            temp_a_on = k*temp_a+b                                         #equation 3 : G=G_0*(k*t+b)
-            temp_a_off = k*temp_a+b
-
-        for i in range (self.batch_size): 
-            if self.d2d_variation:
-                self.Gon_aging[i] = temp_a_on[i] * self.Gon_d2d[i]
-                self.Goff_aging[i] = temp_a_off[i] * self.Goff_d2d[i]
-            else:
-                self.Gon_aging[i] = temp_a_on[i] * self.G_on_0[i]
-                self.Goff_aging[i] = temp_a_off[i] * self.G_off_0[i]
+            self.Gon_aging = self.Gon_0 * ((1 - k_on) ** (self.mem_t * dt))
+            self.Goff_aging = self.Goff_0 * ((1 - k_off) ** (self.mem_t * dt))
+        elif self.aging_effect == 2: #TODO: equation 2: G=G_0*(k*lg(t)+b)
+            self.Gon_aging = self.Gon_0
+            self.Goff_aging = self.Goff_0
+        elif self.aging_effect == 3: # TODO: equation 3: G=G_0*(k*lg(t)+b)
+            self.Gon_aging = self.Gon_0
+            self.Goff_aging = self.Goff_0
 
 
 class AbstractInput(ABC):

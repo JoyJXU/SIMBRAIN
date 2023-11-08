@@ -40,8 +40,10 @@
         "sigma_absolute":0.005783083695110348,
         "Gon_sigma":0.5e-6,
         "Goff_sigma":0.5e-4,
-        "R_on":0.5,
-        "R_off":0.5
+        "Aging_k_on":0.5,
+        "Aging_k_off":0.5,
+        "Aging_b_on":0.5,
+        "Aging_b_off":0.5
     },
     "hu":
     {
