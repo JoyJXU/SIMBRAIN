@@ -186,6 +186,27 @@ class Nodes(torch.nn.Module):
                 self.mem_x[self.mem_v <= v_on] = self.mem_x[self.mem_v <= v_on]+delta_t*(k_on*(self.mem_v[self.mem_v <= v_on]/v_on-1)**alpha_on)*(self.mem_x[self.mem_v <= v_on])**(P_on)
 
                 self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
+                
+                # Retention Loss
+                if self.retention_loss == 1:
+                    # G(t) = G(0) * e^(- t*tau)^beta                      
+                    self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
+                    self.mem_x *= torch.exp(torch.tensor(-(1/4 * delta_t * retention_loss_tau) ** retention_loss_beta))
+                    self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
+                    self.mem_x = (self.mem_x - G_on) * trans_ratio
+                    # tau = 0.012478 , beta = 1.066  or  tau = 0.01245 , beta = 1.073
+                    
+    
+                if self.retention_loss == 2:
+                    # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)                    
+                    self.mem_v_threshold = torch.where((self.mem_v > v_on) & (self.mem_v < v_off), torch.zeros_like(self.mem_v), torch.ones_like(self.mem_v))
+                    self.mem_loss_time[self.mem_v_threshold == 0] += delta_t
+                    self.mem_loss_time[self.mem_v_threshold == 1] = 0         
+                    self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
+                    self.mem_x -= self.mem_x * delta_t * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
+                    self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
+                    self.mem_x = (self.mem_x - G_on) * trans_ratio                     
+                
 
                 if self.c2c_variation:
                     self.normal_relative.normal_(mean=0., std=sigma_relative)
@@ -201,31 +222,7 @@ class Nodes(torch.nn.Module):
                 else:
                     self.x = G_off * self.mem_x + G_on * (1 - self.mem_x)
                     
-                # Retention Loss
-                if self.retention_loss == 1:
-                    # G(t) = G(0) * e^(- t*tau)^beta                      
-                    self.x *=  torch.exp(torch.tensor(-(1/2 * delta_t * retention_loss_tau) ** retention_loss_beta))
-                    self.x = torch.clamp(self.x, min = G_on, max = G_off)
-                    
-                    self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-                    self.mem_x *= torch.exp(torch.tensor(-(1/2 * delta_t * retention_loss_tau) ** retention_loss_beta))
-                    self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
-                    self.mem_x = (self.mem_x - G_on) * trans_ratio
-                    # tau = 0.012478 , beta = 1.066  or  tau = 0.01245 , beta = 1.073
-                    
-    
-                if self.retention_loss == 2:
-                    # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)                    
-                    self.mem_v_threshold = torch.where((self.mem_v > v_on) & (self.mem_v < v_off), torch.zeros_like(self.mem_v), torch.ones_like(self.mem_v))
-                    self.mem_loss_time[self.mem_v_threshold == 0] += delta_t
-                    self.mem_loss_time[self.mem_v_threshold == 1] = 0
-                    self.x -= self.x * delta_t * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
-                    self.x = torch.clamp(self.x, min = G_on, max = G_off)
-                    
-                    self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-                    self.mem_x -= self.mem_x * delta_t * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
-                    self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
-                    self.mem_x = (self.mem_x - G_on) * trans_ratio                    
+               
                     
                 self.x = (self.x - G_on) * trans_ratio
                 
