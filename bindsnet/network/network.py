@@ -240,6 +240,13 @@ class Network(torch.nn.Module):
                         inputs[c[1]] = torch.zeros(
                             self.batch_size, *target.shape, device=target.s.device
                         )
+                
+                if c == ('Y', 'Y'):
+                    all_false = torch.all(source.s == False)
+                    if all_false == False:
+                        all_false = all_false
+                        #print(source.s)
+                        
                 # Add to input: source's spikes multiplied by connection weights.
                 if isinstance(target, CSRMNodes):
                     inputs[c[1]] += self.connections[c].compute_window(source.s)
