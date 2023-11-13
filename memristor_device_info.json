@@ -41,9 +41,7 @@
         "Gon_sigma":0.5e-6,
         "Goff_sigma":0.5e-4,
         "Aging_k_on":0.5,
-        "Aging_k_off":0.5,
-        "Aging_b_on":0.5,
-        "Aging_b_off":0.5
+        "Aging_k_off":0.5
     },
     "hu":
     {

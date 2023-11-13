@@ -58,7 +58,7 @@ parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_device", type=str, default='ferro') #trace: original trace
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=bool, default=False)
-parser.add_argument("--aging_effect", type=int, default=1) # 0: No aging effect, 1: equation 1, 2: equation 2, 3: equation 3
+parser.add_argument("--aging_effect", type=int, default=1) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.set_defaults(plot=False, gpu=True)
 
 args = parser.parse_args()

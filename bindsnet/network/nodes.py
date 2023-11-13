@@ -179,9 +179,7 @@ class Nodes(torch.nn.Module):
                 if self.aging_effect:
                     Aging_k_on = mem_info['Aging_k_on']
                     Aging_k_off = mem_info['Aging_k_off']
-                    Aging_b_on = mem_info['Aging_b_on']
-                    Aging_b_off = mem_info['Aging_b_off']
-                    self.cal_Gon_Goff(delta_t, Aging_k_on, Aging_k_off, Aging_b_on, Aging_b_off)
+                    self.cal_Gon_Goff(delta_t, Aging_k_on, Aging_k_off)
 
                     self.x = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
 
@@ -304,7 +302,7 @@ class Nodes(torch.nn.Module):
         self.learning = mode
         return super().train(mode)
     
-    def cal_Gon_Goff(self, dt, k_on, k_off, b_on, b_off) -> None:
+    def cal_Gon_Goff(self, dt, k_on, k_off) -> None:
         if self.mem_t.dim() == 4:
             self.mem_t[:, 0, :, :] = self.mem_step.view(-1, 1, 1)
         elif self.mem_t.dim() == 2:
@@ -315,13 +313,9 @@ class Nodes(torch.nn.Module):
         if self.aging_effect == 1:
             self.Gon_aging = self.Gon_0 * ((1 - k_on) ** (self.mem_t * dt))
             self.Goff_aging = self.Goff_0 * ((1 - k_off) ** (self.mem_t * dt))
-        elif self.aging_effect == 2: #TODO: equation 2: G=G_0*(k*lg(t)+b)
-            self.Gon_aging = self.Gon_0
-            self.Goff_aging = self.Goff_0
-        elif self.aging_effect == 3: # TODO: equation 3: G=G_0*(k*lg(t)+b)
-            self.Gon_aging = self.Gon_0
-            self.Goff_aging = self.Goff_0
-
+        elif self.aging_effect == 2: #TODO: equation 2: G=k*t+G_0
+            self.Gon_aging = k_on*self.mem_t+self.Gon_0
+            self.Goff_aging = k_off*self.mem_t+self.Goff_0
 
 class AbstractInput(ABC):
     # language=rst
