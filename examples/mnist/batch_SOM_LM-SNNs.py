@@ -57,7 +57,7 @@ parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_device", type=str, default='hu') #trace: original trace
 parser.add_argument("--c2c_variation", type=bool, default=False)
-parser.add_argument("--retention_loss", type=int, default=0) #retention loss: 0, without it ; 1, during pulse ; 2, no pluse for a long time
+parser.add_argument("--retention_loss", type=int, default=2) #retention loss: 0, without it ; 1, during pulse ; 2, no pluse for a long time
 parser.set_defaults(plot=False, gpu=True)
 
 args = parser.parse_args()

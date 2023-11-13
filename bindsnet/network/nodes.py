@@ -104,7 +104,7 @@ class Nodes(torch.nn.Module):
         self.learning = learning
 
         if self.device_name != 'trace':
-            with open('/home/zhengyi_/mem-brain-bindsnet/memristor_device_info.json', 'r') as f:
+            with open('../../memristor_device_info.json', 'r') as f:
                 self.memristor_info_dict = json.load(f)
 
             assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
@@ -182,8 +182,10 @@ class Nodes(torch.nn.Module):
                                       #self.mem_x+delta_t*(k_off*(self.mem_v/v_off-1)**alpha_off)*(1-self.mem_x)**(P_off), \
                                       #self.mem_x+delta_t*(k_on*(self.mem_v/v_on-1)**alpha_on)*(self.mem_x)**(P_on))
                     
-                self.mem_x[self.mem_v >= v_off] = self.mem_x[self.mem_v >= v_off]+delta_t*(k_off*(self.mem_v[self.mem_v >= v_off]/v_off-1)**alpha_off)*(1-self.mem_x[self.mem_v >= v_off])**(P_off)
-                self.mem_x[self.mem_v <= v_on] = self.mem_x[self.mem_v <= v_on]+delta_t*(k_on*(self.mem_v[self.mem_v <= v_on]/v_on-1)**alpha_on)*(self.mem_x[self.mem_v <= v_on])**(P_on)
+                self.mem_x[self.mem_v >= v_off] = self.mem_x[self.mem_v >= v_off] + \
+                                                  delta_t*(k_off*(self.mem_v[self.mem_v >= v_off]/v_off-1)**alpha_off)*(1-self.mem_x[self.mem_v >= v_off])**(P_off)
+                self.mem_x[self.mem_v <= v_on] = self.mem_x[self.mem_v <= v_on] + \
+                                                 delta_t*(k_on*(self.mem_v[self.mem_v <= v_on]/v_on-1)**alpha_on)*(self.mem_x[self.mem_v <= v_on])**(P_on)
 
                 self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
                 
@@ -198,10 +200,10 @@ class Nodes(torch.nn.Module):
                     
     
                 if self.retention_loss == 2:
-                    # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)                    
-                    self.mem_v_threshold = torch.where((self.mem_v > v_on) & (self.mem_v < v_off), torch.zeros_like(self.mem_v), torch.ones_like(self.mem_v))
-                    self.mem_loss_time[self.mem_v_threshold == 0] += delta_t
-                    self.mem_loss_time[self.mem_v_threshold == 1] = 0         
+                    # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)                   
+                    self.mem_v_threshold = (self.mem_v > v_on) & (self.mem_v < v_off)
+                    self.mem_loss_time[self.mem_v_threshold] += delta_t
+                    self.mem_loss_time[~self.mem_v_threshold] = 0
                     self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
                     self.mem_x -= self.mem_x * delta_t * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
                     self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
