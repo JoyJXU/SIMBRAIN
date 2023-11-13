@@ -73,6 +73,7 @@ class Nodes(torch.nn.Module):
         self.c2c_variation = mem_device['c2c_variation']
         self.d2d_variation = mem_device['d2d_variation']
         self.stuck_at_fault = mem_device['stuck_at_fault']
+        self.retention_loss = mem_device['retention_loss']
 
         if self.traces:
             self.register_buffer("x", torch.Tensor()) # Firing traces.
@@ -101,6 +102,10 @@ class Nodes(torch.nn.Module):
             if self.stuck_at_fault:
                 self.register_buffer("SAF0_mask", torch.Tensor())
                 self.register_buffer("SAF1_mask", torch.Tensor())
+                
+            if self.retention_loss == 2:
+                self.register_buffer("mem_v_threshold", torch.Tensor())
+                self.register_buffer("mem_loss_time", torch.Tensor())    
 
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
@@ -149,6 +154,8 @@ class Nodes(torch.nn.Module):
                 G_on = mem_info['G_on']
                 sigma_relative = mem_info['sigma_relative']
                 sigma_absolute = mem_info['sigma_absolute']
+                retention_loss_tau = mem_info['retention_loss_tau']
+                retention_loss_beta = mem_info['retention_loss_beta']
 
                 trans_ratio = 1 / (G_off - G_on)
 
@@ -158,19 +165,44 @@ class Nodes(torch.nn.Module):
                 self.mem_v[self.mem_v == 1] = mem_info['vinput_pos']
 
                 if self.d2d_variation in [1, 3]:
-                    self.mem_x = torch.where(self.mem_v > 0, \
-                                             self.mem_x + delta_t * (k_off * (self.mem_v / v_off - 1) ** alpha_off) * ( \
-                                                         1 - self.mem_x) ** (self.Poff_d2d), \
-                                             self.mem_x + delta_t * (k_on * (self.mem_v / v_on - 1) ** alpha_on) * ( \
-                                                 self.mem_x) ** (self.Pon_d2d))
-                else:
-                    self.mem_x = torch.where(self.mem_v > 0, \
-                                             self.mem_x + delta_t * (k_off * (self.mem_v / v_off - 1) ** alpha_off) * ( \
-                                                     1 - self.mem_x) ** (P_off), \
-                                             self.mem_x + delta_t * (k_on * (self.mem_v / v_on - 1) ** alpha_on) * ( \
-                                                 self.mem_x) ** (P_on))
+                    #self.mem_x = torch.where(self.mem_v > 0, \
+                                             #self.mem_x + delta_t * (k_off * (self.mem_v / v_off - 1) ** alpha_off) * ( \
+                                                         #1 - self.mem_x) ** (self.Poff_d2d), \
+                                             #self.mem_x + delta_t * (k_on * (self.mem_v / v_on - 1) ** alpha_on) * ( \
+                                                 #self.mem_x) ** (self.Pon_d2d))
+                    self.mem_x[self.mem_v >= v_off] = self.mem_x[self.mem_v >= v_off] + delta_t*(k_off*(self.mem_v[self.mem_v >= v_off]/v_off-1)**alpha_off) * torch.pow((1-self.mem_x[self.mem_v >= v_off]),(self.Poff_d2d[self.mem_v >= v_off]))
+                    self.mem_x[self.mem_v <= v_on] = self.mem_x[self.mem_v <= v_on]+delta_t*(k_on*(self.mem_v[self.mem_v <= v_on]/v_on-1)**alpha_on)*torch.pow((self.mem_x[self.mem_v <= v_on]),(self.Pon_d2d[self.mem_v <= v_on]))
 
+                else:
+                    #self.mem_x = torch.where(self.mem_v > 0, \
+                                             #self.mem_x + delta_t * (k_off * (self.mem_v / v_off - 1) ** alpha_off) * ( \
+                                                     #1 - self.mem_x) ** (P_off), \
+                                             #self.mem_x + delta_t * (k_on * (self.mem_v / v_on - 1) ** alpha_on) * ( \
+                                                 #self.mem_x) ** (P_on))
+                    self.mem_x[self.mem_v >= v_off] = self.mem_x[self.mem_v >= v_off] + \
+                                  delta_t*(k_off*(self.mem_v[self.mem_v >= v_off]/v_off-1)**alpha_off)*(1-self.mem_x[self.mem_v >= v_off])**(P_off)
+                    self.mem_x[self.mem_v <= v_on] = self.mem_x[self.mem_v <= v_on] + \
+                                 delta_t*(k_on*(self.mem_v[self.mem_v <= v_on]/v_on-1)**alpha_on)*(self.mem_x[self.mem_v <= v_on])**(P_on)
                 self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
+
+                # Retention Loss
+                if self.retention_loss == 1:
+                    # G(t) = G(0) * e^(- t*tau)^beta                      
+                    self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
+                    self.mem_x *= torch.exp(torch.tensor(-(1/4 * delta_t * retention_loss_tau) ** retention_loss_beta))
+                    self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
+                    self.mem_x = (self.mem_x - G_on) * trans_ratio
+                    # tau = 0.012478 , beta = 1.066  or  tau = 0.01245 , beta = 1.073
+                    
+                if self.retention_loss == 2:
+                    # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)                    
+                    self.mem_v_threshold = (self.mem_v > v_on) & (self.mem_v < v_off)
+                    self.mem_loss_time[self.mem_v_threshold] += delta_t
+                    self.mem_loss_time[~self.mem_v_threshold] = 0     
+                    self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
+                    self.mem_x -= self.mem_x * delta_t * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
+                    self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
+                    self.mem_x = (self.mem_x - G_on) * trans_ratio 
 
                 if self.c2c_variation:
                     self.normal_relative.normal_(mean=0., std=sigma_relative)
@@ -186,10 +218,8 @@ class Nodes(torch.nn.Module):
 
                 if self.stuck_at_fault:
                     self.x2.masked_fill_(self.SAF0_mask, 0)
-                    self.mem_x.masked_fill_(self.SAF0_mask, 0)
 
                     self.x2.masked_fill_(self.SAF1_mask, 1)
-                    self.mem_x.masked_fill_(self.SAF1_mask, 1)
 
                 if self.d2d_variation in [1, 2]:
                     self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
@@ -306,6 +336,10 @@ class Nodes(torch.nn.Module):
                 random_tensor = torch.rand(*self.shape, device=self.SAF0_mask.device)
                 self.SAF0_mask = random_tensor < ((SAF_ratio / (SAF_ratio + 1)) * SAF_lambda)
                 self.SAF1_mask = (random_tensor >= ((SAF_ratio / (SAF_ratio + 1)) * SAF_lambda)) & (random_tensor < SAF_lambda)
+
+            if self.retention_loss == 2:
+                self.mem_v_threshold = torch.zeros(batch_size, *self.shape, device=self.mem_v_threshold.device)
+                self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
 
         if self.sum_input:
             self.summed = torch.zeros(
