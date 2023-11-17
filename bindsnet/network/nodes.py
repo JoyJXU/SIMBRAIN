@@ -310,12 +310,12 @@ class Nodes(torch.nn.Module):
         else:
             print("Wrong mem_t shape!!!!!!!!")
 
-        if self.aging_effect == 1:
+        if self.aging_effect == 1: #equation 1: G=G_0*(1-r)**t
             self.Gon_aging = self.Gon_0 * ((1 - k_on) ** (self.mem_t * dt))
             self.Goff_aging = self.Goff_0 * ((1 - k_off) ** (self.mem_t * dt))
-        elif self.aging_effect == 2: #TODO: equation 2: G=k*t+G_0
-            self.Gon_aging = k_on*self.mem_t+self.Gon_0
-            self.Goff_aging = k_off*self.mem_t+self.Goff_0
+        elif self.aging_effect == 2: #equation 2: G=k*t+G_0
+            self.Gon_aging = k_on * self.mem_t + self.Gon_0
+            self.Goff_aging = k_off * self.mem_t + self.Goff_0
 
 class AbstractInput(ABC):
     # language=rst
