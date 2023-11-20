@@ -74,6 +74,7 @@ class Nodes(torch.nn.Module):
         self.d2d_variation = mem_device['d2d_variation']
         self.stuck_at_fault = mem_device['stuck_at_fault']
         self.retention_loss = mem_device['retention_loss']
+        self.aging_effect = mem_device['aging_effect']
 
         if self.traces:
             self.register_buffer("x", torch.Tensor()) # Firing traces.
@@ -99,6 +100,13 @@ class Nodes(torch.nn.Module):
                 self.register_buffer("Pon_d2d", torch.Tensor())
                 self.register_buffer("Poff_d2d", torch.Tensor())
 
+            if self.aging_effect:
+                self.register_buffer("Gon_aging", torch.Tensor())
+                self.register_buffer("Goff_aging", torch.Tensor())
+                self.register_buffer("Gon_0", torch.Tensor())
+                self.register_buffer("Goff_0", torch.Tensor())
+                self.register_buffer("mem_t", torch.Tensor())
+
             if self.stuck_at_fault:
                 self.register_buffer("SAF0_mask", torch.Tensor())
                 self.register_buffer("SAF1_mask", torch.Tensor())
@@ -114,6 +122,7 @@ class Nodes(torch.nn.Module):
         self.batch_size = None
         self.trace_decay = None
         self.learning = learning
+        self.register_buffer("mem_step", torch.Tensor())
 
         if self.device_name != 'trace':
             with open('../../memristor_device_info.json', 'r') as f:
@@ -221,10 +230,18 @@ class Nodes(torch.nn.Module):
 
                     self.x2.masked_fill_(self.SAF1_mask, 1)
 
-                if self.d2d_variation in [1, 2]:
+                if self.aging_effect:
+                    Aging_k_on = mem_info['Aging_k_on']
+                    Aging_k_off = mem_info['Aging_k_off']
+                    self.cal_Gon_Goff(delta_t, Aging_k_on, Aging_k_off)
+
+                    self.x = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
+
+                elif self.d2d_variation in [1, 2]:
                     self.x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
+
                 else:
-                    self.x = G_off * self.x2 + G_on * (1 - self.x2)
+                   self.x = G_off * self.x2 + G_on * (1 - self.x2)
 
                 self.x = (self.x - G_on) * trans_ratio
 
@@ -327,6 +344,24 @@ class Nodes(torch.nn.Module):
                 self.Pon_d2d = torch.stack([self.Pon_d2d] * batch_size)
                 self.Poff_d2d = torch.stack([self.Poff_d2d] * batch_size)
 
+            if self.aging_effect:
+                # Initialize the time-dependent Gon/Goff
+                self.Gon_aging = torch.zeros(*self.shape, device=self.Gon_aging.device)
+                self.Goff_aging = torch.zeros(*self.shape, device=self.Goff_aging.device)
+                self.Gon_aging = torch.stack([self.Goff_aging] * self.batch_size)
+                self.Goff_aging = torch.stack([self.Goff_aging] * self.batch_size)
+
+                # Initialize the mem_t
+                self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+
+                # Initialize the start point Gon/Goff
+                if self.d2d_variation in [1, 2]:
+                    self.Gon_0 = self.Gon_d2d
+                    self.Goff_0 = self.Goff_d2d
+                else:
+                    self.Gon_0 = self.memristor_info_dict[self.device_name]['G_on'] * torch.ones(batch_size, *self.shape, device=self.Gon_0.device)
+                    self.Goff_0 = self.memristor_info_dict[self.device_name]['G_off'] * torch.ones(batch_size, *self.shape, device=self.Goff_0.device)
+
             if self.stuck_at_fault:
                 SAF_lambda = self.memristor_info_dict[self.device_name]['SAF_lambda']
                 SAF_ratio = self.memristor_info_dict[self.device_name]['SAF_ratio'] # SAF0:SAF1
@@ -356,6 +391,21 @@ class Nodes(torch.nn.Module):
         """
         self.learning = mode
         return super().train(mode)
+    
+    def cal_Gon_Goff(self, dt, k_on, k_off) -> None:
+        if self.mem_t.dim() == 4:
+            self.mem_t[:, 0, :, :] = self.mem_step.view(-1, 1, 1)
+        elif self.mem_t.dim() == 2:
+            self.mem_t[:, :] = self.mem_step.view(-1, 1)
+        else:
+            print("Wrong mem_t shape!!!!!!!!")
+
+        if self.aging_effect == 1: #equation 1: G=G_0*(1-r)**t
+            self.Gon_aging = self.Gon_0 * ((1 - k_on) ** (self.mem_t * dt))
+            self.Goff_aging = self.Goff_0 * ((1 - k_off) ** (self.mem_t * dt))
+        elif self.aging_effect == 2: #equation 2: G=k*t+G_0
+            self.Gon_aging = k_on * self.mem_t + self.Gon_0
+            self.Goff_aging = k_off * self.mem_t + self.Goff_0
 
 
 class AbstractInput(ABC):
