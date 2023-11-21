@@ -1,10 +1,5 @@
-from abc import ABC, abstractmethod
-from functools import reduce
-from operator import mul
 from typing import Iterable, Optional, Union
-
 import torch
-import json
 
 class MemristorArray(torch.nn.Module):
     
@@ -12,6 +7,7 @@ class MemristorArray(torch.nn.Module):
         self,
         mem_device: dict = {},
         shape: Optional[Iterable[int]] = None,
+        memristor_info_dict : dict = {},
         **kwargs,
     ) -> None:
         # language=rst
@@ -23,8 +19,8 @@ class MemristorArray(torch.nn.Module):
     
         self.shape = shape    
     
-        self.register_buffer("mem_v", torch.ByteTensor())
         self.register_buffer("mem_x", torch.Tensor())  # Memristor-based firing traces.
+        self.register_buffer("mem_c", torch.Tensor())
     
         self.device_name = mem_device['device_name']
         self.c2c_variation = mem_device['c2c_variation']
@@ -52,25 +48,11 @@ class MemristorArray(torch.nn.Module):
             self.register_buffer("mem_v_threshold", torch.Tensor())
             self.register_buffer("mem_loss_time", torch.Tensor())    
     
-        with open('../../memristor_device_info.json', 'r') as f:
-            self.memristor_info_dict = json.load(f)
+
+        self.memristor_info_dict = memristor_info_dict
     
-        assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
+
     
-    
-    def reset_memristor_variables(self) -> None:
-        # language=rst
-        """
-        Abstract base class method for resetting state variables.
-        """
-    
-        self.mem_v.zero_()
-        self.mem_x.zero_()  
-    
-        if self.c2c_variation:
-            self.normal_relative.zero_()
-            self.normal_absolute.zero_()
-            
     
     def set_batch_size(self,batch_size) -> None:
         # language=rst
@@ -81,12 +63,9 @@ class MemristorArray(torch.nn.Module):
         """
         self.batch_size = batch_size
     
-        self.mem_v = torch.zeros(
-            batch_size, *self.shape, device=self.mem_v.device, dtype=torch.bool
-        )
     
-
         self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
+        self.mem_c = torch.zeros(batch_size, *self.shape, device=self.mem_c.device)
 
         if self.c2c_variation:
             self.normal_relative = torch.zeros(batch_size, *self.shape, device=self.normal_relative.device)
@@ -145,7 +124,7 @@ class MemristorArray(torch.nn.Module):
             self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
     
     
-    def memristor_compute(self, s: torch.Tensor) -> None:
+    def memristor_compute(self, mem_v: torch.Tensor) -> None:
         # language=rst
         """
         Abstract base class method for a single simulation step.
@@ -169,21 +148,15 @@ class MemristorArray(torch.nn.Module):
         sigma_absolute = mem_info['sigma_absolute']
         retention_loss_tau = mem_info['retention_loss_tau']
         retention_loss_beta = mem_info['retention_loss_beta']
-    
-        trans_ratio = 1 / (G_off - G_on)
-    
-        self.mem_v = s.float()
-    
-        self.mem_v[self.mem_v == 0] = mem_info['vinput_neg']
-        self.mem_v[self.mem_v == 1] = mem_info['vinput_pos']
-    
+
+
         if self.d2d_variation in [1, 3]:
-            self.mem_x[self.mem_v >= v_off] = self.mem_x[self.mem_v >= v_off]+delta_t*(k_off*(self.mem_v[self.mem_v >= v_off]/v_off-1)**alpha_off)*torch.pow((1-self.mem_x[self.mem_v >= v_off]),(self.Poff_d2d[self.mem_v >= v_off]))
-            self.mem_x[self.mem_v <= v_on] = self.mem_x[self.mem_v <= v_on]+delta_t*(k_on*(self.mem_v[self.mem_v <= v_on]/v_on-1)**alpha_on)*torch.pow((self.mem_x[self.mem_v <= v_on]),(self.Pon_d2d[self.mem_v <= v_on]))
+            self.mem_x[mem_v >= v_off] = self.mem_x[mem_v >= v_off]+delta_t*(k_off*(mem_v[mem_v >= v_off]/v_off-1)**alpha_off)*torch.pow((1-self.mem_x[mem_v >= v_off]),(self.Poff_d2d[mem_v >= v_off]))
+            self.mem_x[mem_v <= v_on] = self.mem_x[mem_v <= v_on]+delta_t*(k_on*(mem_v[mem_v <= v_on]/v_on-1)**alpha_on)*torch.pow((self.mem_x[mem_v <= v_on]),(self.Pon_d2d[mem_v <= v_on]))
     
         else:
-            self.mem_x[self.mem_v >= v_off] = self.mem_x[self.mem_v >= v_off]+delta_t*(k_off*(self.mem_v[self.mem_v >= v_off]/v_off-1)**alpha_off)*(1-self.mem_x[self.mem_v >= v_off])**(P_off)
-            self.mem_x[self.mem_v <= v_on] = self.mem_x[self.mem_v <= v_on]+delta_t*(k_on*(self.mem_v[self.mem_v <= v_on]/v_on-1)**alpha_on)*(self.mem_x[self.mem_v <= v_on])**(P_on)
+            self.mem_x[mem_v >= v_off] = self.mem_x[mem_v >= v_off]+delta_t*(k_off*(mem_v[mem_v >= v_off]/v_off-1)**alpha_off)*(1-self.mem_x[mem_v >= v_off])**(P_off)
+            self.mem_x[mem_v <= v_on] = self.mem_x[mem_v <= v_on]+delta_t*(k_on*(mem_v[mem_v <= v_on]/v_on-1)**alpha_on)*(self.mem_x[mem_v <= v_on])**(P_on)
     
         self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
     
@@ -193,18 +166,18 @@ class MemristorArray(torch.nn.Module):
             self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
             self.mem_x *= torch.exp(torch.tensor(-(1/4 * delta_t * retention_loss_tau) ** retention_loss_beta))
             self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
-            self.mem_x = (self.mem_x - G_on) * trans_ratio
+            self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
             # tau = 0.012478 , beta = 1.066  or  tau = 0.01245 , beta = 1.073
             
         if self.retention_loss == 2:
             # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)                    
-            self.mem_v_threshold = torch.where((self.mem_v > v_on) & (self.mem_v < v_off), torch.zeros_like(self.mem_v), torch.ones_like(self.mem_v))
+            self.mem_v_threshold = torch.where((mem_v > v_on) & (mem_v < v_off), torch.zeros_like(mem_v), torch.ones_like(mem_v))
             self.mem_loss_time[self.mem_v_threshold == 0] += delta_t
             self.mem_loss_time[self.mem_v_threshold == 1] = 0         
             self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
             self.mem_x -= self.mem_x * delta_t * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
             self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
-            self.mem_x = (self.mem_x - G_on) * trans_ratio 
+            self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
     
         if self.c2c_variation:
             self.normal_relative.normal_(mean=0., std=sigma_relative)
@@ -224,10 +197,9 @@ class MemristorArray(torch.nn.Module):
             self.x2.masked_fill_(self.SAF1_mask, 1)
     
         if self.d2d_variation in [1, 2]:
-            x = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
+            self.mem_c = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
         else:
-            x = G_off * self.x2 + G_on * (1 - self.x2)
+            self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
     
-        x = (x - G_on) * trans_ratio
     
-        return x
+        return self.mem_c
