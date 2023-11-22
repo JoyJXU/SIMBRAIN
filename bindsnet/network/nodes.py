@@ -65,7 +65,6 @@ class Nodes(torch.nn.Module):
             traces_additive  # Whether to record spike traces additively.
         )
         self.register_buffer("s", torch.ByteTensor())  # Spike occurrences.
-        self.register_buffer("mem_v", torch.ByteTensor())
 
         self.sum_input = sum_input  # Whether to sum all inputs.
 
@@ -78,7 +77,6 @@ class Nodes(torch.nn.Module):
 
         if self.traces:
             self.register_buffer("x", torch.Tensor()) # Firing traces.
-            self.register_buffer("mem_x", torch.Tensor())  # Memristor-based firing traces.
             self.register_buffer(
                 "tc_trace", torch.tensor(tc_trace)
             )  # Time constant of spike trace decay.
@@ -89,31 +87,41 @@ class Nodes(torch.nn.Module):
                 "trace_decay", torch.empty_like(self.tc_trace)
             )  # Set in compute_decays.
 
-            if self.c2c_variation:
-                self.register_buffer("normal_absolute", torch.Tensor())
-                self.register_buffer("normal_relative", torch.Tensor())
+            if self.device_name != 'trace':
+                with open('../../memristor_device_info.json', 'r') as f:
+                    self.memristor_info_dict = json.load(f)
+                assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
 
-            if self.d2d_variation in [1, 2]:
-                self.register_buffer("Gon_d2d", torch.Tensor())
-                self.register_buffer("Goff_d2d", torch.Tensor())
-            if self.d2d_variation in [1, 3]:
-                self.register_buffer("Pon_d2d", torch.Tensor())
-                self.register_buffer("Poff_d2d", torch.Tensor())
-
-            if self.aging_effect:
-                self.register_buffer("Gon_aging", torch.Tensor())
-                self.register_buffer("Goff_aging", torch.Tensor())
-                self.register_buffer("Gon_0", torch.Tensor())
-                self.register_buffer("Goff_0", torch.Tensor())
+                self.register_buffer("mem_x", torch.Tensor())  # Memristor-based firing traces.
+                self.register_buffer("mem_v", torch.ByteTensor())
                 self.register_buffer("mem_t", torch.Tensor())
+                self.register_buffer("mem_step", torch.Tensor())
 
-            if self.stuck_at_fault:
-                self.register_buffer("SAF0_mask", torch.Tensor())
-                self.register_buffer("SAF1_mask", torch.Tensor())
-                
-            if self.retention_loss == 2:
-                self.register_buffer("mem_v_threshold", torch.Tensor())
-                self.register_buffer("mem_loss_time", torch.Tensor())    
+                if self.c2c_variation:
+                    self.register_buffer("normal_absolute", torch.Tensor())
+                    self.register_buffer("normal_relative", torch.Tensor())
+
+                if self.d2d_variation in [1, 2]:
+                    self.register_buffer("Gon_d2d", torch.Tensor())
+                    self.register_buffer("Goff_d2d", torch.Tensor())
+                if self.d2d_variation in [1, 3]:
+                    self.register_buffer("Pon_d2d", torch.Tensor())
+                    self.register_buffer("Poff_d2d", torch.Tensor())
+
+                if self.aging_effect:
+                    self.register_buffer("Gon_aging", torch.Tensor())
+                    self.register_buffer("Goff_aging", torch.Tensor())
+                    self.register_buffer("Gon_0", torch.Tensor())
+                    self.register_buffer("Goff_0", torch.Tensor())
+
+                if self.stuck_at_fault:
+                    self.register_buffer("SAF0_mask", torch.Tensor())
+                    self.register_buffer("SAF1_mask", torch.Tensor())
+                    self.register_buffer("Q_mask", torch.Tensor())
+
+                if self.retention_loss == 2:
+                    self.register_buffer("mem_v_threshold", torch.Tensor())
+                    self.register_buffer("mem_loss_time", torch.Tensor())
 
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
@@ -122,13 +130,6 @@ class Nodes(torch.nn.Module):
         self.batch_size = None
         self.trace_decay = None
         self.learning = learning
-        self.register_buffer("mem_step", torch.Tensor())
-
-        if self.device_name != 'trace':
-            with open('../../memristor_device_info.json', 'r') as f:
-                self.memristor_info_dict = json.load(f)
-
-            assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
 
     @abstractmethod
     def forward(self, x: torch.Tensor) -> None:
@@ -167,6 +168,14 @@ class Nodes(torch.nn.Module):
                 retention_loss_beta = mem_info['retention_loss_beta']
 
                 trans_ratio = 1 / (G_off - G_on)
+
+                # Calculate the mem_t
+                if self.mem_t.dim() == 4:
+                    self.mem_t[:, 0, :, :] = self.mem_step.view(-1, 1, 1)
+                elif self.mem_t.dim() == 2:
+                    self.mem_t[:, :] = self.mem_step.view(-1, 1)
+                else:
+                    print("Wrong mem_t shape!!!!!!!!")
 
                 self.mem_v = self.s.float()
 
@@ -223,7 +232,6 @@ class Nodes(torch.nn.Module):
 
                 if self.stuck_at_fault:
                     self.x2.masked_fill_(self.SAF0_mask, 0)
-
                     self.x2.masked_fill_(self.SAF1_mask, 1)
 
                 if self.aging_effect:
@@ -253,15 +261,17 @@ class Nodes(torch.nn.Module):
         Abstract base class method for resetting state variables.
         """
         self.s.zero_()
-        self.mem_v.zero_()
 
         if self.traces:
             self.x.zero_()  # Spike traces.
-            self.mem_x.zero_()  # Memristor-based spike traces.
 
-            if self.c2c_variation:
-                self.normal_relative.zero_()
-                self.normal_absolute.zero_()
+            if self.device_name != 'trace':
+                self.mem_v.zero_()
+                self.mem_x.zero_()  # Memristor-based spike traces.
+
+                if self.c2c_variation:
+                    self.normal_relative.zero_()
+                    self.normal_absolute.zero_()
 
         if self.sum_input:
             self.summed.zero_()  # Summed inputs.
@@ -290,87 +300,90 @@ class Nodes(torch.nn.Module):
         self.s = torch.zeros(
             batch_size, *self.shape, device=self.s.device, dtype=torch.bool
         )
-        self.mem_v = torch.zeros(
-            batch_size, *self.shape, device=self.mem_v.device, dtype=torch.bool
-        )
 
         if self.traces:
             self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
-            self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
 
-            if self.c2c_variation:
-                self.normal_relative = torch.zeros(batch_size, *self.shape, device=self.normal_relative.device)
-                self.normal_absolute = torch.zeros(batch_size, *self.shape, device=self.normal_absolute.device)
-
-            if self.d2d_variation in [1, 2]:
-                G_off = self.memristor_info_dict[self.device_name]['G_off']
-                G_on = self.memristor_info_dict[self.device_name]['G_on']
-                Gon_sigma = self.memristor_info_dict[self.device_name]['Gon_sigma']
-                Goff_sigma = self.memristor_info_dict[self.device_name]['Goff_sigma']
-
-                # Initialize
-                self.Gon_d2d = torch.zeros(*self.shape, device=self.Gon_d2d.device)
-                self.Goff_d2d = torch.zeros(*self.shape, device=self.Goff_d2d.device)
-                # Add d2d variation
-                self.Gon_d2d.normal_(mean=G_on, std=Gon_sigma)
-                self.Goff_d2d.normal_(mean=G_off, std=Goff_sigma)
-                # Clipping
-                self.Gon_d2d = torch.clamp(self.Gon_d2d, min=0)
-                self.Goff_d2d = torch.clamp(self.Goff_d2d, min=0)
-
-                self.Gon_d2d = torch.stack([self.Gon_d2d] * batch_size)
-                self.Goff_d2d = torch.stack([self.Goff_d2d] * batch_size)
-
-            if self.d2d_variation in [1, 3]:
-                P_off = self.memristor_info_dict[self.device_name]['P_off']
-                P_on = self.memristor_info_dict[self.device_name]['P_on']
-                Pon_sigma = self.memristor_info_dict[self.device_name]['Pon_sigma']
-                Poff_sigma = self.memristor_info_dict[self.device_name]['Poff_sigma']
-
-                # Initialize
-                self.Pon_d2d = torch.zeros(*self.shape, device=self.Pon_d2d.device)
-                self.Poff_d2d = torch.zeros(*self.shape, device=self.Poff_d2d.device)
-                # Add d2d variation
-                self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma)
-                self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma)
-                # Clipping
-                self.Pon_d2d = torch.clamp(self.Pon_d2d, min=0)
-                self.Poff_d2d = torch.clamp(self.Poff_d2d, min=0)
-
-                self.Pon_d2d = torch.stack([self.Pon_d2d] * batch_size)
-                self.Poff_d2d = torch.stack([self.Poff_d2d] * batch_size)
-
-            if self.aging_effect:
-                # Initialize the time-dependent Gon/Goff
-                self.Gon_aging = torch.zeros(*self.shape, device=self.Gon_aging.device)
-                self.Goff_aging = torch.zeros(*self.shape, device=self.Goff_aging.device)
-                self.Gon_aging = torch.stack([self.Goff_aging] * self.batch_size)
-                self.Goff_aging = torch.stack([self.Goff_aging] * self.batch_size)
+            if self.device_name != 'trace':
+                self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
+                self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
 
                 # Initialize the mem_t
                 self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
 
-                # Initialize the start point Gon/Goff
+                if self.c2c_variation:
+                    self.normal_relative = torch.zeros(batch_size, *self.shape, device=self.normal_relative.device)
+                    self.normal_absolute = torch.zeros(batch_size, *self.shape, device=self.normal_absolute.device)
+
                 if self.d2d_variation in [1, 2]:
-                    self.Gon_0 = self.Gon_d2d
-                    self.Goff_0 = self.Goff_d2d
-                else:
-                    self.Gon_0 = self.memristor_info_dict[self.device_name]['G_on'] * torch.ones(batch_size, *self.shape, device=self.Gon_0.device)
-                    self.Goff_0 = self.memristor_info_dict[self.device_name]['G_off'] * torch.ones(batch_size, *self.shape, device=self.Goff_0.device)
+                    G_off = self.memristor_info_dict[self.device_name]['G_off']
+                    G_on = self.memristor_info_dict[self.device_name]['G_on']
+                    Gon_sigma = self.memristor_info_dict[self.device_name]['Gon_sigma']
+                    Goff_sigma = self.memristor_info_dict[self.device_name]['Goff_sigma']
 
-            if self.stuck_at_fault:
-                SAF_lambda = self.memristor_info_dict[self.device_name]['SAF_lambda']
-                SAF_ratio = self.memristor_info_dict[self.device_name]['SAF_ratio'] # SAF0:SAF1
-                SAF_delta = self.memristor_info_dict[self.device_name]['SAF_delta'] # measured %/h????
+                    # Initialize
+                    self.Gon_d2d = torch.zeros(*self.shape, device=self.Gon_d2d.device)
+                    self.Goff_d2d = torch.zeros(*self.shape, device=self.Goff_d2d.device)
+                    # Add d2d variation
+                    self.Gon_d2d.normal_(mean=G_on, std=Gon_sigma)
+                    self.Goff_d2d.normal_(mean=G_off, std=Goff_sigma)
+                    # Clipping
+                    self.Gon_d2d = torch.clamp(self.Gon_d2d, min=0)
+                    self.Goff_d2d = torch.clamp(self.Goff_d2d, min=0)
 
-                # Add pre-deployment SAF #TODO:Change to architectural SAF with Poisson-distributed intra-crossbar and uniform-distributed inter-crossbar SAF
-                random_tensor = torch.rand(*self.shape, device=self.SAF0_mask.device)
-                self.SAF0_mask = random_tensor < ((SAF_ratio / (SAF_ratio + 1)) * SAF_lambda)
-                self.SAF1_mask = (random_tensor >= ((SAF_ratio / (SAF_ratio + 1)) * SAF_lambda)) & (random_tensor < SAF_lambda)
+                    self.Gon_d2d = torch.stack([self.Gon_d2d] * batch_size)
+                    self.Goff_d2d = torch.stack([self.Goff_d2d] * batch_size)
 
-            if self.retention_loss == 2:
-                self.mem_v_threshold = torch.zeros(batch_size, *self.shape, device=self.mem_v_threshold.device)
-                self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
+                if self.d2d_variation in [1, 3]:
+                    P_off = self.memristor_info_dict[self.device_name]['P_off']
+                    P_on = self.memristor_info_dict[self.device_name]['P_on']
+                    Pon_sigma = self.memristor_info_dict[self.device_name]['Pon_sigma']
+                    Poff_sigma = self.memristor_info_dict[self.device_name]['Poff_sigma']
+
+                    # Initialize
+                    self.Pon_d2d = torch.zeros(*self.shape, device=self.Pon_d2d.device)
+                    self.Poff_d2d = torch.zeros(*self.shape, device=self.Poff_d2d.device)
+                    # Add d2d variation
+                    self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma)
+                    self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma)
+                    # Clipping
+                    self.Pon_d2d = torch.clamp(self.Pon_d2d, min=0)
+                    self.Poff_d2d = torch.clamp(self.Poff_d2d, min=0)
+
+                    self.Pon_d2d = torch.stack([self.Pon_d2d] * batch_size)
+                    self.Poff_d2d = torch.stack([self.Poff_d2d] * batch_size)
+
+                if self.aging_effect:
+                    # Initialize the time-dependent Gon/Goff
+                    self.Gon_aging = torch.zeros(*self.shape, device=self.Gon_aging.device)
+                    self.Goff_aging = torch.zeros(*self.shape, device=self.Goff_aging.device)
+                    self.Gon_aging = torch.stack([self.Goff_aging] * self.batch_size)
+                    self.Goff_aging = torch.stack([self.Goff_aging] * self.batch_size)
+
+                    # Initialize the start point Gon/Goff
+                    if self.d2d_variation in [1, 2]:
+                        self.Gon_0 = self.Gon_d2d
+                        self.Goff_0 = self.Goff_d2d
+                    else:
+                        self.Gon_0 = self.memristor_info_dict[self.device_name]['G_on'] * torch.ones(batch_size, *self.shape, device=self.Gon_0.device)
+                        self.Goff_0 = self.memristor_info_dict[self.device_name]['G_off'] * torch.ones(batch_size, *self.shape, device=self.Goff_0.device)
+
+                if self.stuck_at_fault:
+                    SAF_lambda = self.memristor_info_dict[self.device_name]['SAF_lambda']
+                    SAF_ratio = self.memristor_info_dict[self.device_name]['SAF_ratio'] # SAF0:SAF1
+
+                    # Add pre-deployment SAF #TODO:Change to architectural SAF with Poisson-distributed intra-crossbar and uniform-distributed inter-crossbar SAF
+                    self.Q_mask = torch.zeros(*self.shape, device=self.Q_mask.device)
+                    self.SAF0_mask = torch.zeros(*self.shape, device=self.Q_mask.device)
+                    self.SAF1_mask = torch.zeros(*self.shape, device=self.Q_mask.device)
+
+                    self.Q_mask.uniform_()
+                    self.SAF0_mask = self.Q_mask < ((SAF_ratio / (SAF_ratio + 1)) * SAF_lambda)
+                    self.SAF1_mask = (self.Q_mask >= ((SAF_ratio / (SAF_ratio + 1)) * SAF_lambda)) & (self.Q_mask < SAF_lambda)
+
+                if self.retention_loss == 2:
+                    self.mem_v_threshold = torch.zeros(batch_size, *self.shape, device=self.mem_v_threshold.device)
+                    self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
 
         if self.sum_input:
             self.summed = torch.zeros(
@@ -389,13 +402,6 @@ class Nodes(torch.nn.Module):
         return super().train(mode)
     
     def cal_Gon_Goff(self, dt, k_on, k_off) -> None:
-        if self.mem_t.dim() == 4:
-            self.mem_t[:, 0, :, :] = self.mem_step.view(-1, 1, 1)
-        elif self.mem_t.dim() == 2:
-            self.mem_t[:, :] = self.mem_step.view(-1, 1)
-        else:
-            print("Wrong mem_t shape!!!!!!!!")
-
         if self.aging_effect == 1: #equation 1: G=G_0*(1-r)**t
             self.Gon_aging = self.Gon_0 * ((1 - k_on) ** (self.mem_t * dt))
             self.Goff_aging = self.Goff_0 * ((1 - k_off) ** (self.mem_t * dt))
@@ -403,6 +409,23 @@ class Nodes(torch.nn.Module):
             self.Gon_aging = k_on * self.mem_t + self.Gon_0
             self.Goff_aging = k_off * self.mem_t + self.Goff_0
 
+    def update_SAF_mask(self) -> None:
+        if self.traces and self.device_name != 'trace' and self.stuck_at_fault:
+            mem_info = self.memristor_info_dict[self.device_name]
+            SAF_lambda = mem_info['SAF_lambda']
+            SAF_ratio = mem_info['SAF_ratio']
+            SAF_delta = mem_info['SAF_delta']
+            dt = mem_info['delta_t']
+
+            Q_ratio = self.SAF0_mask.float().mean() + self.SAF1_mask.float().mean()
+            target_ratio = SAF_lambda + self.mem_t.max() * dt * SAF_delta
+            increase_ratio = (target_ratio - Q_ratio) / (1 - Q_ratio)
+
+            if increase_ratio > 0:
+                self.Q_mask.uniform_()
+                self.SAF0_mask += (~(self.SAF0_mask + self.SAF1_mask)) & (self.Q_mask < ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio))
+                self.SAF1_mask += (~(self.SAF0_mask + self.SAF1_mask)) & \
+                                  ((self.Q_mask >= ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio)) & (self.Q_mask < increase_ratio))
 
 class AbstractInput(ABC):
     # language=rst

@@ -53,9 +53,9 @@
         "Goff_sigma":0.9e-6,
         "Pon_sigma":0.2,
         "Poff_sigma":0.1,
-        "SAF_lambda": 1,
+        "SAF_lambda": 0,
         "SAF_ratio": 9,
-        "SAF_delta": 1,
+        "SAF_delta": 0,
         "Aging_k_on":0.5,
         "Aging_k_off":0.5
     },

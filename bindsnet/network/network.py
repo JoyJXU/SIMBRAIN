@@ -351,11 +351,17 @@ class Network(torch.nn.Module):
 
                     for l in self.layers:
                         self.layers[l].set_batch_size(self.batch_size)
+                        self.mem_current_step = torch.zeros(self.batch_size, device=self.mem_current_step.device)
+                        self.mem_step_matrix = torch.arange(self.batch_size, device=self.mem_current_step.device)
 
                     for m in self.monitors:
                         self.monitors[m].reset_state_variables()
 
                 break
+
+        # TODO: update SAF mask
+        for l in self.layers:
+            self.layers[l].update_SAF_mask()
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
