@@ -64,7 +64,6 @@ class Nodes(torch.nn.Module):
             traces_additive  # Whether to record spike traces additively.
         )
         self.register_buffer("s", torch.ByteTensor())  # Spike occurrences.
-        self.register_buffer("mem_v", torch.ByteTensor())
 
         self.sum_input = sum_input  # Whether to sum all inputs.
 
