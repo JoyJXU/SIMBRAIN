@@ -176,11 +176,18 @@ class Nodes(torch.nn.Module):
                     #self.mem_x[self.mem_v <= v_on] = self.mem_x[self.mem_v <= v_on]+delta_t*(k_on*(self.mem_v[self.mem_v <= v_on]/v_on-1)**alpha_on)*torch.pow((self.mem_x[self.mem_v <= v_on]),(self.Pon_d2d[self.mem_v <= v_on]))
 
                 else:
-                    self.mem_x = torch.where(self.mem_v > 0, \
+                    #self.mem_x = torch.where(self.mem_v > 0, \
+                                             #self.mem_x + delta_t * (k_off * (self.mem_v / v_off - 1) ** alpha_off) * ( \
+                                                     #1 - self.mem_x) ** (P_off), \
+                                             #self.mem_x + delta_t * (k_on * (self.mem_v / v_on - 1) ** alpha_on) * ( \
+                                                 #self.mem_x) ** (P_on))
+                    self.mem_x = torch.where(self.mem_v >= v_off, \
                                              self.mem_x + delta_t * (k_off * (self.mem_v / v_off - 1) ** alpha_off) * ( \
-                                                     1 - self.mem_x) ** (P_off), \
+                                                         1 - self.mem_x) ** (P_off), self.mem_x)
+                        
+                    self.mem_x = torch.where(self.mem_v <= v_on, \
                                              self.mem_x + delta_t * (k_on * (self.mem_v / v_on - 1) ** alpha_on) * ( \
-                                                 self.mem_x) ** (P_on))
+                                                 self.mem_x) ** (P_on),self.mem_x)
                     #self.mem_x[self.mem_v >= v_off] = self.mem_x[self.mem_v >= v_off] + \
                                   #delta_t*(k_off*(self.mem_v[self.mem_v >= v_off]/v_off-1)**alpha_off)*(1-self.mem_x[self.mem_v >= v_off])**(P_off)
                     #self.mem_x[self.mem_v <= v_on] = self.mem_x[self.mem_v <= v_on] + \
