@@ -106,6 +106,12 @@ class Network(torch.nn.Module):
         self.mem_device = mem_device
         self.batch_size = batch_size
 
+        self.register_buffer("mem_current_step", torch.Tensor())
+        self.register_buffer("mem_step_matrix", torch.Tensor())
+        
+        self.mem_current_step = torch.zeros(self.batch_size, device=self.mem_current_step.device)
+        self.mem_step_matrix = torch.arange(self.batch_size, device=self.mem_current_step.device)
+
         self.layers = {}
         self.connections = {}
         self.monitors = {}
@@ -356,12 +362,23 @@ class Network(torch.nn.Module):
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
+            if self.learning:
+                if t == 0:
+                    self.mem_current_step = torch.max(self.mem_current_step[:]) + timesteps * self.mem_step_matrix + 1
+                else:
+                    self.mem_current_step += 1
+            else:
+                if t == 0:
+                    self.mem_current_step.fill_(torch.max(self.mem_current_step[:]))
+
             # Get input to all layers (synchronous mode).
             current_inputs = {}
             if not one_step:
                 current_inputs.update(self._get_inputs())
 
             for l in self.layers:
+                self.layers[l].mem_step = self.mem_current_step
+
                 # Update each layer of nodes.
                 if l in inputs:
                     if l in current_inputs:

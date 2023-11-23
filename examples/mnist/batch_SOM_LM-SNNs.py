@@ -60,6 +60,7 @@ parser.add_argument("--c2c_variation", type=bool, default=True)
 parser.add_argument("--d2d_variation", type=int, default=1) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=True)
 parser.add_argument("--retention_loss", type=int, default=1) #retention loss: 0, without it ; 1, during pulse ; 2, no pluse for a long time
+parser.add_argument("--aging_effect", type=int, default=1) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.set_defaults(plot=False, gpu=True)
 
 args = parser.parse_args()
@@ -82,8 +83,10 @@ update_interval = args.update_interval
 plot = args.plot
 gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
+aging_effect = args.aging_effect
 device_params = {'device_name': args.memristor_device, 'c2c_variation': args.c2c_variation, \
-                 'd2d_variation': args.d2d_variation, 'stuck_at_fault': args.stuck_at_fault, 'retention_loss':args.retention_loss}
+                 'd2d_variation': args.d2d_variation, 'stuck_at_fault': args.stuck_at_fault, \
+                 'retention_loss':args.retention_loss, 'aging_effect': args.aging_effect}
 
 
 # %% Sets up Gpu use
