@@ -55,7 +55,7 @@ parser.add_argument("--update_inhibation_weights", type=int, default=500)
 parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
-parser.add_argument("--memristor_device", type=str, default='ferro') #trace: original trace
+parser.add_argument("--memristor_device", type=str, default='ideal') #trace: original trace
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
@@ -90,7 +90,7 @@ device_params = {'device_name': args.memristor_device, 'c2c_variation': args.c2c
 
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
@@ -114,7 +114,7 @@ start_intensity = intensity
 
 # %% Multiple test
 out_root = 'Test_Accuracy_Results.txt'
-multiple_test_no = 100
+multiple_test_no = 10
 
 for test_cnt in range(multiple_test_no):
     out = open(out_root, 'a')
