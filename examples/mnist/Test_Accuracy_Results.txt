@@ -1,2 +1,12 @@
 All activity accuracy:0.9101	Proportion weighting accuracy:0.9112
 All activity accuracy:0.9203	Proportion weighting accuracy:0.9212
+All activity accuracy:0.141	Proportion weighting accuracy:0.1403
+All activity accuracy:0.0746	Proportion weighting accuracy:0.0741
+All activity accuracy:0.123	Proportion weighting accuracy:0.1225
+All activity accuracy:0.7907	Proportion weighting accuracy:0.7909
+All activity accuracy:0.9202	Proportion weighting accuracy:0.9215
+All activity accuracy:0.926	Proportion weighting accuracy:0.9269
+All activity accuracy:0.92	Proportion weighting accuracy:0.9211
+All activity accuracy:0.9134	Proportion weighting accuracy:0.9152
+All activity accuracy:0.9226	Proportion weighting accuracy:0.9232
+All activity accuracy:0.9183	Proportion weighting accuracy:0.9195
