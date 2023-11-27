@@ -105,6 +105,12 @@ class Network(torch.nn.Module):
         self.dt = dt
         self.mem_device = mem_device
         self.batch_size = batch_size
+        
+        self.register_buffer("current_step", torch.Tensor())
+        self.register_buffer("step_matrix", torch.Tensor())
+
+        self.current_step = torch.zeros(self.batch_size, device=self.current_step.device)
+        self.step_matrix = torch.arange(self.batch_size, device=self.step_matrix.device)
 
         self.layers = {}
         self.connections = {}
@@ -345,23 +351,38 @@ class Network(torch.nn.Module):
 
                     for l in self.layers:
                         self.layers[l].set_batch_size(self.batch_size)
+                        self.current_step = torch.zeros(self.batch_size, device=self.current_step.device)
+                        self.step_matrix = torch.arange(self.batch_size, device=self.step_matrix.device)
 
                     for m in self.monitors:
                         self.monitors[m].reset_state_variables()
 
                 break
+            
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
+            
+            if self.learning:
+                if t == 0:
+                    self.current_step = torch.max(self.current_step[:]) + (timesteps + 1) * self.step_matrix + 1
+                else:
+                    self.current_step += 1
+            else:
+                if t == 0:
+                    self.current_step.fill_(torch.max(self.current_step[:]))
+        
             # Get input to all layers (synchronous mode).
             current_inputs = {}
             if not one_step:
                 current_inputs.update(self._get_inputs())
 
             for l in self.layers:
+                self.layers[l].current_step = self.current_step
+                
                 # Update each layer of nodes.
                 if l in inputs:
                     if l in current_inputs:
@@ -424,8 +445,13 @@ class Network(torch.nn.Module):
         """
         Reset state variables of objects in network.
         """
+        if self.learning:
+            self.current_step += 1
+        
         for layer in self.layers:
+            self.layers[layer].current_step = self.current_step           
             self.layers[layer].reset_state_variables()
+
 
         for connection in self.connections:
             self.connections[connection].reset_state_variables()

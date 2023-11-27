@@ -64,6 +64,7 @@ class Nodes(torch.nn.Module):
             traces_additive  # Whether to record spike traces additively.
         )
         self.register_buffer("s", torch.ByteTensor())  # Spike occurrences.
+        self.register_buffer("current_step", torch.ByteTensor()) 
 
         self.sum_input = sum_input  # Whether to sum all inputs.
 
@@ -112,7 +113,7 @@ class Nodes(torch.nn.Module):
                     self.x.masked_fill_(self.s.bool(), self.trace_scale)
 
             else:
-                self.x = self.transform.mapping(s = self.s)
+                self.x = self.transform.mapping(s = self.s , mem_step = self.current_step)
 
         if self.sum_input:
             # Add current input to running sum
@@ -129,7 +130,7 @@ class Nodes(torch.nn.Module):
         if self.traces:
             self.x.zero_()  # Spike traces.
             if self.device_name != 'trace':
-                self.transform.reset_memristor_variables()
+                self.transform.reset_memristor_variables(mem_step = self.current_step)
 
         if self.sum_input:
             self.summed.zero_()  # Summed inputs.
@@ -158,6 +159,7 @@ class Nodes(torch.nn.Module):
         self.s = torch.zeros(
             batch_size, *self.shape, device=self.s.device, dtype=torch.bool
         )
+        self.current_step = torch.zeros(batch_size, *self.shape, device=self.current_step.device)        
 
         if self.traces:
             self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)

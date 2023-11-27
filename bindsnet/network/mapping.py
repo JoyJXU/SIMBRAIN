@@ -22,6 +22,7 @@ class Mapping(torch.nn.Module):
         self.device_name = mem_device['device_name']        
         
         self.register_buffer("mem_v", torch.Tensor())
+        self.register_buffer("mem_t", torch.Tensor())
         self.register_buffer("x", torch.Tensor())  
         
         with open('../../memristor_device_info.json', 'r') as f:
@@ -47,27 +48,43 @@ class Mapping(torch.nn.Module):
         self.batch_size = batch_size
     
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
+        self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
         
         self.mem_array.set_batch_size(batch_size = self.batch_size)        
 
 
-    def reset_memristor_variables(self) -> None:
+    def reset_memristor_variables(self,mem_step) -> None:
         # language=rst
         """
         Abstract base class method for resetting state variables.
         """
         self.mem_v.fill_(-self.vpos)
-        self.mem_array.memristor_compute(mem_v = self.mem_v)
+        if self.mem_t.dim() == 4:
+            self.mem_t[:, 0, :, :] = mem_step.view(-1, 1, 1)
+        elif self.mem_t.dim() == 2:
+            self.mem_t[:, :] = mem_step.view(-1, 1)
+        else:
+            print("Wrong mem_t shape!!!!!!!!")        
+        self.mem_array.memristor_compute(mem_v = self.mem_v , mem_t = self.mem_t)
+        self.mem_array.update_SAF_mask()
 
 
-    def mapping(self,s):
+    def mapping(self,s,mem_step):
         # nn to mem
         self.mem_v = s.float()
         self.mem_v[self.mem_v == 0] = self.vneg
         self.mem_v[self.mem_v == 1] = self.vpos   
         
-        mem_c = self.mem_array.memristor_compute(mem_v = self.mem_v)
+        # Calculate the mem_t
+        if self.mem_t.dim() == 4:
+            self.mem_t[:, 0, :, :] = mem_step.view(-1, 1, 1)
+        elif self.mem_t.dim() == 2:
+            self.mem_t[:, :] = mem_step.view(-1, 1)
+        else:
+            print("Wrong mem_t shape!!!!!!!!")
+        
+        mem_c = self.mem_array.memristor_compute(mem_v = self.mem_v , mem_t = self.mem_t)
         
         # mem to nn
         self.x = (mem_c - self.Gon) * self.trans_ratio       
