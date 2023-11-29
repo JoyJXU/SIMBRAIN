@@ -244,7 +244,7 @@ class MemristorArray(torch.nn.Module):
             
             
         if self.aging_effect:
-            self.cal_Gon_Goff(delta_t, Aging_k_on, Aging_k_off)
+            self.cal_Gon_Goff(Aging_k_on, Aging_k_off)
             self.mem_c = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
 
         elif self.d2d_variation in [1, 2]:
@@ -257,10 +257,10 @@ class MemristorArray(torch.nn.Module):
         return self.mem_c
     
     
-    def cal_Gon_Goff(self, dt, k_on, k_off) -> None:
+    def cal_Gon_Goff(self, k_on, k_off) -> None:
         if self.aging_effect == 1: #equation 1: G=G_0*(1-r)**t
-            self.Gon_aging = self.Gon_0 * ((1 - k_on) ** (self.mem_t * dt))
-            self.Goff_aging = self.Goff_0 * ((1 - k_off) ** (self.mem_t * dt))
+            self.Gon_aging = self.Gon_0 * ((1 - k_on) ** self.mem_t)
+            self.Goff_aging = self.Goff_0 * ((1 - k_off) ** self.mem_t )
         elif self.aging_effect == 2: #equation 2: G=k*t+G_0
             self.Gon_aging = k_on * self.mem_t + self.Gon_0
             self.Goff_aging = k_off * self.mem_t + self.Goff_0
@@ -271,10 +271,9 @@ class MemristorArray(torch.nn.Module):
             SAF_lambda = mem_info['SAF_lambda']
             SAF_ratio = mem_info['SAF_ratio']
             SAF_delta = mem_info['SAF_delta']
-            dt = mem_info['delta_t']
 
             Q_ratio = self.SAF0_mask.float().mean() + self.SAF1_mask.float().mean()
-            target_ratio = SAF_lambda + self.mem_t.max() * dt * SAF_delta
+            target_ratio = SAF_lambda + self.mem_t.max() * SAF_delta
             increase_ratio = (target_ratio - Q_ratio) / (1 - Q_ratio)
 
             if increase_ratio > 0 and SAF_delta > 0 :

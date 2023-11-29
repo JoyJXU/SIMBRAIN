@@ -32,6 +32,7 @@ class Mapping(torch.nn.Module):
         self.vpos = self.memristor_info_dict[self.device_name]['vinput_pos']
         self.Gon =  self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
+        self.dt = self.memristor_info_dict[self.device_name]['delta_t']
         
         self.trans_ratio = 1 / (self.Goff - self.Gon)
         
@@ -65,8 +66,13 @@ class Mapping(torch.nn.Module):
         elif self.mem_t.dim() == 2:
             self.mem_t[:, :] = mem_step.view(-1, 1)
         else:
-            print("Wrong mem_t shape!!!!!!!!")        
+            print("Wrong mem_t shape!!!!!!!!") 
+        self.mem_t *= self.dt 
+        
         self.mem_array.memristor_compute(mem_v = self.mem_v , mem_t = self.mem_t)
+
+        
+    def update_SAF_mask(self) -> None:
         self.mem_array.update_SAF_mask()
 
 
@@ -83,6 +89,7 @@ class Mapping(torch.nn.Module):
             self.mem_t[:, :] = mem_step.view(-1, 1)
         else:
             print("Wrong mem_t shape!!!!!!!!")
+        self.mem_t *= self.dt 
         
         mem_c = self.mem_array.memristor_compute(mem_v = self.mem_v , mem_t = self.mem_t)
         

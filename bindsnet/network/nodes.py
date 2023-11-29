@@ -134,6 +134,11 @@ class Nodes(torch.nn.Module):
 
         if self.sum_input:
             self.summed.zero_()  # Summed inputs.
+    
+    def update_SAF_mask(self) -> None:
+        if self.traces:
+            if self.device_name != 'trace':
+                self.transform.update_SAF_mask()
 
     def compute_decays(self, dt) -> None:
         # language=rst

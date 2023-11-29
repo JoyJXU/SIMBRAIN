@@ -358,6 +358,9 @@ class Network(torch.nn.Module):
                         self.monitors[m].reset_state_variables()
 
                 break
+        
+        for l in self.layers:
+            self.layers[l].update_SAF_mask()
             
 
         # Effective number of timesteps.
@@ -369,6 +372,7 @@ class Network(torch.nn.Module):
             if self.learning:
                 if t == 0:
                     self.current_step = torch.max(self.current_step[:]) + (timesteps + 1) * self.step_matrix + 1
+                    # (timesteps + 1) : one more timestep to reset memristor
                 else:
                     self.current_step += 1
             else:
