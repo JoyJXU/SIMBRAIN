@@ -4,7 +4,11 @@ import json
 import torch
 
 class Mapping(torch.nn.Module):
-    
+    # language=rst
+    """
+    Abstract base class for mapping neural networks to memristor arrays.
+    """
+
     def __init__(
         self,
         mem_device: dict = {},
@@ -15,6 +19,7 @@ class Mapping(torch.nn.Module):
         """
         Abstract base class constructor.
         :param mem_device: Memristor device to be used in learning.
+        :param shape: The dimensionality of the layer.
         """
         super().__init__()
     
@@ -30,19 +35,21 @@ class Mapping(torch.nn.Module):
         assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"  
         self.vneg = self.memristor_info_dict[self.device_name]['vinput_neg']
         self.vpos = self.memristor_info_dict[self.device_name]['vinput_pos']
-        self.Gon =  self.memristor_info_dict[self.device_name]['G_on']
+        self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.dt = self.memristor_info_dict[self.device_name]['delta_t']
         
         self.trans_ratio = 1 / (self.Goff - self.Gon)
         
-        self.mem_array = MemristorArray(mem_device = mem_device , shape = self.shape , memristor_info_dict = self.memristor_info_dict)
-        
+        self.mem_array = MemristorArray(mem_device=mem_device, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
 
-    def set_batch_size(self,batch_size) -> None:
+        self.batch_size = None
+
+
+    def set_batch_size(self, batch_size) -> None:
         # language=rst
         """
-        Sets mini-batch size. Called when layer is added to a network.
+        Sets mini-batch size. Called when memristor is used to mapping traces.
     
         :param batch_size: Mini-batch size.
         """
@@ -52,7 +59,7 @@ class Mapping(torch.nn.Module):
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
         
-        self.mem_array.set_batch_size(batch_size = self.batch_size)        
+        self.mem_array.set_batch_size(batch_size=self.batch_size)
 
 
     def reset_memristor_variables(self,mem_step) -> None:
@@ -68,8 +75,8 @@ class Mapping(torch.nn.Module):
         else:
             print("Wrong mem_t shape!!!!!!!!") 
         self.mem_t *= self.dt 
-        
-        self.mem_array.memristor_compute(mem_v = self.mem_v , mem_t = self.mem_t)
+        # Adopt large negative pulses to reset the memristor array
+        self.mem_array.memristor_compute(mem_v=self.mem_v, mem_t=self.mem_t)
 
         
     def update_SAF_mask(self) -> None:
@@ -91,10 +98,10 @@ class Mapping(torch.nn.Module):
             print("Wrong mem_t shape!!!!!!!!")
         self.mem_t *= self.dt 
         
-        mem_c = self.mem_array.memristor_compute(mem_v = self.mem_v , mem_t = self.mem_t)
+        mem_c = self.mem_array.memristor_compute(mem_v=self.mem_v, mem_t=self.mem_t)
         
         # mem to nn
-        self.x = (mem_c - self.Gon) * self.trans_ratio       
+        self.x = (mem_c - self.Gon) * self.trans_ratio
 
         return self.x  
         

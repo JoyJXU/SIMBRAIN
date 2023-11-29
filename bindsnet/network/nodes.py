@@ -83,7 +83,7 @@ class Nodes(torch.nn.Module):
                 "trace_decay", torch.empty_like(self.tc_trace)
             )  # Set in compute_decays.
             if self.device_name != 'trace':
-                self.transform = Mapping(mem_device = mem_device , shape = self.shape)
+                self.transform = Mapping(mem_device=mem_device, shape=self.shape)
    
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
@@ -113,7 +113,7 @@ class Nodes(torch.nn.Module):
                     self.x.masked_fill_(self.s.bool(), self.trace_scale)
 
             else:
-                self.x = self.transform.mapping(s = self.s , mem_step = self.current_step)
+                self.x = self.transform.mapping(s=self.s, mem_step=self.current_step)
 
         if self.sum_input:
             # Add current input to running sum
@@ -130,7 +130,7 @@ class Nodes(torch.nn.Module):
         if self.traces:
             self.x.zero_()  # Spike traces.
             if self.device_name != 'trace':
-                self.transform.reset_memristor_variables(mem_step = self.current_step)
+                self.transform.reset_memristor_variables(mem_step=self.current_step)
 
         if self.sum_input:
             self.summed.zero_()  # Summed inputs.
@@ -169,7 +169,7 @@ class Nodes(torch.nn.Module):
         if self.traces:
             self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
             if self.device_name != 'trace':
-                self.transform.set_batch_size(batch_size = batch_size)
+                self.transform.set_batch_size(batch_size=batch_size)
 
         if self.sum_input:
             self.summed = torch.zeros(

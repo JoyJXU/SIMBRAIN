@@ -2,18 +2,24 @@ from typing import Iterable, Optional, Union
 import torch
 
 class MemristorArray(torch.nn.Module):
-    
+    # language=rst
+    """
+    Abstract base class for memristor arrays.
+    """
+
     def __init__(
         self,
         mem_device: dict = {},
         shape: Optional[Iterable[int]] = None,
-        memristor_info_dict : dict = {},
+        memristor_info_dict: dict = {},
         **kwargs,
     ) -> None:
         # language=rst
         """
         Abstract base class constructor.
         :param mem_device: Memristor device to be used in learning.
+        :param shape: The dimensionality of the layer.
+        :param memristor_info_dict: The parameters of the memristor device.
         """
         super().__init__()
     
@@ -60,14 +66,12 @@ class MemristorArray(torch.nn.Module):
             self.register_buffer("SAF0_mask", torch.Tensor())
             self.register_buffer("SAF1_mask", torch.Tensor())
             self.register_buffer("Q_mask", torch.Tensor())
-    
 
         self.memristor_info_dict = memristor_info_dict
-    
+        self.batch_size = None
 
     
-    
-    def set_batch_size(self,batch_size) -> None:
+    def set_batch_size(self, batch_size) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
@@ -75,8 +79,7 @@ class MemristorArray(torch.nn.Module):
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
-    
-    
+
         self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
         self.mem_c = torch.zeros(batch_size, *self.shape, device=self.mem_c.device)
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
@@ -86,6 +89,7 @@ class MemristorArray(torch.nn.Module):
             self.normal_absolute = torch.zeros(batch_size, *self.shape, device=self.normal_absolute.device)
 
         if self.d2d_variation in [1, 2]:
+            print('Add D2D variation in Gon/Goff!')
             G_off = self.memristor_info_dict[self.device_name]['G_off']
             G_on = self.memristor_info_dict[self.device_name]['G_on']
             Gon_sigma = self.memristor_info_dict[self.device_name]['Gon_sigma']
@@ -105,6 +109,7 @@ class MemristorArray(torch.nn.Module):
             self.Goff_d2d = torch.stack([self.Goff_d2d] * batch_size)
 
         if self.d2d_variation in [1, 3]:
+            print('Add D2D variation in Pon/Poff!')
             P_off = self.memristor_info_dict[self.device_name]['P_off']
             P_on = self.memristor_info_dict[self.device_name]['P_on']
             Pon_sigma = self.memristor_info_dict[self.device_name]['Pon_sigma']
@@ -161,7 +166,8 @@ class MemristorArray(torch.nn.Module):
         """
         Abstract base class method for a single simulation step.
     
-        :param x: Inputs to the layer.
+        :param mem_v: Voltage inputs to the memristor array.
+        :param mem_t: Real-time simulation time of the memristor array.
         """
     
         mem_info = self.memristor_info_dict[self.device_name]
@@ -187,22 +193,21 @@ class MemristorArray(torch.nn.Module):
 
         if self.d2d_variation in [1, 3]:
             self.mem_x = torch.where(mem_v >= v_off, \
-                                             self.mem_x + delta_t * (k_off * (mem_v / v_off - 1) ** alpha_off) * ( \
-                                                         1 - self.mem_x) ** (self.Poff_d2d), self.mem_x)
+                                     self.mem_x + delta_t * (k_off * (mem_v / v_off - 1) ** alpha_off) * ( \
+                                     1 - self.mem_x) ** self.Poff_d2d, self.mem_x)
                         
             self.mem_x = torch.where(mem_v <= v_on, \
-                                             self.mem_x + delta_t * (k_on * (mem_v / v_on - 1) ** alpha_on) * ( \
-                                                 self.mem_x) ** (self.Pon_d2d),self.mem_x)
+                                     self.mem_x + delta_t * (k_on * (mem_v / v_on - 1) ** alpha_on) * ( \
+                                     self.mem_x) ** self.Pon_d2d, self.mem_x)
     
         else:
             self.mem_x = torch.where(mem_v >= v_off, \
-                                 self.mem_x + delta_t * (k_off * (mem_v / v_off - 1) ** alpha_off) * ( \
-                                             1 - self.mem_x) ** (P_off), self.mem_x)
+                                    self.mem_x + delta_t * (k_off * (mem_v / v_off - 1) ** alpha_off) * ( \
+                                    1 - self.mem_x) ** P_off, self.mem_x)
 
             self.mem_x = torch.where(mem_v <= v_on, \
-                                  self.mem_x + delta_t * (k_on * (mem_v / v_on - 1) ** alpha_on) * ( \
-                                      self.mem_x) ** (P_on),self.mem_x)
-            
+                                    self.mem_x + delta_t * (k_on * (mem_v / v_on - 1) ** alpha_on) * ( \
+                                    self.mem_x) ** P_on, self.mem_x)
     
         self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
     
@@ -211,7 +216,7 @@ class MemristorArray(torch.nn.Module):
             # G(t) = G(0) * e^(- t*tau)^beta                      
             self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
             self.mem_x *= torch.exp(torch.tensor(-(1/4 * delta_t * retention_loss_tau) ** retention_loss_beta))
-            self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
+            self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
             self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
             # tau = 0.012478 , beta = 1.066  or  tau = 0.01245 , beta = 1.073
             
@@ -222,7 +227,7 @@ class MemristorArray(torch.nn.Module):
             self.mem_loss_time[self.mem_v_threshold == 1] = 0         
             self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
             self.mem_x -= self.mem_x * delta_t * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
-            self.mem_x = torch.clamp(self.mem_x, min = G_on, max = G_off)
+            self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
             self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
     
         if self.c2c_variation:
@@ -239,10 +244,8 @@ class MemristorArray(torch.nn.Module):
     
         if self.stuck_at_fault:
             self.x2.masked_fill_(self.SAF0_mask, 0)
-    
             self.x2.masked_fill_(self.SAF1_mask, 1)
-            
-            
+
         if self.aging_effect:
             self.cal_Gon_Goff(Aging_k_on, Aging_k_off)
             self.mem_c = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
@@ -252,15 +255,14 @@ class MemristorArray(torch.nn.Module):
 
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
-    
-    
+
         return self.mem_c
     
     
     def cal_Gon_Goff(self, k_on, k_off) -> None:
         if self.aging_effect == 1: #equation 1: G=G_0*(1-r)**t
             self.Gon_aging = self.Gon_0 * ((1 - k_on) ** self.mem_t)
-            self.Goff_aging = self.Goff_0 * ((1 - k_off) ** self.mem_t )
+            self.Goff_aging = self.Goff_0 * ((1 - k_off) ** self.mem_t)
         elif self.aging_effect == 2: #equation 2: G=k*t+G_0
             self.Gon_aging = k_on * self.mem_t + self.Gon_0
             self.Goff_aging = k_off * self.mem_t + self.Goff_0
@@ -276,7 +278,7 @@ class MemristorArray(torch.nn.Module):
             target_ratio = SAF_lambda + self.mem_t.max() * SAF_delta
             increase_ratio = (target_ratio - Q_ratio) / (1 - Q_ratio)
 
-            if increase_ratio > 0 and SAF_delta > 0 :
+            if increase_ratio > 0 and SAF_delta > 0:
                 self.Q_mask.uniform_()
                 self.SAF0_mask += (~(self.SAF0_mask + self.SAF1_mask)) & (self.Q_mask < ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio))
                 self.SAF1_mask += (~(self.SAF0_mask + self.SAF1_mask)) & \
