@@ -62,19 +62,24 @@ class Mapping(torch.nn.Module):
         self.mem_array.set_batch_size(batch_size=self.batch_size)
 
 
+    def mem_t_calculate(self,mem_step):
+        # Calculate the mem_t
+        if self.mem_t.dim() == 4:
+            self.mem_t[:, 0, :, :] = mem_step.view(-1, 1, 1)
+        elif self.mem_t.dim() == 2:
+            self.mem_t[:, :] = mem_step.view(-1, 1)
+        else:
+            print("Wrong mem_t shape!!!!!!!!")
+        self.mem_t *= self.dt 
+        
+        
     def reset_memristor_variables(self,mem_step) -> None:
         # language=rst
         """
         Abstract base class method for resetting state variables.
         """
         self.mem_v.fill_(-self.vpos)
-        if self.mem_t.dim() == 4:
-            self.mem_t[:, 0, :, :] = mem_step.view(-1, 1, 1)
-        elif self.mem_t.dim() == 2:
-            self.mem_t[:, :] = mem_step.view(-1, 1)
-        else:
-            print("Wrong mem_t shape!!!!!!!!") 
-        self.mem_t *= self.dt 
+        self.mem_t_calculate(mem_step=mem_step)        
         # Adopt large negative pulses to reset the memristor array
         self.mem_array.memristor_compute(mem_v=self.mem_v, mem_t=self.mem_t)
 
@@ -88,16 +93,8 @@ class Mapping(torch.nn.Module):
         self.mem_v = s.float()
         self.mem_v[self.mem_v == 0] = self.vneg
         self.mem_v[self.mem_v == 1] = self.vpos   
-        
-        # Calculate the mem_t
-        if self.mem_t.dim() == 4:
-            self.mem_t[:, 0, :, :] = mem_step.view(-1, 1, 1)
-        elif self.mem_t.dim() == 2:
-            self.mem_t[:, :] = mem_step.view(-1, 1)
-        else:
-            print("Wrong mem_t shape!!!!!!!!")
-        self.mem_t *= self.dt 
-        
+        self.mem_t_calculate(mem_step=mem_step)      
+
         mem_c = self.mem_array.memristor_compute(mem_v=self.mem_v, mem_t=self.mem_t)
         
         # mem to nn
