@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from time import time as t
 
-sys.path.append('../../')
+sys.path.append('../')
 
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import PoissonEncoder, poisson
