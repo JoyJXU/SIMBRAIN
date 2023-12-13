@@ -123,6 +123,8 @@ class Network(torch.nn.Module):
         else:
             self.reward_fn = None
 
+        self.sum_readenergy = 0
+
     def add_layer(self, layer: Nodes, name: str) -> None:
         # language=rst
         """
@@ -426,6 +428,22 @@ class Network(torch.nn.Module):
                         self.layers[l].v += inject_v
                     else:
                         self.layers[l].v += inject_v[t]
+
+                if l == 'X':
+                    one_x = self.layers[l].transform.read_energy().shape[0]
+                    one_y = self.layers[l].transform.read_energy().shape[2]
+                    one_z = self.layers[l].transform.read_energy().shape[3]
+                    for i in range(one_x):
+                        for j in range(one_y):
+                            for k in range(one_z):
+                                self.sum_readenergy += self.layers[l].transform.read_energy()[i][0][j][k]
+                if l =='Y':
+                    two_x = self.layers[l].transform.read_energy().shape[0]   
+                    two_y = self.layers[l].transform.read_energy().shape[1] 
+                    for i in range(two_x):
+                        for j in range(two_y):
+                            self.sum_readenergy += self.layers[l].transform.read_energy()[i][j]
+                print(self.sum_readenergy)
 
             # Run synapse updates.
             for c in self.connections:

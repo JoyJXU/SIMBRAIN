@@ -27,7 +27,10 @@
         "SAF_ratio": 9,
         "SAF_delta": 0,
         "Aging_k_on":0,
-        "Aging_k_off":0
+        "Aging_k_off":0,
+        "arrayColSize":1,
+        "widthInFeatureSize":2,
+        "processNode":32
     },
     "ferro":
     {
@@ -57,7 +60,10 @@
         "SAF_ratio": 9,
         "SAF_delta": 0,
         "Aging_k_on":0.5,
-        "Aging_k_off":0.5
+        "Aging_k_off":0.5,
+        "arrayColSize":1,
+        "widthInFeatureSize":2,
+        "processNode":32
     },
     "hu":
     {
@@ -87,7 +93,10 @@
         "SAF_ratio": 9, 
         "SAF_delta": 0,
         "Aging_k_on":1e-8,
-        "Aging_k_off":1e-8      
+        "Aging_k_off":1e-8,
+        "arrayColSize":1,
+        "widthInFeatureSize":2,
+        "processNode":32      
     },
     "ferro_resistance_abandon":
     {
@@ -117,6 +126,9 @@
         "SAF_ratio": 9,
         "SAF_delta": 0,
         "Aging_k_on":0,
-        "Aging_k_off":0
+        "Aging_k_off":0,
+        "arrayColSize":1,
+        "widthInFeatureSize":2,
+        "processNode":32
     }
 }

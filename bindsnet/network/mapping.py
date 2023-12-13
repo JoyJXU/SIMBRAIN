@@ -1,5 +1,6 @@
 from typing import Iterable, Optional, Union
 from bindsnet.network.array import MemristorArray
+from bindsnet.network.power import Power
 import json
 import torch
 
@@ -29,8 +30,9 @@ class Mapping(torch.nn.Module):
         self.register_buffer("mem_v", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
         self.register_buffer("x", torch.Tensor())  
-        
-        with open('../memristor_device_info.json', 'r') as f:
+        self.register_buffer("readEnergy", torch.Tensor())
+
+        with open('memristor_device_info.json', 'r') as f:
             self.memristor_info_dict = json.load(f)
         assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"  
         self.vneg = self.memristor_info_dict[self.device_name]['vinput_neg']
@@ -45,6 +47,8 @@ class Mapping(torch.nn.Module):
 
         self.batch_size = None
 
+        self.power = Power(mem_device=mem_device, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
+
 
     def set_batch_size(self, batch_size) -> None:
         # language=rst
@@ -58,8 +62,10 @@ class Mapping(torch.nn.Module):
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
-        
+        self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
+
         self.mem_array.set_batch_size(batch_size=self.batch_size)
+        self.power.set_batch_size(batch_size=self.batch_size)
 
 
     def mem_t_calculate(self,mem_step):
@@ -101,4 +107,9 @@ class Mapping(torch.nn.Module):
         self.x = (mem_c - self.Gon) * self.trans_ratio
 
         return self.x  
-        
+    
+    def read_energy(self):
+        self.power.mem_c = self.mem_array.mem_c
+        self.power.mem_v = self.mem_v
+        self.readEnergy = self.power.read_energy()
+        return self.readEnergy
