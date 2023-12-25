@@ -30,6 +30,7 @@
         "Aging_k_off":0,
         "arrayColSize":1,
         "widthInFeatureSize":2,
+        "wireResistanceUnit":0.15193,
         "processNode":32
     },
     "ferro":
