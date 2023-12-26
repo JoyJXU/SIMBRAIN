@@ -429,7 +429,6 @@ class Network(torch.nn.Module):
                     else:
                         self.layers[l].v += inject_v[t]
 
-                for l in self.layers:
                 #     one_x = self.layers[l].transform.read_energy().shape[0]
                 #     one_y = self.layers[l].transform.read_energy().shape[1]
                 #     one_z = self.layers[l].transform.read_energy().shape[2]
@@ -437,7 +436,7 @@ class Network(torch.nn.Module):
                 #         for j in range(one_y):
                 #             for k in range(one_z):
                 #                 self.sum_readenergy += self.layers[l].transform.read_energy()[i][j][k]
-                    self.sum_readenergy += torch.sum(self.layers[l].transform.read_energy())
+                self.sum_readenergy += torch.sum(self.layers[l].transform.read_energy())
                 # print(self.sum_readenergy)
 
             # Run synapse updates.
