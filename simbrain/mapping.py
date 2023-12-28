@@ -23,18 +23,19 @@ class Mapping(torch.nn.Module):
         :param shape: The dimensionality of the layer.
         """
         super().__init__()
-    
- 
+
         self.device_name = mem_device['device_name'] 
         self.device_structure = mem_device['device_structure']
-        self.shape = torch.zeros(2)
+
         if self.device_structure == 'trace':
-            self.shape[0] = 1
-            if len(shape) == 3:
-                self.shape[1] = shape[1]*shape[2]
-            elif len(shape) == 1:
-                self.shape[1] = shape[0]
-        self.shape = tuple(self.shape.int().tolist())
+            self.shape = [1, 1]  # Shape of the memristor crossbar
+            for element in shape:
+                self.shape[1] *= element
+            self.shape = tuple(self.shape)
+        elif self.device_structure == 'crossbar':
+            self.shape = shape
+        else:
+            raise Exception("Only trace and crossbar architecture are supported!")
         
         self.register_buffer("mem_v", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
