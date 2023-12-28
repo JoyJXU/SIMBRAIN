@@ -89,7 +89,8 @@ class Power(torch.nn.Module):
         delta_t = mem_info['delta_t']
         wireResistanceUnit = mem_info['wireResistanceUnit']
         readPulseWidth = (1/4) * delta_t
-        self.readEnergy_static = (self.mem_v * self.mem_c * self.mem_v * readPulseWidth + self.mem_v/(2 * wireResistanceUnit) * self.mem_v * readPulseWidth).squeeze()
+        self.readEnergy_static = (self.mem_v * self.mem_c * self.mem_v * readPulseWidth + self.mem_v / (
+                    2 * wireResistanceUnit) * self.mem_v * readPulseWidth).squeeze()
         return self.readEnergy_static
     
     def read_energy_static_crossbar(self):
@@ -97,7 +98,8 @@ class Power(torch.nn.Module):
         delta_t = mem_info['delta_t']
         wireResistanceUnit = mem_info['wireResistanceUnit']
         readPulseWidth = (1/4) * delta_t
-        self.total_wire_resistance =  (wireResistanceUnit * (torch.arange(1, self.shape[1] + 1) + torch.arange(self.shape[0],0,-1)[:,None])).cuda()
+        self.total_wire_resistance = (wireResistanceUnit * (
+                    torch.arange(1, self.shape[1] + 1) + torch.arange(self.shape[0], 0, -1)[:, None])).cuda()
         self.total_wire_resistance = torch.stack([self.total_wire_resistance] * self.batch_size)
         self.total_resistance = self.total_wire_resistance + 1/self.mem_c
         # TODO: check the calculation of total_current
@@ -106,15 +108,15 @@ class Power(torch.nn.Module):
         self.readEnergy_static = (total_current * self.mem_v * readPulseWidth).squeeze()
         return self.readEnergy_static
     
-    def read_energy(self,layer):
+    def read_energy(self, layer):
         if self.device_structure == 'trace':
             return self.read_energy_dynamic_trace(layer) + self.read_energy_static_trace()
         elif self.device_structure == 'crossbar':
             return self.read_energy_dynamic_crossbar() + self.read_energy_static_crossbar()
         else:
-            print("read_energy_calcaulate_wrong!")
+            print("Unsupported Architecture for Read Energy Calculation!")
 
-    def write_energy_dynamic_trace(self,layer):
+    def write_energy_dynamic_trace(self, layer):
         mem_info = self.memristor_info_dict[self.device_name]
         if layer == 'X':
             arrayColSize = mem_info['arrayColSize_X']
@@ -163,11 +165,10 @@ class Power(torch.nn.Module):
 
         return self.writeEnergy_static
     
-    def write_energy(self,layer):
-        
+    def write_energy(self, layer):
         if self.device_structure == 'trace':
             return self.write_energy_dynamic_trace(layer) + self.write_energy_static_trace()
         elif self.device_structure == 'crossbar':
             return self.write_energy_dynamic_crossbar() + self.write_energy_static_crossbar()
         else:
-            print("write_energy_calcaulate_wrong!")
+            print("Unsupported Architecture for Write Energy Calculation!")

@@ -83,9 +83,7 @@ class Mapping(torch.nn.Module):
 
     def mem_t_calculate(self,mem_step):
         # Calculate the mem_t
-        
-        self.mem_t[:,:,0] = mem_step.view(-1,1)
-
+        self.mem_t[:, :, 0] = mem_step.view(-1, 1)
         self.mem_t *= self.dt 
         
         
@@ -104,12 +102,12 @@ class Mapping(torch.nn.Module):
         self.mem_array.update_SAF_mask()
 
 
-    def mapping(self,s,mem_step):
+    def mapping(self, s, mem_step):
         if self.device_structure == 'trace':
             if s.dim() == 4:
-                self.s = s.flatten(2,3)
+                self.s = s.flatten(2, 3)
             elif s.dim() == 2:
-                self.s = torch.unsqueeze(s,1)
+                self.s = torch.unsqueeze(s, 1)
         
         # nn to mem
         self.mem_v = self.s.float()
@@ -124,7 +122,7 @@ class Mapping(torch.nn.Module):
 
         if self.device_structure == 'trace':
             if s.dim() == 4:
-                self.x = self.x.reshape(s.size(0),s.size(1),s.size(2),s.size(3))
+                self.x = self.x.reshape(s.size(0), s.size(1), s.size(2), s.size(3))
             elif s.dim() == 2:
                 self.x = self.x.squeeze()
 
@@ -134,10 +132,10 @@ class Mapping(torch.nn.Module):
         self.power.mem_c = self.mem_array.mem_c
         self.power.mem_v = self.mem_v
     
-    def read_energy(self,layer):
+    def read_energy(self, layer):
         self.readEnergy = self.power.read_energy(layer)
         return self.readEnergy
     
-    def write_energy(self,layer):
+    def write_energy(self, layer):
         self.writeEnergy = self.power.write_energy(layer)
         return self.writeEnergy
