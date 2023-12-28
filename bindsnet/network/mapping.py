@@ -41,6 +41,7 @@ class Mapping(torch.nn.Module):
         self.register_buffer("x", torch.Tensor())
         self.register_buffer("s", torch.Tensor())
         self.register_buffer("readEnergy", torch.Tensor())
+        self.register_buffer("writeEnergy", torch.Tensor())
 
         with open('../memristor_device_info.json', 'r') as f:
             self.memristor_info_dict = json.load(f)
@@ -74,6 +75,7 @@ class Mapping(torch.nn.Module):
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
         self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
         self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
+        self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
 
         self.mem_array.set_batch_size(batch_size=self.batch_size)
         self.power.set_batch_size(batch_size=self.batch_size)
@@ -128,8 +130,14 @@ class Mapping(torch.nn.Module):
 
         return self.x  
     
-    def read_energy(self):
+    def set_power_factor(self):
         self.power.mem_c = self.mem_array.mem_c
         self.power.mem_v = self.mem_v
-        self.readEnergy = self.power.read_energy()
+    
+    def read_energy(self,layer):
+        self.readEnergy = self.power.read_energy(layer)
         return self.readEnergy
+    
+    def write_energy(self,layer):
+        self.writeEnergy = self.power.write_energy(layer)
+        return self.writeEnergy
