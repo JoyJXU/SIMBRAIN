@@ -1,6 +1,6 @@
 from typing import Iterable, Optional, Union
-from bindsnet.network.array import MemristorArray
-from bindsnet.network.power import Power
+from simbrain.memarray import MemristorArray
+from simbrain.power import Power
 import json
 import torch
 
@@ -42,7 +42,7 @@ class Mapping(torch.nn.Module):
         self.register_buffer("s", torch.Tensor())
         self.register_buffer("readEnergy", torch.Tensor())
 
-        with open('../memristor_device_info.json', 'r') as f:
+        with open('../../memristor_device_info.json', 'r') as f:
             self.memristor_info_dict = json.load(f)
         assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"  
         self.vneg = self.memristor_info_dict[self.device_name]['vinput_neg']

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from functools import reduce
 from operator import mul
 from typing import Iterable, Optional, Union
-from bindsnet.network.mapping import Mapping
+from simbrain.mapping import Mapping
 import torch
 
 

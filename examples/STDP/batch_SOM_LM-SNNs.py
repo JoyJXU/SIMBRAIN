@@ -7,7 +7,6 @@ Created on Thu Dec 29 20:49:32 2022
 """
 
 import os
-import sys
 import torch
 import argparse
 import numpy as np
@@ -18,22 +17,12 @@ from tqdm import tqdm
 
 from time import time as t
 
-sys.path.append('../')
-
 from bindsnet.datasets import MNIST
-from bindsnet.encoding import PoissonEncoder, poisson
+from bindsnet.encoding import PoissonEncoder
 from bindsnet.models import IncreasingInhibitionNetwork
 from bindsnet.network.monitors import Monitor
-from bindsnet.utils import get_square_weights, get_square_assignments
 from bindsnet.evaluation import all_activity, proportion_weighting, assign_labels
-from bindsnet.analysis.plotting import (
-    plot_input,
-    plot_spikes,
-    plot_weights,
-    plot_assignments,
-    plot_performance,
-    plot_voltages,
-)
+
 
 # %% Argument
 parser = argparse.ArgumentParser()
