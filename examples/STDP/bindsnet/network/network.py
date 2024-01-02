@@ -448,8 +448,8 @@ class Network(torch.nn.Module):
                 self.monitors[m].record()
 
         # Print power results
-        print("sum_readEnergy:", self.sum_readenergy)
-        print("sum_writeEnergy:", self.sum_writeenergy)
+        # print("sum_readEnergy:", self.sum_readenergy)
+        # print("sum_writeEnergy:", self.sum_writeenergy)
 
         # Re-normalize connections.
         for c in self.connections:

@@ -38,7 +38,9 @@ class Mapping(torch.nn.Module):
             raise Exception("Only trace and crossbar architecture are supported!")
         
         self.register_buffer("mem_v", torch.Tensor())
+        self.register_buffer("mem_v_read", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
+        self.register_buffer("mem_x_read", torch.Tensor())
         self.register_buffer("x", torch.Tensor())
         self.register_buffer("s", torch.Tensor())
         self.register_buffer("readEnergy", torch.Tensor())
@@ -72,7 +74,9 @@ class Mapping(torch.nn.Module):
         self.batch_size = batch_size
         
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
+        self.mem_v_read = torch.zeros(batch_size, self.shape[0], device=self.mem_v.device)
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+        self.mem_x_read = torch.zeros(batch_size, self.shape[1], device=self.mem_v.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
         self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
         self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
@@ -96,14 +100,14 @@ class Mapping(torch.nn.Module):
         self.mem_v.fill_(-self.vpos)
         self.mem_t_calculate(mem_step=mem_step)        
         # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_compute(mem_v=self.mem_v, mem_t=self.mem_t)
+        self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=self.mem_t)
 
         
     def update_SAF_mask(self) -> None:
         self.mem_array.update_SAF_mask()
 
 
-    def mapping(self, s, mem_step):
+    def mapping_write(self, s, mem_step):
         if self.device_structure == 'trace':
             if s.dim() == 4:
                 self.s = s.flatten(2, 3)
@@ -116,7 +120,7 @@ class Mapping(torch.nn.Module):
         self.mem_v[self.mem_v == 1] = self.vpos   
         self.mem_t_calculate(mem_step=mem_step)      
 
-        mem_c = self.mem_array.memristor_compute(mem_v=self.mem_v, mem_t=self.mem_t)
+        mem_c = self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=self.mem_t)
         
         # mem to nn
         self.x = (mem_c - self.Gon) * self.trans_ratio
@@ -127,8 +131,38 @@ class Mapping(torch.nn.Module):
             elif s.dim() == 2:
                 self.x = self.x.squeeze()
 
-        return self.x  
-    
+        return self.x
+
+    def mapping_read(self, s):
+        if self.device_structure == 'trace':
+            if s.dim() == 4:
+                s = s.flatten(2, 3)
+            elif s.dim() == 2:
+                s = torch.unsqueeze(s, 1)
+
+        # Read Voltage generation
+        v_read = 0.01 # TODO: make v_read a parameter in memristor_device_info.json like vneg/vpos
+        # For every batch, read is not necesary when there is no spike s
+        s_sum = torch.sum(s, dim=2).squeeze()
+
+        self.mem_v_read.zero_()
+        self.mem_v_read[s_sum.bool()] = v_read
+
+        mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read)
+
+        # current to trace
+        self.mem_x_read = (mem_i/v_read - self.Gon) * self.trans_ratio
+
+        self.mem_x_read[~s_sum.bool()] = 0
+
+        if self.device_structure == 'trace':
+            if s.dim() == 4:
+                self.mem_x_read = self.mem_x_read.reshape(s.size(0), s.size(1), s.size(2), s.size(3))
+            elif s.dim() == 2:
+                self.mem_x_read = self.mem_x_read.squeeze()
+
+        return self.mem_x_read
+
     def set_power_factor(self):
         self.power.mem_c = self.mem_array.mem_c
         self.power.mem_v = self.mem_v

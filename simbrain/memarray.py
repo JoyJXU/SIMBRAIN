@@ -27,6 +27,7 @@ class MemristorArray(torch.nn.Module):
     
         self.register_buffer("mem_x", torch.Tensor())  # Memristor-based firing traces.
         self.register_buffer("mem_c", torch.Tensor())
+        self.register_buffer("mem_i", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
     
         self.device_name = mem_device['device_name']
@@ -83,6 +84,7 @@ class MemristorArray(torch.nn.Module):
         self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
         self.mem_c = torch.zeros(batch_size, *self.shape, device=self.mem_c.device)
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+        self.mem_i = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_c.device)
 
         if self.c2c_variation:
             self.normal_relative = torch.zeros(batch_size, *self.shape, device=self.normal_relative.device)
@@ -161,10 +163,10 @@ class MemristorArray(torch.nn.Module):
             self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
     
     
-    def memristor_compute(self, mem_v: torch.Tensor, mem_t:torch.Tensor) -> None:
+    def memristor_write(self, mem_v: torch.Tensor, mem_t:torch.Tensor):
         # language=rst
         """
-        Abstract base class method for a single simulation step.
+        Memristor write operation for a single simulation step.
     
         :param mem_v: Voltage inputs to the memristor array.
         :param mem_t: Real-time simulation time of the memristor array.
@@ -257,8 +259,31 @@ class MemristorArray(torch.nn.Module):
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
 
         return self.mem_c
-    
-    
+
+    def memristor_read(self, mem_v: torch.Tensor): # TODO: Add Non-idealities
+        # language=rst
+        """
+        Memristor read operation for a single simulation step.
+
+        :param mem_v: Voltage inputs to the memristor array.
+        """
+        # Detect v_read and threshold voltage
+        mem_info = self.memristor_info_dict[self.device_name]
+        v_off = mem_info['v_off']
+        v_on = mem_info['v_on']
+        in_threshold = ((mem_v >= v_on) & (mem_v <= v_off)).all().item()
+        assert in_threshold, "Read Voltage of the Memristor Array Exceeds the Threshold Voltage!"
+
+        # vector multiplication:
+        # mem_v shape: [batchsize, read_no=1, array_row],
+        # mem_array shape: [batchsize, array_row, array_column],
+        # output_i shape: [batchsize, read_no=1, array_column]
+        mem_v_expand = torch.unsqueeze(mem_v, 1)
+        self.mem_i = torch.matmul(mem_v_expand, self.mem_c)
+
+        return self.mem_i
+
+
     def cal_Gon_Goff(self, k_on, k_off) -> None:
         if self.aging_effect == 1: #equation 1: G=G_0*(1-r)**t
             self.Gon_aging = self.Gon_0 * ((1 - k_on) ** self.mem_t)

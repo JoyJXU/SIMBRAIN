@@ -113,7 +113,7 @@ class Nodes(torch.nn.Module):
                     self.x.masked_fill_(self.s.bool(), self.trace_scale)
 
             else:
-                self.x = self.transform.mapping(s=self.s, mem_step=self.current_step)
+                self.x = self.transform.mapping_write(s=self.s, mem_step=self.current_step)
 
         if self.sum_input:
             # Add current input to running sum
