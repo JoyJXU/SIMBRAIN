@@ -405,6 +405,9 @@ class Network(torch.nn.Module):
                     self.layers[l].forward(x=current_inputs[l])
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
+                
+                self.sum_readenergy += self.layers[l].transform.mem_array.sum_readenergy
+                self.sum_writeenergy += self.layers[l].transform.mem_array.sum_writeenergy
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
@@ -429,10 +432,12 @@ class Network(torch.nn.Module):
                         self.layers[l].v += inject_v
                     else:
                         self.layers[l].v += inject_v[t]
-                        
-                self.layers[l].transform.set_power_factor()
-                self.sum_readenergy += torch.sum(self.layers[l].transform.read_energy(l))
-                self.sum_writeenergy += torch.sum(self.layers[l].transform.write_energy(l))
+
+
+                # self.layers[l].transform.set_power_factor()
+                # self.sum_readenergy += torch.sum(self.layers[l].transform.read_energy(l))
+                # self.sum_writeenergy += torch.sum(self.layers[l].transform.write_energy(l))
+                
 
             # Run synapse updates.
             for c in self.connections:

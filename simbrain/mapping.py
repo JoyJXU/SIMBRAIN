@@ -1,6 +1,6 @@
 from typing import Iterable, Optional, Union
 from simbrain.memarray import MemristorArray
-from simbrain.power import Power
+#from simbrain.power import Power
 import json
 import torch
 
@@ -26,6 +26,7 @@ class Mapping(torch.nn.Module):
 
         self.device_name = mem_device['device_name'] 
         self.device_structure = mem_device['device_structure']
+        self.memristor_device = mem_device['device_name']
 
         if self.device_structure == 'trace':
             self.shape = [1, 1]  # Shape of the memristor crossbar
@@ -61,8 +62,7 @@ class Mapping(torch.nn.Module):
 
         self.batch_size = None
 
-        self.power = Power(mem_device=mem_device, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
-
+        #self.power = Power(mem_device=mem_device, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
 
     def set_batch_size(self, batch_size) -> None:
         # language=rst
@@ -83,7 +83,7 @@ class Mapping(torch.nn.Module):
         self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
 
         self.mem_array.set_batch_size(batch_size=self.batch_size)
-        self.power.set_batch_size(batch_size=self.batch_size)
+        #self.power.set_batch_size(batch_size=self.batch_size)
 
 
     def mem_t_calculate(self,mem_step):
@@ -131,6 +131,10 @@ class Mapping(torch.nn.Module):
             elif s.dim() == 2:
                 self.x = self.x.squeeze()
 
+        if self.memristor_device != 'trace':
+            self.mem_array.power.mem_v = self.mem_v
+            self.mem_array.power_energy()
+            
         return self.x
 
     def mapping_read(self, s):
@@ -163,14 +167,14 @@ class Mapping(torch.nn.Module):
 
         return self.mem_x_read
 
-    def set_power_factor(self):
-        self.power.mem_c = self.mem_array.mem_c
-        self.power.mem_v = self.mem_v
+    # def set_power_factor(self):
+    #     self.power.mem_c = self.mem_array.mem_c
+    #     self.power.mem_v = self.mem_v
     
-    def read_energy(self, layer):
-        self.readEnergy = self.power.read_energy(layer)
-        return self.readEnergy
+    # def read_energy(self, layer):
+    #     self.readEnergy = self.power.read_energy(layer)
+    #     return self.readEnergy
     
-    def write_energy(self, layer):
-        self.writeEnergy = self.power.write_energy(layer)
-        return self.writeEnergy
+    # def write_energy(self, layer):
+    #     self.writeEnergy = self.power.write_energy(layer)
+    #     return self.writeEnergy

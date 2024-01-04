@@ -1,5 +1,6 @@
 import torch
 from typing import Iterable, Optional, Union
+import json
 
 class Power(torch.nn.Module):
 
@@ -17,6 +18,7 @@ class Power(torch.nn.Module):
 
         self.device_name = mem_device['device_name']
         self.device_structure = mem_device['device_structure'] 
+        self.processNode = mem_device['processNode'] 
         self.register_buffer("mem_c", torch.Tensor())
         self.register_buffer("mem_cpre", torch.Tensor())
         self.register_buffer("mem_v", torch.Tensor())
@@ -30,6 +32,17 @@ class Power(torch.nn.Module):
         self.register_buffer("total_wire_resistance", torch.Tensor())
         self.memristor_info_dict = memristor_info_dict
         self.count_n = 0
+
+        with open('power_estimation_info.json', 'r') as file:
+            self.power_info_dict = json.load(file)  
+        self.widthInFeatureSize = self.power_info_dict[self.device_name]['widthInFeatureSize']
+        self.wireResistanceUnit = self.power_info_dict[self.device_name]['wireResistanceUnit']
+
+        self.sim_params = {'readEnergy_static':self.readEnergy_static, 'writeEnergy_static': self.writeEnergy_static,
+                 'readEnergy_dynamic': self.readEnergy_dynamic, 'writeEnergy_dynamic': self.writeEnergy_dynamic,
+                 'readEnergy':self.readEnergy,'writeEnergy':self.writeEnergy}
+        
+        self.arrayColSize = 1
 
     def set_batch_size(self, batch_size) -> None:
         # language=rst
@@ -53,24 +66,24 @@ class Power(torch.nn.Module):
         self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
 
 
-    def read_energy_dynamic_trace(self,layer):
+    def read_energy_dynamic_trace(self):
         mem_info = self.memristor_info_dict[self.device_name]
-        if layer == 'X':
-            arrayColSize = mem_info['arrayColSize_X']
-        elif layer == 'Y':
-            arrayColSize = mem_info['arrayColSize_Y']    
-        widthInFeatureSize = mem_info['widthInFeatureSize']
-        processNode = mem_info['processNode']
+        # if layer == 'X':
+        #     arrayColSize = mem_info['arrayColSize_X']
+        # elif layer == 'Y':
+        #     arrayColSize = mem_info['arrayColSize_Y']    
+        # widthInFeatureSize = mem_info['widthInFeatureSize']
+        # processNode = mem_info['processNode']
 
 		#1.1calculate numCol
         numCellPerSynapse = 1
-        numCol = arrayColSize * numCellPerSynapse
+        numCol = self.arrayColSize * numCellPerSynapse
 		
 		#1.2calculate cellWidth
-        cellWidth = widthInFeatureSize
+        cellWidth = self.widthInFeatureSize
 		
 		#1.3calculate featureSize
-        _featureSizeInNano = processNode #technology node in nm
+        _featureSizeInNano = self.processNode #technology node in nm
         featureSize = _featureSizeInNano * 1e-9
 		
 		#1.4calculate lengthRow
@@ -81,24 +94,25 @@ class Power(torch.nn.Module):
 
 		#2calculate readEnergy_dynamic
         self.readEnergy_dynamic = (wireCapRow  * (self.mem_v * self.mem_v)).squeeze()
-
+        self.sim_params['readEnergy_dynamic'] = self.readEnergy_dynamic
         return self.readEnergy_dynamic
     
     def read_energy_static_trace(self):
         mem_info = self.memristor_info_dict[self.device_name]
         delta_t = mem_info['delta_t']
-        wireResistanceUnit = mem_info['wireResistanceUnit']
+        # wireResistanceUnit = mem_info['wireResistanceUnit']
         readPulseWidth = (1/4) * delta_t
         self.readEnergy_static = (self.mem_v * self.mem_c * self.mem_v * readPulseWidth + self.mem_v / (
-                    2 * wireResistanceUnit) * self.mem_v * readPulseWidth).squeeze()
+                    2 * self.wireResistanceUnit) * self.mem_v * readPulseWidth).squeeze()
+        self.sim_params['readEnergy_static'] = self.readEnergy_static
         return self.readEnergy_static
     
     def read_energy_static_crossbar(self):
         mem_info = self.memristor_info_dict[self.device_name]
         delta_t = mem_info['delta_t']
-        wireResistanceUnit = mem_info['wireResistanceUnit']
+        # wireResistanceUnit = mem_info['wireResistanceUnit']
         readPulseWidth = (1/4) * delta_t
-        self.total_wire_resistance = (wireResistanceUnit * (
+        self.total_wire_resistance = (self.wireResistanceUnit * (
                     torch.arange(1, self.shape[1] + 1) + torch.arange(self.shape[0], 0, -1)[:, None])).cuda()
         self.total_wire_resistance = torch.stack([self.total_wire_resistance] * self.batch_size)
         self.total_resistance = self.total_wire_resistance + 1/self.mem_c
@@ -106,35 +120,40 @@ class Power(torch.nn.Module):
         total_current = torch.sum(self.mem_v/self.total_resistance, dim=1)
         total_current = torch.unsqueeze(total_current, 1)
         self.readEnergy_static = (total_current * self.mem_v * readPulseWidth).squeeze()
+        self.sim_params['readEnergy_static'] = self.readEnergy_static
         return self.readEnergy_static
     
-    def read_energy(self, layer):
+    def read_energy(self):
         if self.device_structure == 'trace':
-            return self.read_energy_dynamic_trace(layer) + self.read_energy_static_trace()
+            self.readEnergy = self.read_energy_dynamic_trace() + self.read_energy_static_trace()
+            self.sim_params['readEnergy'] = self.readEnergy
+            return self.readEnergy
         elif self.device_structure == 'crossbar':
-            return self.read_energy_dynamic_crossbar() + self.read_energy_static_crossbar()
+            self.readEnergy = self.read_energy_dynamic_crossbar() + self.read_energy_static_crossbar()
+            self.sim_params['readEnergy'] = self.readEnergy
+            return self.readEnergy
         else:
             print("Unsupported Architecture for Read Energy Calculation!")
 
-    def write_energy_dynamic_trace(self, layer):
+    def write_energy_dynamic_trace(self):
         mem_info = self.memristor_info_dict[self.device_name]
-        if layer == 'X':
-            arrayColSize = mem_info['arrayColSize_X']
-        elif layer == 'Y':
-            arrayColSize = mem_info['arrayColSize_Y']
-        widthInFeatureSize = mem_info['widthInFeatureSize']
-        processNode = mem_info['processNode']
+        # if layer == 'X':
+        #     arrayColSize = mem_info['arrayColSize_X']
+        # elif layer == 'Y':
+        #     arrayColSize = mem_info['arrayColSize_Y']
+        # widthInFeatureSize = mem_info['widthInFeatureSize']
+        # processNode = mem_info['processNode']
         arrayRowSize = mem_info['arrayRowSize']
         
 		#1.1calculate numCol, numRow
         numCellPerSynapse = 1
-        numCol = arrayColSize * numCellPerSynapse
+        numCol = self.arrayColSize * numCellPerSynapse
         numRow = arrayRowSize
 		#1.2calculate cellWidth
-        cellWidth = widthInFeatureSize
+        cellWidth = self.widthInFeatureSize
 		
 		#1.3calculate featureSize
-        _featureSizeInNano = processNode #technology node in nm
+        _featureSizeInNano = self.processNode #technology node in nm
         featureSize = _featureSizeInNano * 1e-9
 		
 		#1.4calculate lengthRow, lengthCol
@@ -147,28 +166,32 @@ class Power(torch.nn.Module):
 
 		#2calculate readEnergy_dynamic
         self.writeEnergy_dynamic = (wireCapRow  * (self.mem_v * self.mem_v) + wireCapCol * (self.mem_v * self.mem_v)).squeeze()
-
+        self.sim_params['writeEnergy_dynamic'] = self.writeEnergy_dynamic
         return self.writeEnergy_dynamic
     
     def write_energy_static_trace(self):
         mem_info = self.memristor_info_dict[self.device_name]
         delta_t = mem_info['delta_t']
-        wireResistanceUnit = mem_info['wireResistanceUnit']
+        # wireResistanceUnit = mem_info['wireResistanceUnit']
         writePulseWidth = (1/4) * delta_t
         if self.count_n == 0:
             self.mem_cpre = self.mem_c
-            self.writeEnergy_static = (self.mem_v * self.mem_c * self.mem_v * writePulseWidth + self.mem_v/(2 * wireResistanceUnit) * self.mem_v * writePulseWidth).squeeze()
+            self.writeEnergy_static = (self.mem_v * self.mem_c * self.mem_v * writePulseWidth + self.mem_v/(2 * self.wireResistanceUnit) * self.mem_v * writePulseWidth).squeeze()
             self.count_n = 1
         else:
-            self.writeEnergy_static = (self.mem_v * (self.mem_c + self.mem_cpre)/2 * self.mem_v * writePulseWidth + self.mem_v/(2 * wireResistanceUnit) * self.mem_v * writePulseWidth).squeeze()
+            self.writeEnergy_static = (self.mem_v * (self.mem_c + self.mem_cpre)/2 * self.mem_v * writePulseWidth + self.mem_v/(2 * self.wireResistanceUnit) * self.mem_v * writePulseWidth).squeeze()
             self.mem_cpre = self.mem_c
-
+        self.sim_params['writeEnergy_static'] = self.writeEnergy_static
         return self.writeEnergy_static
     
-    def write_energy(self, layer):
+    def write_energy(self):
         if self.device_structure == 'trace':
-            return self.write_energy_dynamic_trace(layer) + self.write_energy_static_trace()
+            self.writeEnergy = self.write_energy_dynamic_trace() + self.write_energy_static_trace()
+            self.sim_params['writeEnergy'] = self.writeEnergy
+            return self.writeEnergy
         elif self.device_structure == 'crossbar':
-            return self.write_energy_dynamic_crossbar() + self.write_energy_static_crossbar()
+            self.writeEnergy = self.write_energy_dynamic_crossbar() + self.write_energy_static_crossbar()
+            self.sim_params['writeEnergy'] = self.writeEnergy
+            return self.writeEnergy
         else:
             print("Unsupported Architecture for Write Energy Calculation!")

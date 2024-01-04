@@ -28,12 +28,7 @@
         "SAF_delta": 0,
         "Aging_k_on":0,
         "Aging_k_off":0,
-        "arrayColSize_X":784,
-        "arrayColSize_Y":625,
-        "arrayRowSize":1,
-        "widthInFeatureSize":2,
-        "wireResistanceUnit":0.15193,
-        "processNode":32
+        "arrayRowSize":1
     },
     "ferro":
     {

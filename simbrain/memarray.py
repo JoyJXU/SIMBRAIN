@@ -1,5 +1,7 @@
 from typing import Iterable, Optional, Union
+from simbrain.power import Power
 import torch
+import numpy as np
 
 class MemristorArray(torch.nn.Module):
     # language=rst
@@ -71,7 +73,12 @@ class MemristorArray(torch.nn.Module):
         self.memristor_info_dict = memristor_info_dict
         self.batch_size = None
 
-    
+        self.power = Power(mem_device=mem_device, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
+        self.sim_device : dict = {}
+        self.sum_readenergy = 0
+        self.sum_writeenergy = 0
+        
+
     def set_batch_size(self, batch_size) -> None:
         # language=rst
         """
@@ -161,7 +168,8 @@ class MemristorArray(torch.nn.Module):
         if self.retention_loss == 2:
             self.mem_v_threshold = torch.zeros(batch_size, *self.shape, device=self.mem_v_threshold.device)
             self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
-    
+
+        self.power.set_batch_size(batch_size=self.batch_size)
     
     def memristor_write(self, mem_v: torch.Tensor, mem_t:torch.Tensor):
         # language=rst
@@ -308,3 +316,18 @@ class MemristorArray(torch.nn.Module):
                 self.SAF0_mask += (~(self.SAF0_mask + self.SAF1_mask)) & (self.Q_mask < ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio))
                 self.SAF1_mask += (~(self.SAF0_mask + self.SAF1_mask)) & \
                                   ((self.Q_mask >= ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio)) & (self.Q_mask < increase_ratio))
+
+    def power_energy(self):
+        #set_power_factor
+        self.power.mem_c = self.mem_c
+        # self.power.arrayColSize = np.prod(self.shape)
+        self.power.arrayColSize = self.shape[1]
+        
+        #read_energy
+        self.power.read_energy()    
+        #write_energy
+        self.power.write_energy()
+        #字典传进去
+        self.sim_device = self.power.sim_params
+        self.sum_readenergy = torch.sum(self.sim_device['readEnergy'])
+        self.sum_writeenergy = torch.sum(self.sim_device['writeEnergy'])
