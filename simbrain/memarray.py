@@ -171,7 +171,7 @@ class MemristorArray(torch.nn.Module):
 
         self.power.set_batch_size(batch_size=self.batch_size)
     
-    def memristor_write(self, mem_v: torch.Tensor, mem_t:torch.Tensor):
+    def memristor_write(self, mem_v: torch.Tensor, mem_t=None):
         # language=rst
         """
         Memristor write operation for a single simulation step.
@@ -198,8 +198,9 @@ class MemristorArray(torch.nn.Module):
         retention_loss_beta = mem_info['retention_loss_beta']
         Aging_k_on = mem_info['Aging_k_on']
         Aging_k_off = mem_info['Aging_k_off']
-        
-        self.mem_t = mem_t
+
+        if self.mem_t is not None:
+            self.mem_t = mem_t
 
         if self.d2d_variation in [1, 3]:
             self.mem_x = torch.where(mem_v >= v_off, \
@@ -266,6 +267,10 @@ class MemristorArray(torch.nn.Module):
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
 
+        # Add self.mem_t by a time step
+        delta_t = mem_info['delta_t']
+        self.mem_t += delta_t
+        
         return self.mem_c
 
     def memristor_read(self, mem_v: torch.Tensor): # TODO: Add Non-idealities
@@ -277,6 +282,7 @@ class MemristorArray(torch.nn.Module):
         """
         # Detect v_read and threshold voltage
         mem_info = self.memristor_info_dict[self.device_name]
+        delta_t = mem_info['delta_t']
         v_off = mem_info['v_off']
         v_on = mem_info['v_on']
         in_threshold = ((mem_v >= v_on) & (mem_v <= v_off)).all().item()
@@ -288,6 +294,9 @@ class MemristorArray(torch.nn.Module):
         # output_i shape: [batchsize, read_no=1, array_column]
         mem_v_expand = torch.unsqueeze(mem_v, 1)
         self.mem_i = torch.matmul(mem_v_expand, self.mem_c)
+
+        # Add self.mem_t by a time step
+        self.mem_t += delta_t
 
         return self.mem_i
 

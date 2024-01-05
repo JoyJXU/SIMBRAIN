@@ -33,14 +33,14 @@ class Power(torch.nn.Module):
         self.memristor_info_dict = memristor_info_dict
         self.count_n = 0
 
-        with open('power_estimation_info.json', 'r') as file:
+        with open('../../power_estimation_info.json', 'r') as file:
             self.power_info_dict = json.load(file)  
         self.widthInFeatureSize = self.power_info_dict[self.device_name]['widthInFeatureSize']
         self.wireResistanceUnit = self.power_info_dict[self.device_name]['wireResistanceUnit']
 
-        self.sim_params = {'readEnergy_static':self.readEnergy_static, 'writeEnergy_static': self.writeEnergy_static,
+        self.sim_params = {'readEnergy_static': self.readEnergy_static, 'writeEnergy_static': self.writeEnergy_static,
                  'readEnergy_dynamic': self.readEnergy_dynamic, 'writeEnergy_dynamic': self.writeEnergy_dynamic,
-                 'readEnergy':self.readEnergy,'writeEnergy':self.writeEnergy}
+                 'readEnergy':self.readEnergy, 'writeEnergy': self.writeEnergy}
         
         self.arrayColSize = 1
 

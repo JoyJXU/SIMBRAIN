@@ -194,7 +194,7 @@ class PostPre(LearningRule):
             # target_x = self.target.x.view(batch_size, -1).unsqueeze(1) * self.nu[0]
 
             # Memristor Read
-            target_x = self.target.transform.mapping_read(s=self.source.s)
+            target_x = self.target.transform.mapping_read_stdp(s=self.source.s)
             target_x = target_x.view(batch_size, -1).unsqueeze(1) * self.nu[0]
 
             self.connection.w -= self.reduction(torch.bmm(source_s, target_x), dim=0)
@@ -208,7 +208,7 @@ class PostPre(LearningRule):
             # source_x = self.source.x.view(batch_size, -1).unsqueeze(2)
 
             # Memristor Read
-            source_x = self.source.transform.mapping_read(s=self.target.s)
+            source_x = self.source.transform.mapping_read_stdp(s=self.target.s)
             source_x = source_x.view(batch_size, -1).unsqueeze(2)
 
             self.connection.w += self.reduction(torch.bmm(source_x, target_s), dim=0)

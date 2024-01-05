@@ -1,7 +1,7 @@
 from typing import Iterable, Optional, Union
 from simbrain.memarray import MemristorArray
-#from simbrain.power import Power
 import json
+import pickle
 import torch
 
 class Mapping(torch.nn.Module):
@@ -33,10 +33,10 @@ class Mapping(torch.nn.Module):
             for element in shape:
                 self.shape[1] *= element
             self.shape = tuple(self.shape)
-        elif self.device_structure == 'crossbar':
+        elif self.device_structure in {'crossbar', 'mimo'}:
             self.shape = shape
         else:
-            raise Exception("Only trace and crossbar architecture are supported!")
+            raise Exception("Only trace, mimo and crossbar architecture are supported!")
         
         self.register_buffer("mem_v", torch.Tensor())
         self.register_buffer("mem_v_read", torch.Tensor())
@@ -62,7 +62,6 @@ class Mapping(torch.nn.Module):
 
         self.batch_size = None
 
-        #self.power = Power(mem_device=mem_device, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
 
     def set_batch_size(self, batch_size) -> None:
         # language=rst
@@ -83,16 +82,15 @@ class Mapping(torch.nn.Module):
         self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
 
         self.mem_array.set_batch_size(batch_size=self.batch_size)
-        #self.power.set_batch_size(batch_size=self.batch_size)
 
 
-    def mem_t_calculate(self,mem_step):
+    def mem_t_calculate(self, mem_step):
         # Calculate the mem_t
-        self.mem_t[:, 0, :] = mem_step.view(-1, 1)
+        self.mem_t[:, :, :] = mem_step.view(-1, 1, 1)
         self.mem_t *= self.dt 
         
         
-    def reset_memristor_variables(self,mem_step) -> None:
+    def reset_memristor_variables(self, mem_step) -> None:
         # language=rst
         """
         Abstract base class method for resetting state variables.
@@ -107,7 +105,31 @@ class Mapping(torch.nn.Module):
         self.mem_array.update_SAF_mask()
 
 
-    def mapping_write(self, s, mem_step):
+class STDPMapping(Mapping):
+    # language=rst
+    """
+    Mapping STDP (Bindsnet) to memristor arrays.
+    """
+
+    def __init__(
+        self,
+        mem_device: dict = {},
+        shape: Optional[Iterable[int]] = None,
+        **kwargs,
+    ) -> None:
+        # language=rst
+        """
+        Abstract base class constructor.
+        :param mem_device: Memristor device to be used in learning.
+        :param shape: The dimensionality of the memristor array.
+        """
+        super().__init__(
+            mem_device=mem_device,
+            shape=shape
+        )
+
+
+    def mapping_write_stdp(self, s, mem_step):
         if self.device_structure == 'trace':
             if s.dim() == 4:
                 self.s = s.flatten(2, 3)
@@ -137,7 +159,7 @@ class Mapping(torch.nn.Module):
             
         return self.x
 
-    def mapping_read(self, s):
+    def mapping_read_stdp(self, s):
         if self.device_structure == 'trace':
             if s.dim() == 4:
                 s = s.flatten(2, 3)
@@ -167,14 +189,88 @@ class Mapping(torch.nn.Module):
 
         return self.mem_x_read
 
-    # def set_power_factor(self):
-    #     self.power.mem_c = self.mem_array.mem_c
-    #     self.power.mem_v = self.mem_v
-    
-    # def read_energy(self, layer):
-    #     self.readEnergy = self.power.read_energy(layer)
-    #     return self.readEnergy
-    
-    # def write_energy(self, layer):
-    #     self.writeEnergy = self.power.write_energy(layer)
-    #     return self.writeEnergy
+class MimoMapping(Mapping):
+    # language=rst
+    """
+    Mapping MIMO to memristor arrays.
+    """
+
+    def __init__(
+        self,
+        mem_device: dict = {},
+        shape: Optional[Iterable[int]] = None,
+        **kwargs,
+    ) -> None:
+        # language=rst
+        """
+        Abstract base class constructor.
+        :param mem_device: Memristor device to be used in learning.
+        :param shape: The dimensionality of the memristor array.
+        """
+        super().__init__(
+            mem_device=mem_device,
+            shape=shape
+        )
+
+        self.register_buffer("write_pulse_no", torch.Tensor())
+        self.write_pulse_no = torch.zeros(*self.shape, device=self.mem_v.device)
+
+        with open('memristor_lut.pkl', 'rb') as f:
+            self.memristor_luts = pickle.load(f)
+        assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
+
+        self.set_batch_size(1)
+        self.mem_t_calculate(mem_step=torch.tensor([0]))
+
+    def mapping_write_mimo(self, target_x):
+        # Memristor reset first
+        self.mem_v.fill_(-100)  # TODO: check the reset voltage
+        # Adopt large negative pulses to reset the memristor array
+        self.mem_array.memristor_write(mem_v=self.mem_v)
+
+        # Vector to Pulse Serial
+        self.write_pulse_no = self.m2v(target_x)
+        total_wr_cycle = self.memristor_luts[self.device_name]['total_no']
+        write_voltage = self.memristor_luts[self.device_name]['voltage']
+
+        # Matrix to memristor
+        counter = torch.ones_like(self.mem_v)
+        # Memristor programming using multiple identical pulses (up to 400)
+        for t in range(total_wr_cycle):
+            self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
+            self.mem_array.memristor_write(mem_v=self.mem_v)
+
+    def mapping_read_mimo(self, target_v):
+        # Get threshold voltage
+        mem_info = self.memristor_info_dict[self.device_name]
+        v_off = mem_info['v_off']
+        v_on = mem_info['v_on']
+        v_thre = min(abs(v_off), abs(v_on)) * 0.95
+
+        # Read voltage generation
+        v_read = target_v.unsqueeze(0) * v_thre
+
+        mem_i = self.mem_array.memristor_read(mem_v=v_read)
+
+        # Current to results
+        self.mem_x_read = self.trans_ratio * (
+                    mem_i / v_thre - torch.matmul(target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon))
+
+        return self.mem_x_read
+
+    def m2v(self, target_matrix):
+        # Target_matrix ranging [0, 1]
+        within_range = (target_matrix >= 0) & (target_matrix <= 1)
+        assert torch.all(within_range), "The target Matrix Must be in the Range [0, 1]!"
+
+        # Target x to target conductance
+        target_c = target_matrix / self.trans_ratio + self.Gon
+
+        # Get access to the look-up-table of the target memristor
+        luts = self.memristor_luts[self.device_name]['conductance']
+
+        # Find the nearest conductance value
+        c_diff = torch.abs(torch.tensor(luts) - target_c.unsqueeze(2))
+        nearest_pulse_no = torch.argmin(c_diff, dim=2)
+
+        return nearest_pulse_no

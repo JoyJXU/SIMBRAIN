@@ -433,12 +433,6 @@ class Network(torch.nn.Module):
                     else:
                         self.layers[l].v += inject_v[t]
 
-
-                # self.layers[l].transform.set_power_factor()
-                # self.sum_readenergy += torch.sum(self.layers[l].transform.read_energy(l))
-                # self.sum_writeenergy += torch.sum(self.layers[l].transform.write_energy(l))
-                
-
             # Run synapse updates.
             for c in self.connections:
                 self.connections[c].update(
@@ -451,10 +445,6 @@ class Network(torch.nn.Module):
             # Record state variables of interest.
             for m in self.monitors:
                 self.monitors[m].record()
-
-        # Print power results
-        # print("sum_readEnergy:", self.sum_readenergy)
-        # print("sum_writeEnergy:", self.sum_writeenergy)
 
         # Re-normalize connections.
         for c in self.connections:

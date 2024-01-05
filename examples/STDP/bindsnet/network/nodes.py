@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from functools import reduce
 from operator import mul
 from typing import Iterable, Optional, Union
-from simbrain.mapping import Mapping
+from simbrain.mapping import STDPMapping
 import torch
 
 
@@ -83,7 +83,7 @@ class Nodes(torch.nn.Module):
                 "trace_decay", torch.empty_like(self.tc_trace)
             )  # Set in compute_decays.
             if self.device_name != 'trace':
-                self.transform = Mapping(mem_device=mem_device, shape=self.shape)
+                self.transform = STDPMapping(mem_device=mem_device, shape=self.shape)
    
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
@@ -113,7 +113,7 @@ class Nodes(torch.nn.Module):
                     self.x.masked_fill_(self.s.bool(), self.trace_scale)
 
             else:
-                self.x = self.transform.mapping_write(s=self.s, mem_step=self.current_step)
+                self.x = self.transform.mapping_write_stdp(s=self.s, mem_step=self.current_step)
 
         if self.sum_input:
             # Add current input to running sum
