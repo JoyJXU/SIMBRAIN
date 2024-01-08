@@ -12,21 +12,21 @@ class Mapping(torch.nn.Module):
 
     def __init__(
         self,
-        mem_device: dict = {},
+        sim_params: dict = {},
         shape: Optional[Iterable[int]] = None,
         **kwargs,
     ) -> None:
         # language=rst
         """
         Abstract base class constructor.
-        :param mem_device: Memristor device to be used in learning.
+        :param sim_params: Memristor device to be used in learning.
         :param shape: The dimensionality of the layer.
         """
         super().__init__()
 
-        self.device_name = mem_device['device_name'] 
-        self.device_structure = mem_device['device_structure']
-        self.memristor_device = mem_device['device_name']
+        self.device_name = sim_params['device_name'] 
+        self.device_structure = sim_params['device_structure']
+        self.memristor_device = sim_params['device_name']
 
         if self.device_structure == 'trace':
             self.shape = [1, 1]  # Shape of the memristor crossbar
@@ -40,12 +40,14 @@ class Mapping(torch.nn.Module):
         
         self.register_buffer("mem_v", torch.Tensor())
         self.register_buffer("mem_v_read", torch.Tensor())
-        self.register_buffer("mem_t", torch.Tensor())
         self.register_buffer("mem_x_read", torch.Tensor())
         self.register_buffer("x", torch.Tensor())
         self.register_buffer("s", torch.Tensor())
         self.register_buffer("readEnergy", torch.Tensor())
         self.register_buffer("writeEnergy", torch.Tensor())
+        self.register_buffer("memristor_t_matrix", torch.Tensor())
+        self.register_buffer("memristor_t_batch_update", torch.Tensor())
+        self.register_buffer("memristor_t_ones", torch.Tensor())
 
         with open('../../memristor_device_info.json', 'r') as f:
             self.memristor_info_dict = json.load(f)
@@ -55,15 +57,18 @@ class Mapping(torch.nn.Module):
         self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.dt = self.memristor_info_dict[self.device_name]['delta_t']
+        self.batch_interval = sim_params['batch_interval']
         
         self.trans_ratio = 1 / (self.Goff - self.Gon)
         
-        self.mem_array = MemristorArray(mem_device=mem_device, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
+        self.mem_array = MemristorArray(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
 
         self.batch_size = None
+        self.learning = None
+        self.batch_count = 1
 
 
-    def set_batch_size(self, batch_size) -> None:
+    def set_batch_size(self, batch_size, learning) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when memristor is used to mapping traces.
@@ -71,34 +76,21 @@ class Mapping(torch.nn.Module):
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
+        self.learning = learning
         
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.mem_v_read = torch.zeros(batch_size, self.shape[0], device=self.mem_v.device)
-        self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+        self.memristor_t_matrix = torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)        
+        self.memristor_t_batch_update = torch.zeros(self.shape, device=self.memristor_t_batch_update.device)
+        self.memristor_t_ones = torch.ones(self.shape, device=self.memristor_t_ones.device)
         self.mem_x_read = torch.zeros(batch_size, self.shape[1], device=self.mem_v.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
         self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
         self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
         self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
 
-        self.mem_array.set_batch_size(batch_size=self.batch_size)
-
-
-    def mem_t_calculate(self, mem_step):
-        # Calculate the mem_t
-        self.mem_t[:, :, :] = mem_step.view(-1, 1, 1)
-        self.mem_t *= self.dt 
+        self.mem_array.set_batch_size(batch_size=self.batch_size, learning=self.learning)
         
-        
-    def reset_memristor_variables(self, mem_step) -> None:
-        # language=rst
-        """
-        Abstract base class method for resetting state variables.
-        """
-        self.mem_v.fill_(-self.vpos)
-        self.mem_t_calculate(mem_step=mem_step)        
-        # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=self.mem_t)
 
         
     def update_SAF_mask(self) -> None:
@@ -113,23 +105,23 @@ class STDPMapping(Mapping):
 
     def __init__(
         self,
-        mem_device: dict = {},
+        sim_params: dict = {},
         shape: Optional[Iterable[int]] = None,
         **kwargs,
     ) -> None:
         # language=rst
         """
         Abstract base class constructor.
-        :param mem_device: Memristor device to be used in learning.
+        :param sim_params: Memristor device to be used in learning.
         :param shape: The dimensionality of the memristor array.
         """
         super().__init__(
-            mem_device=mem_device,
+            sim_params=sim_params,
             shape=shape
         )
 
 
-    def mapping_write_stdp(self, s, mem_step):
+    def mapping_write_stdp(self, s):
         if self.device_structure == 'trace':
             if s.dim() == 4:
                 self.s = s.flatten(2, 3)
@@ -139,10 +131,9 @@ class STDPMapping(Mapping):
         # nn to mem
         self.mem_v = self.s.float()
         self.mem_v[self.mem_v == 0] = self.vneg
-        self.mem_v[self.mem_v == 1] = self.vpos   
-        self.mem_t_calculate(mem_step=mem_step)      
+        self.mem_v[self.mem_v == 1] = self.vpos      
 
-        mem_c = self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=self.mem_t)
+        mem_c = self.mem_array.memristor_write(mem_v=self.mem_v, memristor_t=None)
         
         # mem to nn
         self.x = (mem_c - self.Gon) * self.trans_ratio
@@ -188,6 +179,21 @@ class STDPMapping(Mapping):
                 self.mem_x_read = self.mem_x_read.squeeze()
 
         return self.mem_x_read
+    
+    def reset_memristor_variables(self) -> None:
+        # language=rst
+        """
+        Abstract base class method for resetting state variables.
+        """
+        self.mem_v.fill_(-self.vpos)
+        
+        self.memristor_t_matrix_1 = (self.memristor_t_matrix * self.batch_interval + self.batch_count * self.batch_interval * self.batch_size).unsqueeze(0).T
+        self.memristor_t_batch_update = (self.memristor_t_matrix_1 * self.memristor_t_ones).unsqueeze(1) * self.dt
+        
+        self.batch_count += 1
+        
+        # Adopt large negative pulses to reset the memristor array
+        self.mem_array.memristor_write(mem_v=self.mem_v, memristor_t=self.memristor_t_batch_update)
 
 class MimoMapping(Mapping):
     # language=rst
@@ -197,18 +203,18 @@ class MimoMapping(Mapping):
 
     def __init__(
         self,
-        mem_device: dict = {},
+        sim_params: dict = {},
         shape: Optional[Iterable[int]] = None,
         **kwargs,
     ) -> None:
         # language=rst
         """
         Abstract base class constructor.
-        :param mem_device: Memristor device to be used in learning.
+        :param sim_params: Memristor device to be used in learning.
         :param shape: The dimensionality of the memristor array.
         """
         super().__init__(
-            mem_device=mem_device,
+            sim_params=sim_params,
             shape=shape
         )
 
@@ -220,7 +226,6 @@ class MimoMapping(Mapping):
         assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
         self.set_batch_size(1)
-        self.mem_t_calculate(mem_step=torch.tensor([0]))
 
     def mapping_write_mimo(self, target_x):
         # Memristor reset first
@@ -274,3 +279,13 @@ class MimoMapping(Mapping):
         nearest_pulse_no = torch.argmin(c_diff, dim=2)
 
         return nearest_pulse_no
+
+    def reset_memristor_variables(self, mem_step) -> None:
+        # language=rst
+        """
+        Abstract base class method for resetting state variables.
+        """
+        self.mem_v.fill_(-self.vpos)
+        
+        # Adopt large negative pulses to reset the memristor array
+        self.mem_array.memristor_write(mem_v=self.mem_v, memristor_t=None)

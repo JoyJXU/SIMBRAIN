@@ -315,7 +315,7 @@ class IncreasingInhibitionNetwork(Network):
         start_inhib: float = 1.0,
         max_inhib: float = 100.0,
         dt: float = 1.0,
-        mem_device: dict = {},
+        sim_params: dict = {},
         batch_size: int = 1,
         nu: Optional[Union[float, Sequence[float]]] = (1e-4, 1e-2),
         reduction: Optional[callable] = None,
@@ -334,7 +334,7 @@ class IncreasingInhibitionNetwork(Network):
         :param n_neurons: Number of excitatory, inhibitory neurons.
         :param inh: Strength of synapse weights from inhibitory to excitatory layer.
         :param dt: Simulation time step.
-        :param mem_device: Memristor device to be used in learning.
+        :param sim_params: Memristor device to be used in learning.
         :param nu: Single or pair of learning rates for pre- and post-synaptic events,
             respectively.
         :param reduction: Method for reducing parameter updates along the minibatch
@@ -349,7 +349,7 @@ class IncreasingInhibitionNetwork(Network):
             potential decay.
         :param inpt_shape: The dimensionality of the input layer.
         """
-        super().__init__(dt=dt, mem_device=mem_device, batch_size=batch_size)
+        super().__init__(dt=dt, sim_params=sim_params, batch_size=batch_size)
 
         self.n_input = n_input
         self.n_neurons = n_neurons
@@ -360,7 +360,7 @@ class IncreasingInhibitionNetwork(Network):
         self.inpt_shape = inpt_shape
 
         input_layer = Input(
-            n=self.n_input, shape=self.inpt_shape, traces=True, tc_trace=20.0, mem_device=self.mem_device
+            n=self.n_input, shape=self.inpt_shape, traces=True, tc_trace=20.0, sim_params=self.sim_params
         )
         self.add_layer(input_layer, name="X")
 
@@ -375,7 +375,7 @@ class IncreasingInhibitionNetwork(Network):
             tc_trace=20.0,
             theta_plus=theta_plus,
             tc_theta_decay=tc_theta_decay,
-            mem_device=self.mem_device
+            sim_params=self.sim_params
         )
         self.add_layer(output_layer, name="Y")
 

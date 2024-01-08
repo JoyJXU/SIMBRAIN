@@ -12,9 +12,11 @@ import argparse
 import numpy as np
 import math
 
+import sys
+sys.path.append('../../')
+
 from torchvision import transforms
 from tqdm import tqdm
-
 from time import time as t
 
 from bindsnet.datasets import MNIST
@@ -75,10 +77,10 @@ update_interval = args.update_interval
 plot = args.plot
 gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
-device_params = {'device_structure':args.memristor_structure, 'device_name': args.memristor_device,
+sim_params = {'device_structure':args.memristor_structure, 'device_name': args.memristor_device,
                  'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                  'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-                 'aging_effect': args.aging_effect,'processNode':args.processNode}
+                 'aging_effect': args.aging_effect,'processNode':args.processNode,'batch_interval':args.time*2+1}
 
 
 # %% Sets up Gpu use
@@ -120,7 +122,7 @@ for test_cnt in range(multiple_test_no):
         tc_theta_decay=1e7,
         inpt_shape=(1, 28, 28),
         nu=(1e-4, 1e-2),
-        mem_device=device_params,
+        sim_params=sim_params,
         batch_size=train_batch_size
     )
     
