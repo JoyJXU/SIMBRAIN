@@ -181,12 +181,6 @@ class STDPMapping(Mapping):
 
         self.mem_x_read[~s_sum.bool()] = 0
 
-        if self.device_structure == 'trace':
-            if s.dim() == 4:
-                self.mem_x_read = self.mem_x_read.reshape(s.size(0), s.size(1), s.size(2), s.size(3))
-            elif s.dim() == 2:
-                self.mem_x_read = self.mem_x_read.squeeze()
-
         return self.mem_x_read
 
 class MimoMapping(Mapping):
