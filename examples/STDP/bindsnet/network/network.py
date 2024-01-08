@@ -391,8 +391,9 @@ class Network(torch.nn.Module):
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
                 
-                self.sum_readenergy += self.layers[l].transform.mem_array.sum_readenergy
-                self.sum_writeenergy += self.layers[l].transform.mem_array.sum_writeenergy
+                if (self.sim_params['device_name'] != 'trace' and self.learning == True):
+                    self.sum_readenergy += self.layers[l].transform.mem_array.sum_readenergy
+                    self.sum_writeenergy += self.layers[l].transform.mem_array.sum_writeenergy
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)

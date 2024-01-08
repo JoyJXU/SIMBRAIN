@@ -102,7 +102,10 @@ class Nodes(torch.nn.Module):
         :param x: Inputs to the layer.
         """
         if self.traces:
-            if self.device_name == 'trace':
+            if (self.device_name != 'trace' and self.learning == True):
+                self.x = self.transform.mapping_write_stdp(s=self.s)
+
+            else:
                 # Decay and set spike traces.
                 self.x *= self.trace_decay
 
@@ -110,9 +113,6 @@ class Nodes(torch.nn.Module):
                     self.x += self.trace_scale * self.s.float()
                 else:
                     self.x.masked_fill_(self.s.bool(), self.trace_scale)
-
-            else:
-                self.x = self.transform.mapping_write_stdp(s=self.s)
 
         if self.sum_input:
             # Add current input to running sum
@@ -128,7 +128,7 @@ class Nodes(torch.nn.Module):
 
         if self.traces:
             self.x.zero_()  # Spike traces.
-            if self.device_name != 'trace':
+            if (self.device_name != 'trace' and self.learning == True):
                 self.transform.reset_memristor_variables()
 
         if self.sum_input:
@@ -136,7 +136,7 @@ class Nodes(torch.nn.Module):
     
     def update_SAF_mask(self) -> None:
         if self.traces:
-            if self.device_name != 'trace':
+            if (self.device_name != 'trace' and self.learning == True):
                 self.transform.update_SAF_mask()
 
     def compute_decays(self, dt) -> None:
@@ -166,7 +166,7 @@ class Nodes(torch.nn.Module):
 
         if self.traces:
             self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
-            if self.device_name != 'trace':
+            if (self.device_name != 'trace' and self.learning == True):
                 self.transform.set_batch_size(batch_size=self.batch_size, learning=self.learning)
 
         if self.sum_input:

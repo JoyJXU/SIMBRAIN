@@ -31,9 +31,7 @@ class MemristorArray(torch.nn.Module):
         self.register_buffer("mem_c", torch.Tensor())
         self.register_buffer("mem_i", torch.Tensor())
         self.register_buffer("memristor_t", torch.Tensor())
-        self.register_buffer("memristor_t_matrix", torch.Tensor())
-        self.register_buffer("memristor_t_ones", torch.Tensor())
-    
+
         self.device_structure = sim_params['device_structure']
         self.device_name = sim_params['device_name']
         self.c2c_variation = sim_params['c2c_variation']
@@ -41,7 +39,6 @@ class MemristorArray(torch.nn.Module):
         self.stuck_at_fault = sim_params['stuck_at_fault']
         self.retention_loss = sim_params['retention_loss']
         self.aging_effect = sim_params['aging_effect']
-        self.batch_interval = sim_params['batch_interval']
     
         if self.c2c_variation:
             self.register_buffer("normal_absolute", torch.Tensor())
@@ -77,7 +74,6 @@ class MemristorArray(torch.nn.Module):
         self.memristor_info_dict = memristor_info_dict
         self.dt = self.memristor_info_dict[self.device_name]['delta_t']
         self.batch_size = None
-        self.learning = None
 
         self.power = Power(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
         self.sim_device : dict = {}
@@ -85,7 +81,7 @@ class MemristorArray(torch.nn.Module):
         self.sum_writeenergy = 0
         
 
-    def set_batch_size(self, batch_size, learning) -> None:
+    def set_batch_size(self, batch_size, memristor_t) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
@@ -93,21 +89,11 @@ class MemristorArray(torch.nn.Module):
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
-        self.learning = learning
+        self.memristor_t = memristor_t
 
         self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
         self.mem_c = torch.zeros(batch_size, *self.shape, device=self.mem_c.device)
         self.mem_i = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_c.device)
-        
-        if self.learning:
-            if self.device_structure == 'crossbar':
-                self.memristor_t = torch.zeros(batch_size, *self.shape, device=self.memristor_t.device)
-            else:
-                self.memristor_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)).unsqueeze(0).T 
-                self.memristor_t_ones = torch.ones(self.shape, device=self.memristor_t_ones.device)
-                self.memristor_t = (self.memristor_t_matrix * self.memristor_t_ones).unsqueeze(1) * self.dt
-        else:
-            self.memristor_t.fill_(torch.max(self.memristor_t[:]))
 
         if self.c2c_variation:
             self.normal_relative = torch.zeros(batch_size, *self.shape, device=self.normal_relative.device)

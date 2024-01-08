@@ -191,7 +191,7 @@ class PostPre(LearningRule):
         # Pre-synaptic update.
         if self.nu[0]:
             source_s = self.source.s.view(batch_size, -1).unsqueeze(2).float()
-            # target_x = self.target.x.view(batch_size, -1).unsqueeze(1) * self.nu[0]
+            #target_x = self.target.x.view(batch_size, -1).unsqueeze(1) * self.nu[0]
 
             # Memristor Read
             target_x = self.target.transform.mapping_read_stdp(s=self.source.s)
@@ -205,7 +205,7 @@ class PostPre(LearningRule):
             target_s = (
                 self.target.s.view(batch_size, -1).unsqueeze(1).float() * self.nu[1]
             )
-            # source_x = self.source.x.view(batch_size, -1).unsqueeze(2)
+            #source_x = self.source.x.view(batch_size, -1).unsqueeze(2)
 
             # Memristor Read
             source_x = self.source.transform.mapping_read_stdp(s=self.target.s)

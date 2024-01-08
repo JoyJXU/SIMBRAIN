@@ -48,6 +48,7 @@ class Mapping(torch.nn.Module):
         self.register_buffer("memristor_t_matrix", torch.Tensor())
         self.register_buffer("memristor_t_batch_update", torch.Tensor())
         self.register_buffer("memristor_t_ones", torch.Tensor())
+        self.register_buffer("memristor_t", torch.Tensor())
 
         with open('../../memristor_device_info.json', 'r') as f:
             self.memristor_info_dict = json.load(f)
@@ -65,7 +66,6 @@ class Mapping(torch.nn.Module):
 
         self.batch_size = None
         self.learning = None
-        self.batch_count = 1
 
 
     def set_batch_size(self, batch_size, learning) -> None:
@@ -77,19 +77,32 @@ class Mapping(torch.nn.Module):
         """
         self.batch_size = batch_size
         self.learning = learning
-        
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.mem_v_read = torch.zeros(batch_size, self.shape[0], device=self.mem_v.device)
-        self.memristor_t_matrix = torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)        
-        self.memristor_t_batch_update = torch.zeros(self.shape, device=self.memristor_t_batch_update.device)
-        self.memristor_t_ones = torch.ones(self.shape, device=self.memristor_t_ones.device)
         self.mem_x_read = torch.zeros(batch_size, self.shape[1], device=self.mem_v.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
         self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
         self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
         self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
-
-        self.mem_array.set_batch_size(batch_size=self.batch_size, learning=self.learning)
+        
+        if self.learning:
+            if self.device_structure in {'crossbar', 'mimo'}:
+                self.memristor_t = torch.zeros(batch_size, *self.shape, device=self.memristor_t.device)
+            elif self.device_structure == 'trace':
+                self.memristor_t_matrix = torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)        
+                self.memristor_t_batch_update = torch.zeros(self.shape, device=self.memristor_t_batch_update.device)
+                self.memristor_t_ones = torch.ones(self.shape, device=self.memristor_t_ones.device)
+                self.memristor_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)).unsqueeze(0).T 
+                self.memristor_t_ones = torch.ones(self.shape, device=self.memristor_t_ones.device)
+                self.memristor_t = (self.memristor_t_matrix * self.memristor_t_ones).unsqueeze(1) * self.dt
+                self.memristor_t_batch_update = self.memristor_t
+            else:
+                raise Exception("Only trace, mimo and crossbar architecture are supported!")
+                
+        else:
+            self.memristor_t.fill_(torch.min(self.memristor_t_batch_update[:]))
+            
+        self.mem_array.set_batch_size(batch_size=self.batch_size, memristor_t=self.memristor_t)
         
 
         
@@ -187,13 +200,11 @@ class STDPMapping(Mapping):
         """
         self.mem_v.fill_(-self.vpos)
         
-        self.memristor_t_matrix_1 = (self.memristor_t_matrix * self.batch_interval + self.batch_count * self.batch_interval * self.batch_size).unsqueeze(0).T
-        self.memristor_t_batch_update = (self.memristor_t_matrix_1 * self.memristor_t_ones).unsqueeze(1) * self.dt
-        
-        self.batch_count += 1
-        
+        self.memristor_t_batch_update += self.batch_interval * self.batch_size * self.dt
+
+
         # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_write(mem_v=self.mem_v, memristor_t=self.memristor_t_batch_update)
+        self.mem_array.memristor_write(mem_v=self.mem_v, memristor_t=self.memristor_t.clone())
 
 class MimoMapping(Mapping):
     # language=rst
