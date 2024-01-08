@@ -199,7 +199,7 @@ class MemristorArray(torch.nn.Module):
         Aging_k_on = mem_info['Aging_k_on']
         Aging_k_off = mem_info['Aging_k_off']
 
-        if self.mem_t is not None:
+        if mem_t is not None:
             self.mem_t = mem_t
 
         if self.d2d_variation in [1, 3]:

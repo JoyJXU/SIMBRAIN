@@ -78,7 +78,7 @@ update_inhibation_weights = args.update_inhibation_weights
 device_params = {'device_structure':args.memristor_structure, 'device_name': args.memristor_device,
                  'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                  'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-                 'aging_effect': args.aging_effect,'processNode':args.processNode}
+                 'aging_effect': args.aging_effect, 'processNode': args.processNode}
 
 
 # %% Sets up Gpu use

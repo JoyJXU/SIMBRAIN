@@ -209,7 +209,7 @@ class MimoMapping(Mapping):
         self.register_buffer("write_pulse_no", torch.Tensor())
         self.write_pulse_no = torch.zeros(*self.shape, device=self.mem_v.device)
 
-        with open('memristor_lut.pkl', 'rb') as f:
+        with open('../../memristor_lut.pkl', 'rb') as f:
             self.memristor_luts = pickle.load(f)
         assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
