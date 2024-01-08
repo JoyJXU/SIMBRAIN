@@ -22,7 +22,7 @@ class Nodes(torch.nn.Module):
         trace_scale: Union[float, torch.Tensor] = 1.0,
         sum_input: bool = False,
         learning: bool = True,
-        mem_device: dict = {},
+        sim_params: dict = {},
         **kwargs,
     ) -> None:
         # language=rst
@@ -37,7 +37,7 @@ class Nodes(torch.nn.Module):
         :param trace_scale: Scaling factor for spike trace.
         :param sum_input: Whether to sum all inputs.
         :param learning: Whether to be in learning or testing.
-        :param mem_device: Memristor device to be used in learning.
+        :param sim_params: Memristor device to be used in learning.
         """
         super().__init__()
 
@@ -64,11 +64,10 @@ class Nodes(torch.nn.Module):
             traces_additive  # Whether to record spike traces additively.
         )
         self.register_buffer("s", torch.ByteTensor())  # Spike occurrences.
-        self.register_buffer("current_step", torch.ByteTensor()) 
 
         self.sum_input = sum_input  # Whether to sum all inputs.
 
-        self.device_name = mem_device['device_name']
+        self.device_name = sim_params['device_name']
 
         if self.traces:
             self.register_buffer("x", torch.Tensor()) # Firing traces.
@@ -83,7 +82,7 @@ class Nodes(torch.nn.Module):
                 "trace_decay", torch.empty_like(self.tc_trace)
             )  # Set in compute_decays.
             if self.device_name != 'trace':
-                self.transform = STDPMapping(mem_device=mem_device, shape=self.shape)
+                self.transform = STDPMapping(sim_params=sim_params, shape=self.shape)
    
         if self.sum_input:
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
@@ -103,7 +102,10 @@ class Nodes(torch.nn.Module):
         :param x: Inputs to the layer.
         """
         if self.traces:
-            if self.device_name == 'trace':
+            if (self.device_name != 'trace' and self.learning == True):
+                self.x = self.transform.mapping_write_stdp(s=self.s)
+
+            else:
                 # Decay and set spike traces.
                 self.x *= self.trace_decay
 
@@ -111,9 +113,6 @@ class Nodes(torch.nn.Module):
                     self.x += self.trace_scale * self.s.float()
                 else:
                     self.x.masked_fill_(self.s.bool(), self.trace_scale)
-
-            else:
-                self.x = self.transform.mapping_write_stdp(s=self.s, mem_step=self.current_step)
 
         if self.sum_input:
             # Add current input to running sum
@@ -129,15 +128,15 @@ class Nodes(torch.nn.Module):
 
         if self.traces:
             self.x.zero_()  # Spike traces.
-            if self.device_name != 'trace':
-                self.transform.reset_memristor_variables(mem_step=self.current_step)
+            if (self.device_name != 'trace' and self.learning == True):
+                self.transform.reset_memristor_variables()
 
         if self.sum_input:
             self.summed.zero_()  # Summed inputs.
     
     def update_SAF_mask(self) -> None:
         if self.traces:
-            if self.device_name != 'trace':
+            if (self.device_name != 'trace' and self.learning == True):
                 self.transform.update_SAF_mask()
 
     def compute_decays(self, dt) -> None:
@@ -163,13 +162,12 @@ class Nodes(torch.nn.Module):
         self.batch_size = batch_size
         self.s = torch.zeros(
             batch_size, *self.shape, device=self.s.device, dtype=torch.bool
-        )
-        self.current_step = torch.zeros(batch_size, *self.shape, device=self.current_step.device)        
+        )      
 
         if self.traces:
             self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
-            if self.device_name != 'trace':
-                self.transform.set_batch_size(batch_size=batch_size)
+            if (self.device_name != 'trace' and self.learning == True):
+                self.transform.set_batch_size(batch_size=self.batch_size, learning=self.learning)
 
         if self.sum_input:
             self.summed = torch.zeros(
@@ -210,7 +208,7 @@ class Input(Nodes, AbstractInput):
         tc_trace: Union[float, torch.Tensor] = 20.0,
         trace_scale: Union[float, torch.Tensor] = 1,
         sum_input: bool = False,
-        mem_device: dict = {},
+        sim_params: dict = {},
         **kwargs,
     ) -> None:
         # language=rst
@@ -224,7 +222,7 @@ class Input(Nodes, AbstractInput):
         :param tc_trace: Time constant of spike trace decay.
         :param trace_scale: Scaling factor for spike trace.
         :param sum_input: Whether to sum all inputs.
-        :param mem_device: Memristor device to be used in learning.
+        :param sim_params: Memristor device to be used in learning.
         """
         super().__init__(
             n=n,
@@ -234,7 +232,7 @@ class Input(Nodes, AbstractInput):
             tc_trace=tc_trace,
             trace_scale=trace_scale,
             sum_input=sum_input,
-            mem_device=mem_device
+            sim_params=sim_params
         )
 
     def forward(self, x: torch.Tensor) -> None:
@@ -1023,7 +1021,7 @@ class DiehlAndCookNodes(Nodes):
         tc_trace: Union[float, torch.Tensor] = 20.0,
         trace_scale: Union[float, torch.Tensor] = 1,
         sum_input: bool = False,
-        mem_device: dict = {},
+        sim_params: dict = {},
         thresh: Union[float, torch.Tensor] = -52.0,
         rest: Union[float, torch.Tensor] = -65.0,
         reset: Union[float, torch.Tensor] = -65.0,
@@ -1046,7 +1044,7 @@ class DiehlAndCookNodes(Nodes):
         :param tc_trace: Time constant of spike trace decay.
         :param trace_scale: Scaling factor for spike trace.
         :param sum_input: Whether to sum all inputs.
-        :param mem_device: Memristor device to be used in learning.
+        :param sim_params: Memristor device to be used in learning.
         :param thresh: Spike threshold voltage.
         :param rest: Resting membrane voltage.
         :param reset: Post-spike reset voltage.
@@ -1065,7 +1063,7 @@ class DiehlAndCookNodes(Nodes):
             tc_trace=tc_trace,
             trace_scale=trace_scale,
             sum_input=sum_input,
-            mem_device=mem_device
+            sim_params=sim_params
         )
 
         self.register_buffer("rest", torch.tensor(rest))  # Rest voltage.

@@ -6,7 +6,7 @@ class Power(torch.nn.Module):
 
     def __init__(
         self,
-        mem_device: dict = {},
+        sim_params: dict = {},
         shape: Optional[Iterable[int]] = None,
         memristor_info_dict: dict = {},
         **kwargs,
@@ -16,9 +16,9 @@ class Power(torch.nn.Module):
     
         self.shape = shape    
 
-        self.device_name = mem_device['device_name']
-        self.device_structure = mem_device['device_structure'] 
-        self.processNode = mem_device['processNode'] 
+        self.device_name = sim_params['device_name']
+        self.device_structure = sim_params['device_structure'] 
+        self.processNode = sim_params['processNode'] 
         self.register_buffer("mem_c", torch.Tensor())
         self.register_buffer("mem_cpre", torch.Tensor())
         self.register_buffer("mem_v", torch.Tensor())
@@ -38,7 +38,7 @@ class Power(torch.nn.Module):
         self.widthInFeatureSize = self.power_info_dict[self.device_name]['widthInFeatureSize']
         self.wireResistanceUnit = self.power_info_dict[self.device_name]['wireResistanceUnit']
 
-        self.sim_params = {'readEnergy_static': self.readEnergy_static, 'writeEnergy_static': self.writeEnergy_static,
+        self.sim_power = {'readEnergy_static': self.readEnergy_static, 'writeEnergy_static': self.writeEnergy_static,
                  'readEnergy_dynamic': self.readEnergy_dynamic, 'writeEnergy_dynamic': self.writeEnergy_dynamic,
                  'readEnergy':self.readEnergy, 'writeEnergy': self.writeEnergy}
         
@@ -94,7 +94,7 @@ class Power(torch.nn.Module):
 
 		#2calculate readEnergy_dynamic
         self.readEnergy_dynamic = (wireCapRow  * (self.mem_v * self.mem_v)).squeeze()
-        self.sim_params['readEnergy_dynamic'] = self.readEnergy_dynamic
+        self.sim_power['readEnergy_dynamic'] = self.readEnergy_dynamic
         return self.readEnergy_dynamic
     
     def read_energy_static_trace(self):
@@ -104,7 +104,7 @@ class Power(torch.nn.Module):
         readPulseWidth = (1/4) * delta_t
         self.readEnergy_static = (self.mem_v * self.mem_c * self.mem_v * readPulseWidth + self.mem_v / (
                     2 * self.wireResistanceUnit) * self.mem_v * readPulseWidth).squeeze()
-        self.sim_params['readEnergy_static'] = self.readEnergy_static
+        self.sim_power['readEnergy_static'] = self.readEnergy_static
         return self.readEnergy_static
     
     def read_energy_static_crossbar(self):
@@ -120,17 +120,17 @@ class Power(torch.nn.Module):
         total_current = torch.sum(self.mem_v/self.total_resistance, dim=1)
         total_current = torch.unsqueeze(total_current, 1)
         self.readEnergy_static = (total_current * self.mem_v * readPulseWidth).squeeze()
-        self.sim_params['readEnergy_static'] = self.readEnergy_static
+        self.sim_power['readEnergy_static'] = self.readEnergy_static
         return self.readEnergy_static
     
     def read_energy(self):
         if self.device_structure == 'trace':
             self.readEnergy = self.read_energy_dynamic_trace() + self.read_energy_static_trace()
-            self.sim_params['readEnergy'] = self.readEnergy
+            self.sim_power['readEnergy'] = self.readEnergy
             return self.readEnergy
         elif self.device_structure == 'crossbar':
             self.readEnergy = self.read_energy_dynamic_crossbar() + self.read_energy_static_crossbar()
-            self.sim_params['readEnergy'] = self.readEnergy
+            self.sim_power['readEnergy'] = self.readEnergy
             return self.readEnergy
         else:
             print("Unsupported Architecture for Read Energy Calculation!")
@@ -166,7 +166,7 @@ class Power(torch.nn.Module):
 
 		#2calculate readEnergy_dynamic
         self.writeEnergy_dynamic = (wireCapRow  * (self.mem_v * self.mem_v) + wireCapCol * (self.mem_v * self.mem_v)).squeeze()
-        self.sim_params['writeEnergy_dynamic'] = self.writeEnergy_dynamic
+        self.sim_power['writeEnergy_dynamic'] = self.writeEnergy_dynamic
         return self.writeEnergy_dynamic
     
     def write_energy_static_trace(self):
@@ -181,17 +181,17 @@ class Power(torch.nn.Module):
         else:
             self.writeEnergy_static = (self.mem_v * (self.mem_c + self.mem_cpre)/2 * self.mem_v * writePulseWidth + self.mem_v/(2 * self.wireResistanceUnit) * self.mem_v * writePulseWidth).squeeze()
             self.mem_cpre = self.mem_c
-        self.sim_params['writeEnergy_static'] = self.writeEnergy_static
+        self.sim_power['writeEnergy_static'] = self.writeEnergy_static
         return self.writeEnergy_static
     
     def write_energy(self):
         if self.device_structure == 'trace':
             self.writeEnergy = self.write_energy_dynamic_trace() + self.write_energy_static_trace()
-            self.sim_params['writeEnergy'] = self.writeEnergy
+            self.sim_power['writeEnergy'] = self.writeEnergy
             return self.writeEnergy
         elif self.device_structure == 'crossbar':
             self.writeEnergy = self.write_energy_dynamic_crossbar() + self.write_energy_static_crossbar()
-            self.sim_params['writeEnergy'] = self.writeEnergy
+            self.sim_power['writeEnergy'] = self.writeEnergy
             return self.writeEnergy
         else:
             print("Unsupported Architecture for Write Energy Calculation!")
