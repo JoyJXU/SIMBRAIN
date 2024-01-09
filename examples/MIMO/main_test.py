@@ -52,7 +52,7 @@ def main():
     _rows = 10
     _cols = 1
     _rep = 1
-    _logs=['test_data', None, False, False, None]
+    _logs = ['test_data', None, False, False, None]
 
     mem_device = {'device_structure':args.memristor_structure, 'device_name': args.memristor_device,
                  'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
