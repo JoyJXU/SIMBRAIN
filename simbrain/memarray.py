@@ -201,10 +201,8 @@ class MemristorArray(torch.nn.Module):
         Aging_k_off = mem_info['Aging_k_off']
 
 
-
         self.mem_t += 1
         
-
 
         if self.d2d_variation in [1, 3]:
             self.mem_x = torch.where(mem_v >= v_off, \
@@ -335,7 +333,7 @@ class MemristorArray(torch.nn.Module):
         self.power.read_energy()    
         #write_energy
         self.power.write_energy()
-        #字典传进去
+
         self.sim_device = self.power.sim_power
         self.sum_readenergy = torch.sum(self.sim_device['readEnergy'])
         self.sum_writeenergy = torch.sum(self.sim_device['writeEnergy'])

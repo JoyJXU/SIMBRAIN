@@ -48,18 +48,18 @@ parser.add_argument("--processNode", type=int, default=32)
 args = parser.parse_args()
 
 def main():
-    batch_size = 1
+    batch_size = 10
     _rows = 10
-    _cols = 4
+    _cols = 1
     _rep = 1
-    _logs=['test_data', None, False, False, None]
+    _logs = ['test_data', None, False, False, None]
 
     mem_device = {'device_structure':args.memristor_structure, 'device_name': args.memristor_device,
                  'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                  'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
                  'aging_effect': args.aging_effect, 'processNode': args.processNode}
     
-    _crossbar = MimoMapping(mem_device=mem_device, shape=(_rows, _cols))
+    _crossbar = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
     run_sim(_crossbar, _rep, _rows, _cols, _logs)
 
 if __name__ == "__main__":

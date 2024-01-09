@@ -29,12 +29,12 @@ from bindsnet.evaluation import all_activity, proportion_weighting, assign_label
 # %% Argument
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("--n_neurons", type=int, default=4)
+parser.add_argument("--n_neurons", type=int, default=625)
 parser.add_argument("--train_batch_size", type=int, default=50)
 parser.add_argument("--test_batch_size", type=int, default=128)
 parser.add_argument("--n_epochs", type=int, default=2)
-parser.add_argument("--n_test", type=int, default=100)
-parser.add_argument("--n_train", type=int, default=200)
+parser.add_argument("--n_test", type=int, default=10000)
+parser.add_argument("--n_train", type=int, default=60000)
 parser.add_argument("--n_workers", type=int, default=-1)
 parser.add_argument("--theta_plus", type=float, default=0.05)
 parser.add_argument("--time", type=int, default=250)
@@ -80,8 +80,7 @@ update_inhibation_weights = args.update_inhibation_weights
 sim_params = {'device_structure':args.memristor_structure, 'device_name': args.memristor_device,
                  'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                  'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-                 'aging_effect': args.aging_effect, 'processNode':args.processNode, 'batch_interval':args.time*2+1}
-
+                 'aging_effect': args.aging_effect, 'processNode': args.processNode, 'batch_interval': args.time*2+1}
 
 # %% Sets up Gpu use
 os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))

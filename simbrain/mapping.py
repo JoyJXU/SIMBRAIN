@@ -26,7 +26,7 @@ class Mapping(torch.nn.Module):
 
         self.device_name = sim_params['device_name'] 
         self.device_structure = sim_params['device_structure']
-        self.memristor_device = sim_params['device_name']
+
 
         if self.device_structure == 'trace':
             self.shape = [1, 1]  # Shape of the memristor crossbar
@@ -55,7 +55,10 @@ class Mapping(torch.nn.Module):
         self.vpos = self.memristor_info_dict[self.device_name]['vinput_pos']
         self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
-        self.batch_interval = sim_params['batch_interval']
+        
+        if self.device_structure == 'trace':
+            self.batch_interval = sim_params['batch_interval']
+
         
         self.trans_ratio = 1 / (self.Goff - self.Gon)
         
@@ -65,7 +68,7 @@ class Mapping(torch.nn.Module):
         self.learning = None
 
 
-    def set_batch_size(self, batch_size, learning) -> None:
+    def set_batch_size_total(self, batch_size) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when memristor is used to mapping traces.
@@ -73,7 +76,6 @@ class Mapping(torch.nn.Module):
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
-        self.learning = learning
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.mem_v_read = torch.zeros(batch_size, self.shape[0], device=self.mem_v.device)
         self.mem_x_read = torch.zeros(batch_size, self.shape[1], device=self.mem_v.device)
@@ -81,20 +83,9 @@ class Mapping(torch.nn.Module):
         self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
         self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
         self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
-        
-        if self.learning:
-            if self.device_structure in {'crossbar', 'mimo'}:
-                self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
-            elif self.device_structure == 'trace':
-                self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
-                mem_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.mem_t.device)).unsqueeze(0).T 
-                self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
-                self.mem_t_batch_update = self.mem_t.clone()
-            else:
-                raise Exception("Only trace, mimo and crossbar architecture are supported!")
-                
-        else:
-            self.mem_t.fill_(torch.min(self.mem_t_batch_update[:]))
+        self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+       
+
             
         self.mem_array.set_batch_size(batch_size=self.batch_size, mem_t=self.mem_t)
         
@@ -135,6 +126,20 @@ class STDPMapping(Mapping):
             shape=shape
         )
 
+        self.batch_interval = sim_params['batch_interval']
+
+    def set_batch_size(self, batch_size, learning) -> None:
+        self.learning = learning
+        self.set_batch_size_total(batch_size)
+        if self.learning:
+            self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+            mem_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.mem_t.device)).unsqueeze(0).T 
+            self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
+            self.mem_t_batch_update = self.mem_t.clone()
+        else:
+            self.memristor_t.fill_(torch.min(self.memristor_t_batch_update[:]))
+
+
 
     def mapping_write_stdp(self, s):
         if self.device_structure == 'trace':
@@ -159,7 +164,7 @@ class STDPMapping(Mapping):
             elif s.dim() == 2:
                 self.x = self.x.squeeze()
 
-        if self.memristor_device != 'trace':
+        if self.device_name != 'trace':
             self.mem_array.power.mem_v = self.mem_v
             self.mem_array.power_energy()
             
@@ -227,7 +232,7 @@ class MimoMapping(Mapping):
             self.memristor_luts = pickle.load(f)
         assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
-        self.set_batch_size(1)
+        self.set_batch_size_total(1)
 
     def mapping_write_mimo(self, target_x):
         # Memristor reset first
