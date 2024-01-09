@@ -191,11 +191,14 @@ class PostPre(LearningRule):
         # Pre-synaptic update.
         if self.nu[0]:
             source_s = self.source.s.view(batch_size, -1).unsqueeze(2).float()
-            #target_x = self.target.x.view(batch_size, -1).unsqueeze(1) * self.nu[0]
+            
+            if self.target.traces and self.target.learning and self.target.device_name != 'trace' :
+                # Memristor Read
+                target_x = self.target.transform.mapping_read_stdp(s=self.source.s)
+                target_x = target_x.view(batch_size, -1).unsqueeze(1) * self.nu[0]                
 
-            # Memristor Read
-            target_x = self.target.transform.mapping_read_stdp(s=self.source.s)
-            target_x = target_x.view(batch_size, -1).unsqueeze(1) * self.nu[0]
+            else:
+                target_x = self.target.x.view(batch_size, -1).unsqueeze(1) * self.nu[0]
 
             self.connection.w -= self.reduction(torch.bmm(source_s, target_x), dim=0)
             del source_s, target_x
@@ -205,11 +208,14 @@ class PostPre(LearningRule):
             target_s = (
                 self.target.s.view(batch_size, -1).unsqueeze(1).float() * self.nu[1]
             )
-            #source_x = self.source.x.view(batch_size, -1).unsqueeze(2)
+            
+            if self.target.traces and self.target.learning and self.target.device_name != 'trace' :
+                # Memristor Read
+                source_x = self.source.transform.mapping_read_stdp(s=self.target.s)
+                source_x = source_x.view(batch_size, -1).unsqueeze(2)               
+            else:                
+                source_x = self.source.x.view(batch_size, -1).unsqueeze(2)
 
-            # Memristor Read
-            source_x = self.source.transform.mapping_read_stdp(s=self.target.s)
-            source_x = source_x.view(batch_size, -1).unsqueeze(2)
 
             self.connection.w += self.reduction(torch.bmm(source_x, target_s), dim=0)
             del source_x, target_s

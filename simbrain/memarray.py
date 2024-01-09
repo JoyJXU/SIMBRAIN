@@ -30,7 +30,7 @@ class MemristorArray(torch.nn.Module):
         self.register_buffer("mem_x", torch.Tensor())  # Memristor-based firing traces.
         self.register_buffer("mem_c", torch.Tensor())
         self.register_buffer("mem_i", torch.Tensor())
-        self.register_buffer("memristor_t", torch.Tensor())
+        self.register_buffer("mem_t", torch.Tensor())
 
         self.device_structure = sim_params['device_structure']
         self.device_name = sim_params['device_name']
@@ -81,7 +81,7 @@ class MemristorArray(torch.nn.Module):
         self.sum_writeenergy = 0
         
 
-    def set_batch_size(self, batch_size, memristor_t) -> None:
+    def set_batch_size(self, batch_size, mem_t) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
@@ -89,7 +89,7 @@ class MemristorArray(torch.nn.Module):
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
-        self.memristor_t = memristor_t
+        self.mem_t = mem_t
 
         self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
         self.mem_c = torch.zeros(batch_size, *self.shape, device=self.mem_c.device)
@@ -173,7 +173,7 @@ class MemristorArray(torch.nn.Module):
 
         self.power.set_batch_size(batch_size=self.batch_size)
     
-    def memristor_write(self, mem_v: torch.Tensor, memristor_t=None):
+    def memristor_write(self, mem_v: torch.Tensor, mem_t=None):
         # language=rst
         """
         Memristor write operation for a single simulation step.
@@ -202,7 +202,7 @@ class MemristorArray(torch.nn.Module):
 
 
 
-        self.memristor_t += self.dt
+        self.mem_t += 1
         
 
 
@@ -271,8 +271,6 @@ class MemristorArray(torch.nn.Module):
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
 
-        if memristor_t is not None:
-            self.memristor_t = memristor_t
         
         return self.mem_c
 
@@ -297,18 +295,18 @@ class MemristorArray(torch.nn.Module):
         mem_v_expand = torch.unsqueeze(mem_v, 1)
         self.mem_i = torch.matmul(mem_v_expand, self.mem_c)
 
-        self.memristor_t += self.dt
+        self.mem_t += 1
 
         return self.mem_i
 
 
     def cal_Gon_Goff(self, k_on, k_off) -> None:
         if self.aging_effect == 1: #equation 1: G=G_0*(1-r)**t
-            self.Gon_aging = self.Gon_0 * ((1 - k_on) ** self.memristor_t)
-            self.Goff_aging = self.Goff_0 * ((1 - k_off) ** self.memristor_t)
+            self.Gon_aging = self.Gon_0 * ((1 - k_on) ** (self.mem_t * self.dt))
+            self.Goff_aging = self.Goff_0 * ((1 - k_off) ** (self.mem_t * self.dt))
         elif self.aging_effect == 2: #equation 2: G=k*t+G_0
-            self.Gon_aging = k_on * self.memristor_t + self.Gon_0
-            self.Goff_aging = k_off * self.memristor_t + self.Goff_0
+            self.Gon_aging = k_on * self.mem_t * self.dt + self.Gon_0
+            self.Goff_aging = k_off * self.mem_t * self.dt + self.Goff_0
 
     def update_SAF_mask(self) -> None:
         if self.stuck_at_fault:
@@ -318,7 +316,7 @@ class MemristorArray(torch.nn.Module):
             SAF_delta = mem_info['SAF_delta']
 
             Q_ratio = self.SAF0_mask.float().mean() + self.SAF1_mask.float().mean()
-            target_ratio = SAF_lambda + self.memristor_t.max() * SAF_delta
+            target_ratio = SAF_lambda + self.mem_t.max() * self.dt * SAF_delta
             increase_ratio = (target_ratio - Q_ratio) / (1 - Q_ratio)
 
             if increase_ratio > 0 and SAF_delta > 0:

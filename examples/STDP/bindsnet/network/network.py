@@ -365,7 +365,10 @@ class Network(torch.nn.Module):
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
             
-
+            if t == 0:
+                for l in self.layers:
+                    if (self.layers[l].traces  and self.learning and self.sim_params['device_name'] != 'trace') :
+                        self.layers[l].transform.mem_t_update()
         
             # Get input to all layers (synchronous mode).
             current_inputs = {}
@@ -391,7 +394,7 @@ class Network(torch.nn.Module):
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
                 
-                if (self.sim_params['device_name'] != 'trace' and self.learning == True):
+                if (self.layers[l].traces and self.sim_params['device_name'] != 'trace' and self.learning):
                     self.sum_readenergy += self.layers[l].transform.mem_array.sum_readenergy
                     self.sum_writeenergy += self.layers[l].transform.mem_array.sum_writeenergy
 
@@ -431,6 +434,8 @@ class Network(torch.nn.Module):
             # Record state variables of interest.
             for m in self.monitors:
                 self.monitors[m].record()
+
+
 
         # Re-normalize connections.
         for c in self.connections:

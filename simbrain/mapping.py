@@ -45,10 +45,8 @@ class Mapping(torch.nn.Module):
         self.register_buffer("s", torch.Tensor())
         self.register_buffer("readEnergy", torch.Tensor())
         self.register_buffer("writeEnergy", torch.Tensor())
-        self.register_buffer("memristor_t_matrix", torch.Tensor())
-        self.register_buffer("memristor_t_batch_update", torch.Tensor())
-        self.register_buffer("memristor_t_ones", torch.Tensor())
-        self.register_buffer("memristor_t", torch.Tensor())
+        self.register_buffer("mem_t_matrix", torch.Tensor())
+        self.register_buffer("mem_t", torch.Tensor())
 
         with open('../../memristor_device_info.json', 'r') as f:
             self.memristor_info_dict = json.load(f)
@@ -57,7 +55,6 @@ class Mapping(torch.nn.Module):
         self.vpos = self.memristor_info_dict[self.device_name]['vinput_pos']
         self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
-        self.dt = self.memristor_info_dict[self.device_name]['delta_t']
         self.batch_interval = sim_params['batch_interval']
         
         self.trans_ratio = 1 / (self.Goff - self.Gon)
@@ -87,24 +84,29 @@ class Mapping(torch.nn.Module):
         
         if self.learning:
             if self.device_structure in {'crossbar', 'mimo'}:
-                self.memristor_t = torch.zeros(batch_size, *self.shape, device=self.memristor_t.device)
+                self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
             elif self.device_structure == 'trace':
-                self.memristor_t_matrix = torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)        
-                self.memristor_t_batch_update = torch.zeros(self.shape, device=self.memristor_t_batch_update.device)
-                self.memristor_t_ones = torch.ones(self.shape, device=self.memristor_t_ones.device)
-                self.memristor_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)).unsqueeze(0).T 
-                self.memristor_t_ones = torch.ones(self.shape, device=self.memristor_t_ones.device)
-                self.memristor_t = (self.memristor_t_matrix * self.memristor_t_ones).unsqueeze(1) * self.dt
-                self.memristor_t_batch_update = self.memristor_t
+                self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+                mem_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.mem_t.device)).unsqueeze(0).T 
+                self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
+                self.mem_t_batch_update = self.mem_t.clone()
             else:
                 raise Exception("Only trace, mimo and crossbar architecture are supported!")
                 
         else:
-            self.memristor_t.fill_(torch.min(self.memristor_t_batch_update[:]))
+            self.mem_t.fill_(torch.min(self.mem_t_batch_update[:]))
             
-        self.mem_array.set_batch_size(batch_size=self.batch_size, memristor_t=self.memristor_t)
+        self.mem_array.set_batch_size(batch_size=self.batch_size, mem_t=self.mem_t)
         
-
+    def reset_memristor_variables(self) -> None:
+        # language=rst
+        """
+        Abstract base class method for resetting state variables.
+        """
+        self.mem_v.fill_(-self.vpos)
+        
+        # Adopt large negative pulses to reset the memristor array
+        self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)
         
     def update_SAF_mask(self) -> None:
         self.mem_array.update_SAF_mask()
@@ -146,7 +148,7 @@ class STDPMapping(Mapping):
         self.mem_v[self.mem_v == 0] = self.vneg
         self.mem_v[self.mem_v == 1] = self.vpos      
 
-        mem_c = self.mem_array.memristor_write(mem_v=self.mem_v, memristor_t=None)
+        mem_c = self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)
         
         # mem to nn
         self.x = (mem_c - self.Gon) * self.trans_ratio
@@ -187,18 +189,13 @@ class STDPMapping(Mapping):
 
         return self.mem_x_read
     
-    def reset_memristor_variables(self) -> None:
-        # language=rst
-        """
-        Abstract base class method for resetting state variables.
-        """
-        self.mem_v.fill_(-self.vpos)
+
         
-        self.memristor_t_batch_update += self.batch_interval * self.batch_size * self.dt
+    def mem_t_update(self) -> None:
 
+        self.mem_array.mem_t = self.mem_t_batch_update.clone()        
+        self.mem_t_batch_update += self.batch_interval * self.batch_size
 
-        # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_write(mem_v=self.mem_v, memristor_t=self.memristor_t.clone())
 
 class MimoMapping(Mapping):
     # language=rst
@@ -285,12 +282,4 @@ class MimoMapping(Mapping):
 
         return nearest_pulse_no
 
-    def reset_memristor_variables(self, mem_step) -> None:
-        # language=rst
-        """
-        Abstract base class method for resetting state variables.
-        """
-        self.mem_v.fill_(-self.vpos)
-        
-        # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_write(mem_v=self.mem_v, memristor_t=None)
+
