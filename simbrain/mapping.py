@@ -58,7 +58,6 @@ class Mapping(torch.nn.Module):
         self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.dt = self.memristor_info_dict[self.device_name]['delta_t']
-        self.batch_interval = sim_params['batch_interval']
         
         self.trans_ratio = 1 / (self.Goff - self.Gon)
         
@@ -68,7 +67,7 @@ class Mapping(torch.nn.Module):
         self.learning = None
 
 
-    def set_batch_size(self, batch_size, learning) -> None:
+    def set_batch_size(self, batch_size) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when memristor is used to mapping traces.
@@ -76,7 +75,6 @@ class Mapping(torch.nn.Module):
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
-        self.learning = learning
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.mem_v_read = torch.zeros(batch_size, self.shape[0], device=self.mem_v.device)
         self.mem_x_read = torch.zeros(batch_size, self.shape[1], device=self.mem_v.device)
@@ -85,27 +83,26 @@ class Mapping(torch.nn.Module):
         self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
         self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
         
-        if self.learning:
-            if self.device_structure in {'crossbar', 'mimo'}:
-                self.memristor_t = torch.zeros(batch_size, *self.shape, device=self.memristor_t.device)
-            elif self.device_structure == 'trace':
-                self.memristor_t_matrix = torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)        
+
+        if self.device_structure in {'crossbar', 'mimo'}:
+            self.memristor_t = torch.zeros(batch_size, *self.shape, device=self.memristor_t.device)
+        elif self.device_structure == 'trace':
+            if self.learning:
+                self.memristor_t_matrix = torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)
                 self.memristor_t_batch_update = torch.zeros(self.shape, device=self.memristor_t_batch_update.device)
                 self.memristor_t_ones = torch.ones(self.shape, device=self.memristor_t_ones.device)
-                self.memristor_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)).unsqueeze(0).T 
+                self.memristor_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.memristor_t_matrix.device)).unsqueeze(0).T
                 self.memristor_t_ones = torch.ones(self.shape, device=self.memristor_t_ones.device)
                 self.memristor_t = (self.memristor_t_matrix * self.memristor_t_ones).unsqueeze(1) * self.dt
                 self.memristor_t_batch_update = self.memristor_t
             else:
-                raise Exception("Only trace, mimo and crossbar architecture are supported!")
-                
+                self.memristor_t.fill_(torch.min(self.memristor_t_batch_update[:]))
         else:
-            self.memristor_t.fill_(torch.min(self.memristor_t_batch_update[:]))
+            raise Exception("Only trace, mimo and crossbar architecture are supported!")
             
         self.mem_array.set_batch_size(batch_size=self.batch_size, memristor_t=self.memristor_t)
         
 
-        
     def update_SAF_mask(self) -> None:
         self.mem_array.update_SAF_mask()
 
@@ -132,6 +129,12 @@ class STDPMapping(Mapping):
             sim_params=sim_params,
             shape=shape
         )
+
+        self.batch_interval = sim_params['batch_interval']
+
+    def set_batch_size(self, batch_size, learning) -> None:
+        self.learning = learning
+        self.set_batch_size(batch_size)
 
 
     def mapping_write_stdp(self, s):

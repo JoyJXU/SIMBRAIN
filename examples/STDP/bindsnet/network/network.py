@@ -364,17 +364,12 @@ class Network(torch.nn.Module):
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
-            
-
-        
             # Get input to all layers (synchronous mode).
             current_inputs = {}
             if not one_step:
                 current_inputs.update(self._get_inputs())
 
             for l in self.layers:
-
-                
                 # Update each layer of nodes.
                 if l in inputs:
                     if l in current_inputs:
