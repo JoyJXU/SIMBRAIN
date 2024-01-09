@@ -45,7 +45,6 @@ class Mapping(torch.nn.Module):
         self.register_buffer("s", torch.Tensor())
         self.register_buffer("readEnergy", torch.Tensor())
         self.register_buffer("writeEnergy", torch.Tensor())
-        self.register_buffer("mem_t_matrix", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
 
         with open('../../memristor_device_info.json', 'r') as f:
@@ -55,9 +54,6 @@ class Mapping(torch.nn.Module):
         self.vpos = self.memristor_info_dict[self.device_name]['vinput_pos']
         self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
-        
-        if self.device_structure == 'trace':
-            self.batch_interval = sim_params['batch_interval']
 
         
         self.trans_ratio = 1 / (self.Goff - self.Gon)
@@ -68,7 +64,7 @@ class Mapping(torch.nn.Module):
         self.learning = None
 
 
-    def set_batch_size_total(self, batch_size) -> None:
+    def set_batch_size(self, batch_size) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when memristor is used to mapping traces.
@@ -86,18 +82,7 @@ class Mapping(torch.nn.Module):
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
        
 
-            
-        self.mem_array.set_batch_size(batch_size=self.batch_size, mem_t=self.mem_t)
-        
-    def reset_memristor_variables(self) -> None:
-        # language=rst
-        """
-        Abstract base class method for resetting state variables.
-        """
-        self.mem_v.fill_(-self.vpos)
-        
-        # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)
+     
         
     def update_SAF_mask(self) -> None:
         self.mem_array.update_SAF_mask()
@@ -128,17 +113,15 @@ class STDPMapping(Mapping):
 
         self.batch_interval = sim_params['batch_interval']
 
-    def set_batch_size(self, batch_size, learning) -> None:
+    def set_batch_size_stdp(self, batch_size, learning) -> None:
         self.learning = learning
-        self.set_batch_size_total(batch_size)
+        self.set_batch_size(batch_size)
         if self.learning:
-            self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
             mem_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.mem_t.device)).unsqueeze(0).T 
             self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
-            self.mem_t_batch_update = self.mem_t.clone()
         else:
             self.memristor_t.fill_(torch.min(self.memristor_t_batch_update[:]))
-
+        self.mem_array.set_batch_size(batch_size=self.batch_size, mem_t=self.mem_t)
 
 
     def mapping_write_stdp(self, s):
@@ -194,12 +177,19 @@ class STDPMapping(Mapping):
 
         return self.mem_x_read
     
-
+    def reset_memristor_variables(self) -> None:
+        # language=rst
+        """
+        Abstract base class method for resetting state variables.
+        """
+        self.mem_v.fill_(-self.vpos)
+        
+        # Adopt large negative pulses to reset the memristor array
+        self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)
         
     def mem_t_update(self) -> None:
 
-        self.mem_array.mem_t = self.mem_t_batch_update.clone()        
-        self.mem_t_batch_update += self.batch_interval * self.batch_size
+        self.mem_array.mem_t += self.batch_interval * (self.batch_size -1)
 
 
 class MimoMapping(Mapping):
@@ -232,8 +222,9 @@ class MimoMapping(Mapping):
             self.memristor_luts = pickle.load(f)
         assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
-        self.set_batch_size_total(1)
-
+        self.set_batch_size(1)
+        self.mem_array.set_batch_size(batch_size=self.batch_size, mem_t=self.mem_t)
+        
     def mapping_write_mimo(self, target_x):
         # Memristor reset first
         self.mem_v.fill_(-100)  # TODO: check the reset voltage
@@ -287,4 +278,12 @@ class MimoMapping(Mapping):
 
         return nearest_pulse_no
 
-
+    def reset_memristor_variables(self) -> None:
+        # language=rst
+        """
+        Abstract base class method for resetting state variables.
+        """
+        self.mem_v.fill_(-100)
+        
+        # Adopt large negative pulses to reset the memristor array
+        self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)

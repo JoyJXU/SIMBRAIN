@@ -29,12 +29,12 @@ from bindsnet.evaluation import all_activity, proportion_weighting, assign_label
 # %% Argument
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("--n_neurons", type=int, default=625)
+parser.add_argument("--n_neurons", type=int, default=4)
 parser.add_argument("--train_batch_size", type=int, default=50)
 parser.add_argument("--test_batch_size", type=int, default=128)
 parser.add_argument("--n_epochs", type=int, default=2)
-parser.add_argument("--n_test", type=int, default=10000)
-parser.add_argument("--n_train", type=int, default=60000)
+parser.add_argument("--n_test", type=int, default=100)
+parser.add_argument("--n_train", type=int, default=200)
 parser.add_argument("--n_workers", type=int, default=-1)
 parser.add_argument("--theta_plus", type=float, default=0.05)
 parser.add_argument("--time", type=int, default=250)
@@ -257,6 +257,7 @@ for test_cnt in range(multiple_test_no):
     
             # %% Update
             network.reset_state_variables()  # Reset state variables.
+            network.mem_t_update()
             pbar.set_description_str("Train progress: ")
             pbar.update()
     

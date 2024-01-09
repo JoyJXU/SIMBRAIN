@@ -365,10 +365,6 @@ class Network(torch.nn.Module):
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
 
-            if t == 0:
-                for l in self.layers:
-                    if (self.layers[l].traces  and self.learning and self.sim_params['device_name'] != 'trace') :
-                        self.layers[l].transform.mem_t_update()
 
             # Get input to all layers (synchronous mode).
             current_inputs = {}
@@ -453,6 +449,13 @@ class Network(torch.nn.Module):
 
         for monitor in self.monitors:
             self.monitors[monitor].reset_state_variables()
+            
+        
+        
+    def mem_t_update(self) -> None:
+        for l in self.layers:
+            if (self.layers[l].traces  and self.learning and self.sim_params['device_name'] != 'trace') :
+                self.layers[l].transform.mem_t_update()
 
     def train(self, mode: bool = True) -> "torch.nn.Module":
         # language=rst

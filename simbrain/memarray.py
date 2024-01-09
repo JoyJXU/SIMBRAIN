@@ -228,7 +228,7 @@ class MemristorArray(torch.nn.Module):
         if self.retention_loss == 1:
             # G(t) = G(0) * e^(- t*tau)^beta                      
             self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-            self.mem_x *= torch.exp(torch.tensor(-(1/4 * self.dt * retention_loss_tau) ** retention_loss_beta))
+            self.mem_x *= torch.exp(torch.tensor(-(1/2 * self.dt * retention_loss_tau) ** retention_loss_beta))
             self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
             self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
             # tau = 0.012478 , beta = 1.066  or  tau = 0.01245 , beta = 1.073
@@ -236,7 +236,7 @@ class MemristorArray(torch.nn.Module):
         if self.retention_loss == 2:
             # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)                    
             self.mem_v_threshold = torch.where((mem_v > v_on) & (mem_v < v_off), torch.zeros_like(mem_v), torch.ones_like(mem_v))
-            self.mem_loss_time[self.mem_v_threshold == 0] += self.dt
+            self.mem_loss_time[self.mem_v_threshold == 0] += 2*self.dt
             self.mem_loss_time[self.mem_v_threshold == 1] = 0         
             self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
             self.mem_x -= self.mem_x * self.dt * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)

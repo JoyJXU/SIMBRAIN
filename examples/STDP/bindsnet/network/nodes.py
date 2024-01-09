@@ -167,7 +167,7 @@ class Nodes(torch.nn.Module):
         if self.traces:
             self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
             if (self.device_name != 'trace' and self.learning == True):
-                self.transform.set_batch_size(batch_size=self.batch_size, learning=self.learning)
+                self.transform.set_batch_size_stdp(batch_size=self.batch_size, learning=self.learning)
 
         if self.sum_input:
             self.summed = torch.zeros(

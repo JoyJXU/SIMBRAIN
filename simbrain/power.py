@@ -101,7 +101,7 @@ class Power(torch.nn.Module):
         mem_info = self.memristor_info_dict[self.device_name]
         delta_t = mem_info['delta_t']
         # wireResistanceUnit = mem_info['wireResistanceUnit']
-        readPulseWidth = (1/4) * delta_t
+        readPulseWidth = (1/2) * delta_t
         self.readEnergy_static = (self.mem_v * self.mem_c * self.mem_v * readPulseWidth + self.mem_v / (
                     2 * self.wireResistanceUnit) * self.mem_v * readPulseWidth).squeeze()
         self.sim_power['readEnergy_static'] = self.readEnergy_static
@@ -111,7 +111,7 @@ class Power(torch.nn.Module):
         mem_info = self.memristor_info_dict[self.device_name]
         delta_t = mem_info['delta_t']
         # wireResistanceUnit = mem_info['wireResistanceUnit']
-        readPulseWidth = (1/4) * delta_t
+        readPulseWidth = (1/2) * delta_t
         self.total_wire_resistance = (self.wireResistanceUnit * (
                     torch.arange(1, self.shape[1] + 1) + torch.arange(self.shape[0], 0, -1)[:, None])).cuda()
         self.total_wire_resistance = torch.stack([self.total_wire_resistance] * self.batch_size)
@@ -173,7 +173,7 @@ class Power(torch.nn.Module):
         mem_info = self.memristor_info_dict[self.device_name]
         delta_t = mem_info['delta_t']
         # wireResistanceUnit = mem_info['wireResistanceUnit']
-        writePulseWidth = (1/4) * delta_t
+        writePulseWidth = (1/2) * delta_t
         if self.count_n == 0:
             self.mem_cpre = self.mem_c
             self.writeEnergy_static = (self.mem_v * self.mem_c * self.mem_v * writePulseWidth + self.mem_v/(2 * self.wireResistanceUnit) * self.mem_v * writePulseWidth).squeeze()
