@@ -76,9 +76,7 @@ class MemristorArray(torch.nn.Module):
         self.batch_size = None
 
         self.power = Power(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
-        self.sim_device : dict = {}
-        self.sum_readenergy = 0
-        self.sum_writeenergy = 0
+        self.sim_power : dict = {}
         
 
     def set_batch_size(self, batch_size, mem_t) -> None:
@@ -269,6 +267,12 @@ class MemristorArray(torch.nn.Module):
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
 
+        if self.memristor_device != 'trace':
+            #set_power_factor
+            self.power.mem_v = mem_v
+            self.power.mem_c = self.mem_c
+            self.power.mem_t = self.mem_t
+            self.power_energy()
         
         return self.mem_c
 
@@ -323,16 +327,9 @@ class MemristorArray(torch.nn.Module):
                                   ((self.Q_mask >= ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio)) & (self.Q_mask < increase_ratio))
 
     def power_energy(self):
-        #set_power_factor
-        self.power.mem_c = self.mem_c
-        # self.power.arrayColSize = np.prod(self.shape)
         self.power.arrayColSize = self.shape[1]
-        
-        #read_energy
-        self.power.read_energy()    
-        #write_energy
-        self.power.write_energy()
+        self.power.arrayRowSize = self.shape[0]
+    
+        self.power.totalEnergy() 
 
-        self.sim_device = self.power.sim_power
-        self.sum_readenergy = torch.sum(self.sim_device['readEnergy'])
-        self.sum_writeenergy = torch.sum(self.sim_device['writeEnergy'])
+        self.sim_power = self.power.sim_power
