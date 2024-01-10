@@ -48,9 +48,9 @@ parser.add_argument("--processNode", type=int, default=32)
 args = parser.parse_args()
 
 def main():
-    _rows = 64
+    _rows = 8
     _cols = 1
-    _rep = 1000000
+    _rep = 1000
     _logs = ['test_data', None, False, False, None]
 
     mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,

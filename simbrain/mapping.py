@@ -252,7 +252,7 @@ class MimoMapping(Mapping):
         v_thre = min(abs(v_off), abs(v_on)) * 0.95
 
         # Read voltage generation
-        v_read = target_v.unsqueeze(0) * v_thre
+        v_read = target_v * v_thre
 
         mem_i = self.mem_array.memristor_read(mem_v=v_read)
 
@@ -274,8 +274,8 @@ class MimoMapping(Mapping):
         luts = self.memristor_luts[self.device_name]['conductance']
 
         # Find the nearest conductance value
-        c_diff = torch.abs(torch.tensor(luts) - target_c.unsqueeze(2))
-        nearest_pulse_no = torch.argmin(c_diff, dim=2)
+        c_diff = torch.abs(torch.tensor(luts) - target_c.unsqueeze(3))
+        nearest_pulse_no = torch.argmin(c_diff, dim=3)
 
         return nearest_pulse_no
 

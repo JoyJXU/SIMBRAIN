@@ -110,6 +110,7 @@ results/
 Accuracy_Results.txt
 Test_accuracy_Results.txt
 Test_Accuracy_Results.txt
+**/test_data/
 
 # Results from network monitoring test.
 examples/saved_checkpoints

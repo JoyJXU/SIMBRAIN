@@ -118,7 +118,7 @@ def run_c2c_sim(_crossbar, _rep, _rows, _cols, sim_params, _logs=[None, None, Fa
             memristor_info_dict[device_name]['sigma_relative'] = _var_rel
             memristor_info_dict[device_name]['sigma_absolute'] = _var_abs
             _crossbar.mem_array = MemristorArray(sim_params=sim_params, shape=_crossbar.shape, memristor_info_dict=memristor_info_dict)
-            _crossbar.set_batch_size(_rep)
+            _crossbar.mem_array.set_batch_size(_rep)
 
             # matrix and vector random generation
             matrix = torch.rand(_rep, _rows, _cols)
