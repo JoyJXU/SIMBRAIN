@@ -92,6 +92,7 @@ class MemristorArray(torch.nn.Module):
 
         self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
         self.mem_c = torch.zeros(batch_size, *self.shape, device=self.mem_c.device)
+        self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
         self.mem_i = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_c.device)
 
         if self.c2c_variation:

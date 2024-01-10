@@ -55,7 +55,6 @@ class Mapping(torch.nn.Module):
         self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
 
-        
         self.trans_ratio = 1 / (self.Goff - self.Gon)
         
         self.mem_array = MemristorArray(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
@@ -80,10 +79,10 @@ class Mapping(torch.nn.Module):
         self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
         self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+
+        self.mem_array.set_batch_size(batch_size=self.batch_size)
        
 
-     
-        
     def update_SAF_mask(self) -> None:
         self.mem_array.update_SAF_mask()
 
@@ -117,11 +116,11 @@ class STDPMapping(Mapping):
         self.learning = learning
         self.set_batch_size(batch_size)
         if self.learning:
-            mem_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.mem_t.device)).unsqueeze(0).T 
+            mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
             self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
         else:
             self.mem_t.fill_(torch.min(self.mem_t_batch_update[:]))
-        self.mem_array.set_batch_size(batch_size=self.batch_size)
+
         self.mem_array.mem_t = self.mem_t
 
 
@@ -154,6 +153,7 @@ class STDPMapping(Mapping):
             
         return self.x
 
+
     def mapping_read_stdp(self, s):
         if self.device_structure == 'trace':
             if s.dim() == 4:
@@ -178,7 +178,8 @@ class STDPMapping(Mapping):
         self.mem_x_read[~s_sum.bool()] = 0
 
         return self.mem_x_read
-    
+
+
     def reset_memristor_variables(self) -> None:
         # language=rst
         """
@@ -188,10 +189,10 @@ class STDPMapping(Mapping):
         
         # Adopt large negative pulses to reset the memristor array
         self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)
-        
-    def mem_t_update(self) -> None:
 
-        self.mem_array.mem_t += self.batch_interval * (self.batch_size -1)
+
+    def mem_t_update(self) -> None:
+        self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
 
 
 class MimoMapping(Mapping):
@@ -224,9 +225,16 @@ class MimoMapping(Mapping):
             self.memristor_luts = pickle.load(f)
         assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
-        self.set_batch_size(1)
-        self.mem_array.set_batch_size(batch_size=self.batch_size, mem_t=self.mem_t)
-        
+        self.batch_interval = sim_params['batch_interval']
+
+
+    def set_batch_size_mimo(self, batch_size) -> None:
+        self.set_batch_size(batch_size)
+        mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
+        self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
+        self.mem_array.mem_t = self.mem_t
+
+
     def mapping_write_mimo(self, target_x):
         # Memristor reset first
         self.mem_v.fill_(-100)  # TODO: check the reset voltage
@@ -244,6 +252,7 @@ class MimoMapping(Mapping):
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
             self.mem_array.memristor_write(mem_v=self.mem_v)
+
 
     def mapping_read_mimo(self, target_v):
         # Get threshold voltage
@@ -263,6 +272,7 @@ class MimoMapping(Mapping):
 
         return self.mem_x_read
 
+
     def m2v(self, target_matrix):
         # Target_matrix ranging [0, 1]
         within_range = (target_matrix >= 0) & (target_matrix <= 1)
@@ -275,10 +285,11 @@ class MimoMapping(Mapping):
         luts = self.memristor_luts[self.device_name]['conductance']
 
         # Find the nearest conductance value
-        c_diff = torch.abs(torch.tensor(luts) - target_c.unsqueeze(3))
+        c_diff = torch.abs(torch.tensor(luts, device=target_c.device) - target_c.unsqueeze(3))
         nearest_pulse_no = torch.argmin(c_diff, dim=3)
 
         return nearest_pulse_no
+
 
     def reset_memristor_variables(self) -> None:
         # language=rst

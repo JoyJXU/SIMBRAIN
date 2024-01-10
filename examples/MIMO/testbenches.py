@@ -87,7 +87,7 @@ def run_single_sim(_crossbar, _rep, _rows, _cols, _logs=[None, None, False, Fals
     print("Execution time: ", exe_time)
 
 
-def run_c2c_sim(_crossbar, _rep, _rows, _cols, sim_params, _logs=[None, None, False, False, None]):
+def run_c2c_sim(_crossbar, _rep, _rows, _cols, sim_params, device, _logs=[None, None, False, False, None]):
     print("<========================================>")
     print("Test case: ", _rep)
     file_name = "test_case_r"+str(_rows)+"_c" + \
@@ -118,11 +118,12 @@ def run_c2c_sim(_crossbar, _rep, _rows, _cols, sim_params, _logs=[None, None, Fa
             memristor_info_dict[device_name]['sigma_relative'] = _var_rel
             memristor_info_dict[device_name]['sigma_absolute'] = _var_abs
             _crossbar.mem_array = MemristorArray(sim_params=sim_params, shape=_crossbar.shape, memristor_info_dict=memristor_info_dict)
-            _crossbar.mem_array.set_batch_size(_rep)
+            _crossbar.to(device)
+            _crossbar.set_batch_size_mimo(_rep)
 
             # matrix and vector random generation
-            matrix = torch.rand(_rep, _rows, _cols)
-            vector = -1 + 2 * torch.rand(_rep, 1, _rows)
+            matrix = torch.rand(_rep, _rows, _cols, device=device)
+            vector = -1 + 2 * torch.rand(_rep, 1, _rows, device=device)
             # print("Randomized input")
 
             # Golden results calculation

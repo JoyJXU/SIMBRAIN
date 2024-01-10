@@ -38,6 +38,8 @@ from simbrain.mapping import MimoMapping
 
 #############################################################
 parser = argparse.ArgumentParser()
+parser.add_argument("--seed", type=int, default=0)
+parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_structure", type=str, default='mimo') # trace, mimo or crossbar 
 parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=True)
@@ -49,19 +51,38 @@ parser.add_argument("--processNode", type=int, default=32)
 args = parser.parse_args()
 
 def main():
+    seed = args.seed
+    gpu = args.gpu
+    # Sets up Gpu use
+    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # torch.manual_seed(seed)
+    if gpu and torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    else:
+        torch.manual_seed(seed)
+        device = "cpu"
+        if gpu:
+            gpu = False
+
+    torch.set_num_threads(os.cpu_count() - 1)
+    print("Running on Device = ", device)
+
     _rows = 8
     _cols = 1
-    _rep = 1000
+    _rep = 100000
     _logs = ['test_data', None, False, False, None]
 
     mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
                  'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                  'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-                 'aging_effect': args.aging_effect, 'processNode': args.processNode}
+                 'aging_effect': args.aging_effect, 'processNode': args.processNode, 'batch_interval': 402}
     
     _crossbar = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
-    _crossbar.set_batch_size(_rep)
-    run_c2c_sim(_crossbar, _rep, _rows, _cols, mem_device, _logs)
+    _crossbar.to(device)
+    _crossbar.set_batch_size_mimo(_rep)
+    run_c2c_sim(_crossbar, _rep, _rows, _cols, mem_device, device, _logs)
 
 if __name__ == "__main__":
     main()

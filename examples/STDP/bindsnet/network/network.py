@@ -357,15 +357,12 @@ class Network(torch.nn.Module):
         
         for l in self.layers:
             self.layers[l].update_SAF_mask()
-            
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
-
-
             # Get input to all layers (synchronous mode).
             current_inputs = {}
             if not one_step:
