@@ -296,3 +296,7 @@ class MimoMapping(Mapping):
         
         # Adopt large negative pulses to reset the memristor array
         self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)
+
+
+    def mem_t_update(self) -> None:
+        self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)

@@ -114,6 +114,9 @@ def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
     for _var_abs in sigma_list:
         for _var_rel in sigma_list:
             device_name = sim_params['device_name']
+            batch_interval = 1 + _crossbar.memristor_luts[device_name]['total_no'] + 1  # reset + write + read
+            _crossbar.batch_interval = batch_interval
+
             memristor_info_dict = _crossbar.memristor_info_dict
             memristor_info_dict[device_name]['sigma_relative'] = _var_rel
             memristor_info_dict[device_name]['sigma_absolute'] = _var_abs
@@ -141,6 +144,9 @@ def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
                 _crossbar.mapping_write_mimo(target_x=matrix_batch)
                 # Memristor crossbar perform matrix vector multiplication
                 cross[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(target_v=vector_batch)
+
+                # mem_t update
+                _crossbar.mem_t_update()
 
             # Error calculation
             error = utility.cal_error(golden_model, cross)

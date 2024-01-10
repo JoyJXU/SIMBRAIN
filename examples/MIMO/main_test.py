@@ -82,12 +82,11 @@ def main():
     mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
                  'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                  'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-                 'aging_effect': args.aging_effect, 'processNode': args.processNode, 'batch_interval': 402}
+                 'aging_effect': args.aging_effect, 'processNode': args.processNode, 'batch_interval': None}
 
     # Run c2c variation
     _crossbar = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
     _crossbar.to(device)
-    _crossbar.set_batch_size_mimo(_batch_size)
     run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
 
 if __name__ == "__main__":
