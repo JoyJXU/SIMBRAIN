@@ -265,12 +265,12 @@ class MemristorArray(torch.nn.Module):
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
 
-        if self.memristor_device != 'trace':
-            #set_power_factor
-            self.power.mem_v = mem_v
-            self.power.mem_c = self.mem_c
-            self.power.mem_t = self.mem_t
-            self.power_energy()
+        # if self.device_name != 'trace':
+        #     #set_power_factor
+        #     self.power.mem_v = mem_v
+        #     self.power.mem_c = self.mem_c
+        #     self.power.mem_t = self.mem_t
+        #     self.power_energy()
         
         return self.mem_c
 

@@ -67,11 +67,11 @@ class Power(torch.nn.Module):
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
         self.total_resistance = torch.zeros(batch_size, *self.shape, device=self.total_resistance.device)
         self.total_wire_resistance = torch.zeros(self.shape, device=self.total_wire_resistance.device)
-        self.readEnergy_dynamic = torch.zeros(batch_size, *(self.shape[0],), device=self.readEnergy_dynamic.device)
-        self.readEnergy_static = torch.zeros(batch_size, *(self.shape[0],), device=self.readEnergy_static.device)
+        self.readEnergy_dynamic = torch.zeros(batch_size, *(self.shape[1],), device=self.readEnergy_dynamic.device)
+        self.readEnergy_static = torch.zeros(batch_size, *(self.shape[1],), device=self.readEnergy_static.device)
         self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
-        self.writeEnergy_dynamic = torch.zeros(batch_size, *(self.shape[0],), device=self.writeEnergy_dynamic.device)
-        self.writeEnergy_static = torch.zeros(batch_size, *(self.shape[0],), device=self.writeEnergy_static.device)
+        self.writeEnergy_dynamic = torch.zeros(batch_size, *(self.shape[1],), device=self.writeEnergy_dynamic.device)
+        self.writeEnergy_static = torch.zeros(batch_size, *(self.shape[1],), device=self.writeEnergy_static.device)
         self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
 
 
@@ -102,8 +102,8 @@ class Power(torch.nn.Module):
         wireCapRow = lengthRow *0.2e-15/1e-6
 
 		#2calculate readEnergy_dynamic
-        self.readEnergy_dynamic = (wireCapRow  * (self.mem_v * self.mem_v)).squeeze()
-        self.sim_power['readEnergy_dynamic'] += self.readEnergy_dynamic
+        self.readEnergy_dynamic += (wireCapRow  * (self.mem_v * self.mem_v)).squeeze()
+        self.sim_power['readEnergy_dynamic'] = self.readEnergy_dynamic
         return self.readEnergy_dynamic
     
     def read_energy_static_trace(self):
@@ -111,9 +111,9 @@ class Power(torch.nn.Module):
         delta_t = mem_info['delta_t']
         # wireResistanceUnit = mem_info['wireResistanceUnit']
         readPulseWidth = (1/2) * delta_t
-        self.readEnergy_static = (self.mem_v * self.mem_c * self.mem_v * readPulseWidth + self.mem_v / (
+        self.readEnergy_static += (self.mem_v * self.mem_c * self.mem_v * readPulseWidth + self.mem_v / (
                     2 * self.wireResistanceUnit) * self.mem_v * readPulseWidth).squeeze()
-        self.sim_power['readEnergy_static'] += self.readEnergy_static
+        self.sim_power['readEnergy_static'] = self.readEnergy_static
         return self.readEnergy_static
     
     def read_energy_static_crossbar(self):
@@ -134,12 +134,12 @@ class Power(torch.nn.Module):
     
     def read_energy(self):
         if self.device_structure == 'trace':
-            self.readEnergy = self.read_energy_dynamic_trace() + self.read_energy_static_trace()
-            self.sim_power['readEnergy'] += self.readEnergy
+            self.readEnergy += self.read_energy_dynamic_trace() + self.read_energy_static_trace()
+            self.sim_power['readEnergy'] = self.readEnergy
             return self.readEnergy
         elif self.device_structure == 'crossbar':
-            self.readEnergy = self.read_energy_dynamic_crossbar() + self.read_energy_static_crossbar()
-            self.sim_power['readEnergy'] += self.readEnergy
+            self.readEnergy += self.read_energy_dynamic_crossbar() + self.read_energy_static_crossbar()
+            self.sim_power['readEnergy'] = self.readEnergy
             return self.readEnergy
         else:
             print("Unsupported Architecture for Read Energy Calculation!")
