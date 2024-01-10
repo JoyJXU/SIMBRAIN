@@ -427,9 +427,9 @@ class Network(torch.nn.Module):
             for m in self.monitors:
                 self.monitors[m].record()
 
-        # Print power results
-        print("total_energy:", self.total_energy)
-        print("average_power:", self.average_power)
+        # # Print power results
+        # print("total_energy:", self.total_energy)
+        # print("average_power:", self.average_power)
 
         # Re-normalize connections.
         for c in self.connections:
