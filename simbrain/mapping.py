@@ -120,8 +120,9 @@ class STDPMapping(Mapping):
             mem_t_matrix = (self.batch_interval * torch.arange(0, self.batch_size, device=self.mem_t.device)).unsqueeze(0).T 
             self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
         else:
-            self.memristor_t.fill_(torch.min(self.memristor_t_batch_update[:]))
-        self.mem_array.set_batch_size(batch_size=self.batch_size, mem_t=self.mem_t)
+            self.mem_t.fill_(torch.min(self.mem_t_batch_update[:]))
+        self.mem_array.set_batch_size(batch_size=self.batch_size)
+        self.mem_array.mem_t = self.mem_t
 
 
     def mapping_write_stdp(self, s):

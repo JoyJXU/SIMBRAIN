@@ -31,7 +31,8 @@ SOFTWARE.
 # Calculation of Voltages depending on the state of the devices (R) and the Voltage sources
 
 import argparse
-
+import sys
+sys.path.append('../../')
 from testbenches import *
 from simbrain.mapping import MimoMapping
 
