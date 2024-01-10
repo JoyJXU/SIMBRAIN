@@ -118,8 +118,8 @@ class Network(torch.nn.Module):
         else:
             self.reward_fn = None
 
-        self.sum_readenergy = 0
-        self.sum_writeenergy = 0
+        self.total_energy = 0
+        self.average_power = 0
 
     def add_layer(self, layer: Nodes, name: str) -> None:
         # language=rst
@@ -386,8 +386,8 @@ class Network(torch.nn.Module):
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
                 
                 if (self.layers[l].traces and self.sim_params['device_name'] != 'trace' and self.learning):
-                    self.sum_readenergy += self.layers[l].transform.mem_array.sum_readenergy
-                    self.sum_writeenergy += self.layers[l].transform.mem_array.sum_writeenergy
+                    self.total_energy += self.layers[l].transform.mem_array.power.total_Energy
+                    self.average_power += self.layers[l].transform.mem_array.power.average_Power
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
@@ -426,7 +426,9 @@ class Network(torch.nn.Module):
             for m in self.monitors:
                 self.monitors[m].record()
 
-
+        # Print power results
+        print("total_energy:", self.total_energy)
+        print("average_power:", self.average_power)
 
         # Re-normalize connections.
         for c in self.connections:

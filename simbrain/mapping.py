@@ -147,10 +147,6 @@ class STDPMapping(Mapping):
             elif s.dim() == 2:
                 self.x = self.x.squeeze()
 
-        if self.device_name != 'trace':
-            self.mem_array.power.mem_v = self.mem_v
-            self.mem_array.power_energy()
-            
         return self.x
 
 

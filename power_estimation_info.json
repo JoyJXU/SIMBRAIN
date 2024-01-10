@@ -1,10 +1,5 @@
 {
-    "ideal":
-    {
-        "widthInFeatureSize":2,
-        "wireResistanceUnit":0.15193
-    },
-    "ferro":
+    "2F":
     {
         "widthInFeatureSize":2,
         "wireResistanceUnit":0.15193
