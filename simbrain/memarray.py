@@ -79,7 +79,7 @@ class MemristorArray(torch.nn.Module):
         self.sim_power : dict = {}
         
 
-    def set_batch_size(self, batch_size, mem_t) -> None:
+    def set_batch_size(self, batch_size) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
@@ -87,7 +87,6 @@ class MemristorArray(torch.nn.Module):
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
-        self.mem_t = mem_t
 
         self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
         self.mem_c = torch.zeros(batch_size, *self.shape, device=self.mem_c.device)
