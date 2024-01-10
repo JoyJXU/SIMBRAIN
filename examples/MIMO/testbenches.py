@@ -87,7 +87,7 @@ def run_single_sim(_crossbar, _rep, _rows, _cols, _logs=[None, None, False, Fals
     print("Execution time: ", exe_time)
 
 
-def run_c2c_sim(_crossbar, _rep, _rows, _cols, sim_params, device, _logs=[None, None, False, False, None]):
+def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, _logs=[None, None, False, False, None]):
     print("<========================================>")
     print("Test case: ", _rep)
     file_name = "test_case_r"+str(_rows)+"_c" + \
@@ -119,7 +119,7 @@ def run_c2c_sim(_crossbar, _rep, _rows, _cols, sim_params, device, _logs=[None, 
             memristor_info_dict[device_name]['sigma_absolute'] = _var_abs
             _crossbar.mem_array = MemristorArray(sim_params=sim_params, shape=_crossbar.shape, memristor_info_dict=memristor_info_dict)
             _crossbar.to(device)
-            _crossbar.set_batch_size_mimo(_rep)
+            _crossbar.set_batch_size_mimo(_batch_size)
 
             # matrix and vector random generation
             matrix = torch.rand(_rep, _rows, _cols, device=device)
@@ -129,11 +129,18 @@ def run_c2c_sim(_crossbar, _rep, _rows, _cols, sim_params, device, _logs=[None, 
             # Golden results calculation
             golden_model = torch.matmul(vector, matrix)
 
-            # Memristor-based results simulation
-            # Memristor crossbar program
-            _crossbar.mapping_write_mimo(target_x=matrix)
-            # Memristor crossbar perform matrix vector multiplication
-            cross = _crossbar.mapping_read_mimo(target_v=vector)
+            n_step = int(_rep / _batch_size)
+            cross = torch.zeros_like(golden_model, device=device)
+
+            for step in range(n_step):
+                matrix_batch = matrix[(step * _batch_size):(step * _batch_size + _batch_size)]
+                vector_batch = vector[(step * _batch_size):(step * _batch_size + _batch_size)]
+
+                # Memristor-based results simulation
+                # Memristor crossbar program
+                _crossbar.mapping_write_mimo(target_x=matrix_batch)
+                # Memristor crossbar perform matrix vector multiplication
+                cross[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(target_v=vector_batch)
 
             # Error calculation
             error = utility.cal_error(golden_model, cross)
