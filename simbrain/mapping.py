@@ -73,8 +73,8 @@ class Mapping(torch.nn.Module):
         """
         self.batch_size = batch_size
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
-        self.mem_v_read = torch.zeros(batch_size, self.shape[0], device=self.mem_v.device)
-        self.mem_x_read = torch.zeros(batch_size, self.shape[1], device=self.mem_v.device)
+        self.mem_v_read = torch.zeros(batch_size, 1, self.shape[0], device=self.mem_v.device)
+        self.mem_x_read = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_v.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
         self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
         self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
@@ -165,6 +165,7 @@ class STDPMapping(Mapping):
         v_read = 0.01 # TODO: make v_read a parameter in memristor_device_info.json like vneg/vpos
         # For every batch, read is not necesary when there is no spike s
         s_sum = torch.sum(s, dim=2).squeeze()
+        s_sum = torch.unsqueeze(s_sum, 1)
 
         self.mem_v_read.zero_()
         self.mem_v_read[s_sum.bool()] = v_read

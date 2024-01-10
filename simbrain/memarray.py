@@ -289,8 +289,7 @@ class MemristorArray(torch.nn.Module):
         # mem_v shape: [batchsize, read_no=1, array_row],
         # mem_array shape: [batchsize, array_row, array_column],
         # output_i shape: [batchsize, read_no=1, array_column]
-        mem_v_expand = torch.unsqueeze(mem_v, 1)
-        self.mem_i = torch.matmul(mem_v_expand, self.mem_c)
+        self.mem_i = torch.matmul(mem_v, self.mem_c)
 
         self.mem_t += 1
 
