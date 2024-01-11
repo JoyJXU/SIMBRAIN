@@ -90,8 +90,8 @@ def run_single_sim(_crossbar, _rep, _rows, _cols, _logs=[None, None, False, Fals
 def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, _logs=[None, None, False, False, None]):
     print("<========================================>")
     print("Test case: ", _rep)
-    file_name = "test_case_r"+str(_rows)+"_c" + \
-        str(_cols)+"_rep_"+str(_rep)+".csv"
+    file_name = "c2c_test_case_r"+str(_rows)+"_c" + \
+        str(_cols)+"_rep"+str(_rep)+".csv"
     file_path = _logs[0] #main file path
     header = ['var_abs', 'var_rel']
     for x in range(_cols):
@@ -117,6 +117,9 @@ def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
             batch_interval = 1 + _crossbar.memristor_luts[device_name]['total_no'] + 1  # reset + write + read
             _crossbar.batch_interval = batch_interval
 
+            # Perform c2c variation only
+            sim_params['c2c_variation'] = True
+            sim_params['d2d_variation'] = 0
             memristor_info_dict = _crossbar.memristor_info_dict
             memristor_info_dict[device_name]['sigma_relative'] = _var_rel
             memristor_info_dict[device_name]['sigma_absolute'] = _var_abs
@@ -166,6 +169,100 @@ def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
             utility.write_to_csv(file_path, file_name, data)
 
             print("Absolute Sigma: ", _var_abs, ", Relative Sigma: ", _var_rel, ", Mean Error: ", me.item())
+
+    end_time = time.time()
+    exe_time = end_time - start_time
+    print("Execution time: ", exe_time)
+
+
+def run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, _logs=[None, None, False, False, None]):
+    print("<========================================>")
+    print("Test case: ", _rep)
+    file_name = "d2d_test_case_r"+str(_rows)+"_c" + \
+        str(_cols)+"_rep"+str(_rep)+".csv"
+    file_path = _logs[0] #main file path
+    header = ['var_abs', 'var_rel', 'me', 'mae', 'rmse']
+    file = file_path+"/"+file_name # Location to the file for the main results
+    # Only write header once
+    if not (os.path.isfile(file)):
+        utility.write_to_csv(file_path, file_name, header)
+
+    print("<==============>")
+    start_time = time.time()
+    print("Row No. ", _rows, " Column No. ", _cols)
+
+    print("<==============>")
+    sigma_list = [0, 0.001, 0.01, 0.1, 1, 10]
+    print("Start Sigma: ", sigma_list[1], ", End Sigma: ", sigma_list[-1], ", Sigma=0 Included")
+
+    _var_g = 0
+    _var_linearity = 0
+    for _var_g in sigma_list:
+        for _var_linearity in sigma_list:
+            device_name = sim_params['device_name']
+            batch_interval = 1 + _crossbar.memristor_luts[device_name]['total_no'] + 1  # reset + write + read
+            _crossbar.batch_interval = batch_interval
+
+            # Perform d2d variation only
+            sim_params['c2c_variation'] = False
+            sim_params['d2d_variation'] = 1
+            memristor_info_dict = _crossbar.memristor_info_dict
+            G_off = memristor_info_dict[device_name]['G_off']
+            G_on = memristor_info_dict[device_name]['G_on']
+            memristor_info_dict[device_name]['Gon_sigma'] = G_on * _var_g
+            memristor_info_dict[device_name]['Goff_sigma'] = G_off * _var_g
+
+            P_off = memristor_info_dict[device_name]['P_off']
+            P_on = memristor_info_dict[device_name]['P_on']
+            memristor_info_dict[device_name]['Pon_sigma'] = P_on * _var_linearity
+            memristor_info_dict[device_name]['Poff_sigma'] = P_off * _var_linearity
+
+            _crossbar.mem_array = MemristorArray(sim_params=sim_params, shape=_crossbar.shape, memristor_info_dict=memristor_info_dict)
+            _crossbar.to(device)
+            _crossbar.set_batch_size_mimo(_batch_size)
+
+            # matrix and vector random generation
+            matrix = torch.rand(_rep, _rows, _cols, device=device)
+            vector = -1 + 2 * torch.rand(_rep, 1, _rows, device=device)
+            # print("Randomized input")
+
+            # Golden results calculation
+            golden_model = torch.matmul(vector, matrix)
+
+            n_step = int(_rep / _batch_size)
+            cross = torch.zeros_like(golden_model, device=device)
+
+            for step in range(n_step):
+                matrix_batch = matrix[(step * _batch_size):(step * _batch_size + _batch_size)]
+                vector_batch = vector[(step * _batch_size):(step * _batch_size + _batch_size)]
+
+                # Memristor-based results simulation
+                # Memristor crossbar program
+                _crossbar.mapping_write_mimo(target_x=matrix_batch)
+                # Memristor crossbar perform matrix vector multiplication
+                cross[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(target_v=vector_batch)
+
+                # mem_t update
+                _crossbar.mem_t_update()
+
+            # Error calculation
+            error = utility.cal_error(golden_model, cross)
+            error = error.flatten(0, 2)
+
+            # data = [str(_var_abs), str(_var_rel)]
+            # [data.append(str(e.item())) for e in error]
+            # utility.write_to_csv(file_path, file_name, data)
+
+            me = torch.mean(error)
+            mae = torch.mean(abs(error))
+            rmse = torch.sqrt(torch.mean(error**2))
+            metrics = [me, mae, rmse]
+
+            data = [str(_var_g), str(_var_linearity)]
+            [data.append(str(e.item())) for e in metrics]
+            utility.write_to_csv(file_path, file_name, data)
+
+            print("Gon/Goff Sigma: ", _var_g, ", Nonlinearity Sigma: ", _var_linearity, ", Mean Error: ", me.item())
 
     end_time = time.time()
     exe_time = end_time - start_time
