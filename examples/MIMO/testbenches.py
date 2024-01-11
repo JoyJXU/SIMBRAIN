@@ -34,6 +34,7 @@ from utility import utility
 import time
 import os
 import torch
+import matplotlib.pyplot as plt
 
 from simbrain.memarray import MemristorArray
 
@@ -101,6 +102,17 @@ def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
     if not (os.path.isfile(file)):
         utility.write_to_csv(file_path, file_name, header)
 
+    # plot
+    plt.figure(figsize=(13, 4.5))
+    grid = plt.GridSpec(9, 14, wspace=0.5, hspace=0.5)
+    ax = plt.subplot(grid[0:4, 0:4])
+    bx = plt.subplot(grid[5:9, 0:4])
+    cx = plt.subplot(grid[0:4, 5:9])
+    dx = plt.subplot(grid[5:9, 5:9])
+    ex = plt.subplot(grid[0:4, 10:14])
+    fx = plt.subplot(grid[5:9, 10:14])
+    figs = [ax, bx, cx, dx, ex, fx]
+
     print("<==============>")
     start_time = time.time()
     print("Row No. ", _rows, " Column No. ", _cols)
@@ -153,7 +165,11 @@ def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
 
             # Error calculation
             error = utility.cal_error(golden_model, cross)
+            relative_error = error / golden_model
             error = error.flatten(0, 2)
+            relative_error = relative_error.flatten(0, 2)
+
+            utility.plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error)
 
             # data = [str(_var_abs), str(_var_rel)]
             # [data.append(str(e.item())) for e in error]
@@ -162,7 +178,9 @@ def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
             me = torch.mean(error)
             mae = torch.mean(abs(error))
             rmse = torch.sqrt(torch.mean(error**2))
-            metrics = [me, mae, rmse]
+            rmae = torch.mean(abs(relative_error))
+            rrmse = torch.sqrt(torch.mean(relative_error**2))
+            metrics = [me, mae, rmse, rmae, rrmse]
 
             data = [str(_var_abs), str(_var_rel)]
             [data.append(str(e.item())) for e in metrics]
@@ -247,7 +265,9 @@ def run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
 
             # Error calculation
             error = utility.cal_error(golden_model, cross)
+            relative_error = error / golden_model
             error = error.flatten(0, 2)
+            relative_error = relative_error.flatten(0, 2)
 
             # data = [str(_var_abs), str(_var_rel)]
             # [data.append(str(e.item())) for e in error]
@@ -255,8 +275,9 @@ def run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
 
             me = torch.mean(error)
             mae = torch.mean(abs(error))
-            rmse = torch.sqrt(torch.mean(error**2))
-            metrics = [me, mae, rmse]
+            rmse = torch.sqrt(torch.mean(error ** 2))
+            rmae = torch.mean(abs(relative_error))
+            metrics = [me, mae, rmse, rmae]
 
             data = [str(_var_g), str(_var_linearity)]
             [data.append(str(e.item())) for e in metrics]

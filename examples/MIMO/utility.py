@@ -26,6 +26,7 @@ SOFTWARE.
 
 import csv
 import os
+import matplotlib.pyplot as plt
 
 # Class with utility functions
 
@@ -125,3 +126,31 @@ class utility:
 
     def __str__(self):
         return (f"This is a utility class")
+
+
+    #############################################################
+
+    def plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error):
+        # plt.clf()
+        [ax, bx, cx, dx, ex, fx] = figs
+        ax.cla()
+        bx.cla()
+        cx.cla()
+        dx.cla()
+        ex.cla()
+        fx.cla()
+
+        ax.hist(vector.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+        ax.set_title('vector')
+        bx.hist(matrix.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+        bx.set_title('matrix')
+        cx.hist(golden_model.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+        cx.set_title('golden model')
+        dx.hist(cross.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+        dx.set_title('crossbar')
+        ex.hist(error.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+        ex.set_title('error')
+        fx.hist(relative_error.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+        fx.set_title('relative error')
+        plt.draw()
+        plt.pause(0.05)

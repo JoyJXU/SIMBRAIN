@@ -40,10 +40,10 @@ from simbrain.mapping import MimoMapping
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
-parser.add_argument("--rows", type=int, default=2048)
+parser.add_argument("--rows", type=int, default=8)
 parser.add_argument("--cols", type=int, default=1)
 parser.add_argument("--rep", type=int, default=10000)
-parser.add_argument("--batch_size", type=int, default=100)
+parser.add_argument("--batch_size", type=int, default=10000)
 parser.add_argument("--memristor_structure", type=str, default='mimo') # trace, mimo or crossbar 
 parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=False)
@@ -55,20 +55,20 @@ parser.add_argument("--processNode", type=int, default=32)
 args = parser.parse_args()
 
 def main():
-    seed = args.seed
+    # seed = args.seed
     gpu = args.gpu
     # Sets up Gpu use
     os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # torch.manual_seed(seed)
-    if gpu and torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-    else:
-        torch.manual_seed(seed)
-        device = "cpu"
-        if gpu:
-            gpu = False
+    # # torch.manual_seed(seed)
+    # if gpu and torch.cuda.is_available():
+    #     torch.cuda.manual_seed_all(seed)
+    # else:
+    #     torch.manual_seed(seed)
+    #     device = "cpu"
+    #     if gpu:
+    #         gpu = False
 
     torch.set_num_threads(os.cpu_count() - 1)
     print("Running on Device = ", device)
@@ -88,7 +88,7 @@ def main():
     _crossbar = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
     _crossbar.to(device)
     run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
-    run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
+    # run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
 
 if __name__ == "__main__":
     main()
