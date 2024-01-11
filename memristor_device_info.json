@@ -15,10 +15,19 @@
         "trans_ratio":1.1111e-3,
         "vinput_pos": 100,
         "vinput_neg": -1.4877,
+        "retention_loss_tau": 0,
+        "retention_loss_beta": 1,
         "sigma_relative":0,
         "sigma_absolute":0,
         "Gon_sigma":0,
-        "Goff_sigma":0
+        "Goff_sigma":0,
+        "Pon_sigma":0,
+        "Poff_sigma":0,
+        "SAF_lambda": 0,
+        "SAF_ratio": 9,
+        "SAF_delta": 0,
+        "Aging_k_on":0,
+        "Aging_k_off":0
     },
     "ferro":
     {
@@ -36,10 +45,17 @@
         "trans_ratio":1.1198e5,
         "vinput_pos": 6.0,
         "vinput_neg": -2.55,
+        "retention_loss_tau": 0,
+        "retention_loss_beta": 1,
         "sigma_relative":0.1032073708277878,
         "sigma_absolute":0.005783083695110348,
-        "Gon_sigma":0.5e-6,
-        "Goff_sigma":0.5e-4,
+        "Gon_sigma":0.7e-8,
+        "Goff_sigma":0.9e-6,
+        "Pon_sigma":0.2,
+        "Poff_sigma":0.1,
+        "SAF_lambda": 1,
+        "SAF_ratio": 9,
+        "SAF_delta": 0,
         "Aging_k_on":0.5,
         "Aging_k_off":0.5
     },
@@ -59,8 +75,19 @@
         "trans_ratio":6.25e8,
         "vinput_pos": 12,
         "vinput_neg": -3.63,
+        "retention_loss_tau": 0.012478,
+        "retention_loss_beta": 1.066,        
         "sigma_relative":0.02438171519582677,
-        "sigma_absolute":0.005490197724238527
+        "sigma_absolute":0.005490197724238527,
+        "Gon_sigma":1e-11,
+        "Goff_sigma":1e-10,
+        "Pon_sigma":0.12,
+        "Poff_sigma":0.12,
+        "SAF_lambda": 0.1,
+        "SAF_ratio": 9, 
+        "SAF_delta": 0,
+        "Aging_k_on":1e-8,
+        "Aging_k_off":1e-8  
     },
     "ferro_resistance_abandon":
     {
@@ -78,7 +105,18 @@
         "trans_ratio":7.2254e-8,
         "vinput_pos": 12,
         "vinput_neg": -2.44,
+        "retention_loss_tau": 0,
+        "retention_loss_beta": 1,
         "sigma_relative":0.1544,
-        "sigma_absolute":0.0166
+        "sigma_absolute":0.0166,
+        "Gon_sigma":0,
+        "Goff_sigma":0,
+        "Pon_sigma":0,
+        "Poff_sigma":0,
+        "SAF_lambda": 0,
+        "SAF_ratio": 9,
+        "SAF_delta": 0,
+        "Aging_k_on":0,
+        "Aging_k_off":0
     }
 }
