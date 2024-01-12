@@ -193,6 +193,133 @@ def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
     print("Execution time: ", exe_time)
 
 
+def run_signed_c2c_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _cols, sim_params, device, _logs=[None, None, False, False, None]):
+    print("<========================================>")
+    print("Test case: ", _rep)
+    file_name = "signed_c2c_test_case_r"+str(_rows)+"_c" + \
+        str(_cols)+"_rep"+str(_rep)+".csv"
+    file_path = _logs[0] #main file path
+    header = ['var_abs', 'var_rel']
+    for x in range(_cols):
+        header.append(str(x))
+    file = file_path+"/"+file_name # Location to the file for the main results
+    # Only write header once
+    if not (os.path.isfile(file)):
+        utility.write_to_csv(file_path, file_name, header)
+
+    # plot
+    plt.figure(figsize=(13, 4.5))
+    grid = plt.GridSpec(9, 14, wspace=0.5, hspace=0.5)
+    ax = plt.subplot(grid[0:4, 0:4])
+    bx = plt.subplot(grid[5:9, 0:4])
+    cx = plt.subplot(grid[0:4, 5:9])
+    dx = plt.subplot(grid[5:9, 5:9])
+    ex = plt.subplot(grid[0:4, 10:14])
+    fx = plt.subplot(grid[5:9, 10:14])
+    figs = [ax, bx, cx, dx, ex, fx]
+
+    print("<==============>")
+    start_time = time.time()
+    print("Row No. ", _rows, " Column No. ", _cols)
+
+    print("<==============>")
+    sigma_list = [0, 0.001, 0.01, 0.1, 1, 10]
+    print("Start Sigma: ", sigma_list[1], ", End Sigma: ", sigma_list[-1], ", Sigma=0 Included")
+
+    _var_abs = 0
+    _var_rel = 0
+    for _var_abs in sigma_list:
+        for _var_rel in sigma_list:
+            device_name = sim_params['device_name']
+            batch_interval = 1 + _crossbar_pos.memristor_luts[device_name]['total_no'] + 1  # reset + write + read
+            _crossbar_pos.batch_interval = batch_interval
+            _crossbar_neg.batch_interval = batch_interval
+
+            # Perform c2c variation only
+            sim_params['c2c_variation'] = True
+            sim_params['d2d_variation'] = 0
+            memristor_info_dict = _crossbar_pos.memristor_info_dict
+            memristor_info_dict[device_name]['sigma_relative'] = _var_rel
+            memristor_info_dict[device_name]['sigma_absolute'] = _var_abs
+            _crossbar_pos.mem_array = MemristorArray(sim_params=sim_params, shape=_crossbar_pos.shape,
+                                                     memristor_info_dict=memristor_info_dict)
+            _crossbar_neg.mem_array = MemristorArray(sim_params=sim_params, shape=_crossbar_neg.shape,
+                                                     memristor_info_dict=memristor_info_dict)
+            _crossbar_pos.to(device)
+            _crossbar_neg.to(device)
+            _crossbar_pos.set_batch_size_mimo(_batch_size)
+            _crossbar_neg.set_batch_size_mimo(_batch_size)
+
+            # matrix and vector random generation
+            matrix = torch.rand(_rep, _rows, _cols, device=device)
+            # matrix = -1 + 2 * torch.rand(_rep, _rows, _cols, device=device)
+            # matrix = torch.ones(_rep, _rows, _cols, device=device)
+            vector = torch.rand(_rep, 1, _rows, device=device)
+            # vector = -1 + 2 * torch.rand(_rep, 1, _rows, device=device)
+            # vector = torch.ones(_rep, 1, _rows, device=device)
+            # print("Randomized input")
+
+            # Golden results calculation
+            golden_model = torch.matmul(vector, matrix)
+
+            n_step = int(_rep / _batch_size)
+            cross = torch.zeros_like(golden_model, device=device)
+            cross_pos = torch.zeros_like(golden_model, device=device)
+            cross_neg = torch.zeros_like(golden_model, device=device)
+
+            for step in range(n_step):
+                matrix_batch = matrix[(step * _batch_size):(step * _batch_size + _batch_size)]
+                vector_batch = vector[(step * _batch_size):(step * _batch_size + _batch_size)]
+
+                # Enable signed matrix
+                matrix_pos = torch.relu(matrix_batch)
+                matrix_neg = torch.relu(matrix_batch * -1)
+
+                # Memristor-based results simulation
+                # Memristor crossbar program
+                _crossbar_pos.mapping_write_mimo(target_x=matrix_pos)
+                _crossbar_neg.mapping_write_mimo(target_x=matrix_neg)
+                # Memristor crossbar perform matrix vector multiplication
+                cross_pos[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar_pos.mapping_read_mimo(
+                    target_v=vector_batch)
+                cross_neg[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar_neg.mapping_read_mimo(
+                    target_v=(vector_batch * -1))
+                cross = cross_pos + cross_neg
+
+                # mem_t update
+                _crossbar_pos.mem_t_update()
+                _crossbar_neg.mem_t_update()
+
+            # Error calculation
+            error = utility.cal_error(golden_model, cross)
+            relative_error = error / golden_model
+            error = error.flatten(0, 2)
+            relative_error = relative_error.flatten(0, 2)
+
+            utility.plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error)
+
+            # data = [str(_var_abs), str(_var_rel)]
+            # [data.append(str(e.item())) for e in error]
+            # utility.write_to_csv(file_path, file_name, data)
+
+            me = torch.mean(error)
+            mae = torch.mean(abs(error))
+            rmse = torch.sqrt(torch.mean(error**2))
+            rmae = torch.mean(abs(relative_error))
+            rrmse = torch.sqrt(torch.mean(relative_error**2))
+            metrics = [me, mae, rmse, rmae, rrmse]
+
+            data = [str(_var_abs), str(_var_rel)]
+            [data.append(str(e.item())) for e in metrics]
+            utility.write_to_csv(file_path, file_name, data)
+
+            print("Absolute Sigma: ", _var_abs, ", Relative Sigma: ", _var_rel, ", Mean Error: ", me.item())
+
+    end_time = time.time()
+    exe_time = end_time - start_time
+    print("Execution time: ", exe_time)
+
+
 def run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, _logs=[None, None, False, False, None]):
     print("<========================================>")
     print("Test case: ", _rep)
