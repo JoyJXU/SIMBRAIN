@@ -414,11 +414,6 @@ class Network(torch.nn.Module):
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
                 
-                # if (self.layers[l].traces and self.sim_params['device_name'] != 'trace' and self.learning):
-                    # self.total_energy += self.layers[l].transform.mem_array.power.total_Energy
-                    # self.average_power += self.layers[l].transform.mem_array.power.average_Powernergy
-                    # self.average_power += self.layers[l].transform.mem_array.power.average_Power
-
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
                 if clamp is not None:
@@ -455,10 +450,16 @@ class Network(torch.nn.Module):
             # Record state variables of interest.
             for m in self.monitors:
                 self.monitors[m].record()
-
+        
+        self.total_energy = 0
+        self.average_power = 0
+        for l in self.layers:
+            if (self.layers[l].traces and self.sim_params['device_name'] != 'trace' and self.learning):
+                self.total_energy += self.layers[l].transform.mem_array.power.total_Energy
+                self.average_power += self.layers[l].transform.mem_array.power.average_Power
         # # Print power results
-        # print("total_energy:", self.total_energy)
-        # print("average_power:", self.average_power)
+        print("total_energy:", self.total_energy)
+        print("average_power:", self.average_power)
 
         # Re-normalize connections.
         for c in self.connections:
