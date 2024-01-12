@@ -34,7 +34,6 @@ from utility import utility
 import time
 import os
 import torch
-import matplotlib.pyplot as plt
 
 from simbrain.memarray import MemristorArray
 
@@ -193,7 +192,7 @@ def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
     print("Execution time: ", exe_time)
 
 
-def run_signed_c2c_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _cols, sim_params, device, _logs=[None, None, False, False, None]):
+def run_signed_c2c_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _cols, sim_params, device, _logs=[None, None, False, False, None], figs=None):
     print("<========================================>")
     print("Test case: ", _rep)
     file_name = "signed_c2c_test_case_r"+str(_rows)+"_c" + \
@@ -206,17 +205,6 @@ def run_signed_c2c_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _
     # Only write header once
     if not (os.path.isfile(file)):
         utility.write_to_csv(file_path, file_name, header)
-
-    # plot
-    plt.figure(figsize=(13, 4.5))
-    grid = plt.GridSpec(9, 14, wspace=0.5, hspace=0.5)
-    ax = plt.subplot(grid[0:4, 0:4])
-    bx = plt.subplot(grid[5:9, 0:4])
-    cx = plt.subplot(grid[0:4, 5:9])
-    dx = plt.subplot(grid[5:9, 5:9])
-    ex = plt.subplot(grid[0:4, 10:14])
-    fx = plt.subplot(grid[5:9, 10:14])
-    figs = [ax, bx, cx, dx, ex, fx]
 
     print("<==============>")
     start_time = time.time()
@@ -251,11 +239,11 @@ def run_signed_c2c_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _
             _crossbar_neg.set_batch_size_mimo(_batch_size)
 
             # matrix and vector random generation
-            matrix = torch.rand(_rep, _rows, _cols, device=device)
-            # matrix = -1 + 2 * torch.rand(_rep, _rows, _cols, device=device)
+            # matrix = torch.rand(_rep, _rows, _cols, device=device)
+            matrix = -1 + 2 * torch.rand(_rep, _rows, _cols, device=device)
             # matrix = torch.ones(_rep, _rows, _cols, device=device)
-            vector = torch.rand(_rep, 1, _rows, device=device)
-            # vector = -1 + 2 * torch.rand(_rep, 1, _rows, device=device)
+            # vector = torch.rand(_rep, 1, _rows, device=device)
+            vector = -1 + 2 * torch.rand(_rep, 1, _rows, device=device)
             # vector = torch.ones(_rep, 1, _rows, device=device)
             # print("Randomized input")
 

@@ -31,8 +31,10 @@ SOFTWARE.
 # Calculation of Voltages depending on the state of the devices (R) and the Voltage sources
 
 import argparse
+import matplotlib.pyplot as plt
 import sys
 sys.path.append('../../')
+
 from testbenches import *
 from simbrain.mapping import MimoMapping
 
@@ -90,12 +92,24 @@ def main():
     # run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
     # run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
 
+    # plot
+    plt.figure(figsize=(13, 4.5))
+    grid = plt.GridSpec(9, 14, wspace=0.5, hspace=0.5)
+    ax = plt.subplot(grid[0:4, 0:4])
+    bx = plt.subplot(grid[5:9, 0:4])
+    cx = plt.subplot(grid[0:4, 5:9])
+    dx = plt.subplot(grid[5:9, 5:9])
+    ex = plt.subplot(grid[0:4, 10:14])
+    fx = plt.subplot(grid[5:9, 10:14])
+    figs = [ax, bx, cx, dx, ex, fx]
+
     # Run signed c2c variation
     _crossbar_pos = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
     _crossbar_neg = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
     _crossbar_pos.to(device)
     _crossbar_neg.to(device)
-    run_signed_c2c_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
+    run_signed_c2c_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _cols, mem_device, device, _logs, figs)
+    # run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
 
 
 if __name__ == "__main__":
