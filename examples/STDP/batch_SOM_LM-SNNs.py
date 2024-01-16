@@ -53,7 +53,6 @@ parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variatio
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
-parser.add_argument("--processNode", type=int, default=32)
 
 parser.set_defaults(plot=False, gpu=True)
 
@@ -80,7 +79,7 @@ update_inhibation_weights = args.update_inhibation_weights
 sim_params = {'device_structure':args.memristor_structure, 'device_name': args.memristor_device,
                  'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                  'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-                 'aging_effect': args.aging_effect, 'processNode': args.processNode, 'batch_interval': args.time*2+1}
+                 'aging_effect': args.aging_effect, 'batch_interval': args.time*2+1}
 
 # %% Sets up Gpu use
 os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))

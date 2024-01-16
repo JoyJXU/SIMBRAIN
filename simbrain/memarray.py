@@ -1,5 +1,6 @@
 from typing import Iterable, Optional, Union
 from simbrain.power import Power
+from simbrain.area import Area
 import torch
 import numpy as np
 
@@ -39,6 +40,7 @@ class MemristorArray(torch.nn.Module):
         self.stuck_at_fault = sim_params['stuck_at_fault']
         self.retention_loss = sim_params['retention_loss']
         self.aging_effect = sim_params['aging_effect']
+        self.memristor_device = sim_params['device_name']
     
         if self.c2c_variation:
             self.register_buffer("normal_absolute", torch.Tensor())
@@ -76,6 +78,8 @@ class MemristorArray(torch.nn.Module):
         self.batch_size = None
 
         self.power = Power(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
+        self.area = Area(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
+
         self.sim_power : dict = {}
         
 
@@ -265,12 +269,13 @@ class MemristorArray(torch.nn.Module):
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
 
-        # if self.device_name != 'trace':
-        #     #set_power_factor
-        #     self.power.mem_v = mem_v
-        #     self.power.mem_c = self.mem_c
-        #     self.power.mem_t = self.mem_t
-        #     self.power_energy()
+        if self.device_name != 'trace':
+            #set_power_factor
+            self.power.mem_v = mem_v
+            self.power.mem_c = self.mem_c
+            self.power.mem_t = self.mem_t
+            self.power_energy()
+            self.area.cal_area()
         
         return self.mem_c
 
@@ -324,10 +329,6 @@ class MemristorArray(torch.nn.Module):
                 self.SAF1_mask += (~(self.SAF0_mask + self.SAF1_mask)) & \
                                   ((self.Q_mask >= ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio)) & (self.Q_mask < increase_ratio))
 
-    def power_energy(self):
-        self.power.arrayColSize = self.shape[1]
-        self.power.arrayRowSize = self.shape[0]
-    
+    def power_energy(self):    
         self.power.totalEnergy() 
-
         self.sim_power = self.power.sim_power
