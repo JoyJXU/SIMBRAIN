@@ -95,6 +95,7 @@ class MemristorArray(torch.nn.Module):
 
         self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
         self.mem_c = torch.zeros(batch_size, *self.shape, device=self.mem_c.device)
+        self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
         self.mem_i = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_c.device)
 
         if self.c2c_variation:
@@ -202,9 +203,8 @@ class MemristorArray(torch.nn.Module):
         Aging_k_on = mem_info['Aging_k_on']
         Aging_k_off = mem_info['Aging_k_off']
 
-
         self.mem_t += 1
-        
+        mem_c_pre = self.mem_c.clone()
 
         if self.d2d_variation in [1, 3]:
             self.mem_x = torch.where(mem_v >= v_off, \
@@ -271,6 +271,8 @@ class MemristorArray(torch.nn.Module):
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
         
+        self.power.write_energy_calculation(mem_v=mem_v, mem_c=self.mem_c, mem_c_pre=mem_c_pre)
+        
         return self.mem_c
 
     def memristor_read(self, mem_v: torch.Tensor): # TODO: Add Non-idealities
@@ -294,6 +296,8 @@ class MemristorArray(torch.nn.Module):
         self.mem_i = torch.matmul(mem_v, self.mem_c)
 
         self.mem_t += 1
+        
+        self.power.read_energy_calculation(mem_v_read=mem_v, mem_c=self.mem_c)
 
         return self.mem_i
 

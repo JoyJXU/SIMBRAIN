@@ -107,6 +107,12 @@ class Network(torch.nn.Module):
         self.batch_size = batch_size
         
 
+        self.register_buffer("mem_current_step", torch.Tensor())
+        self.register_buffer("mem_step_matrix", torch.Tensor())
+        
+        self.mem_current_step = torch.zeros(self.batch_size, device=self.mem_current_step.device)
+        self.mem_step_matrix = torch.arange(self.batch_size, device=self.mem_current_step.device)
+
         self.layers = {}
         self.connections = {}
         self.monitors = {}
@@ -349,6 +355,8 @@ class Network(torch.nn.Module):
 
                     for l in self.layers:
                         self.layers[l].set_batch_size(self.batch_size)
+                        self.mem_current_step = torch.zeros(self.batch_size, device=self.mem_current_step.device)
+                        self.mem_step_matrix = torch.arange(self.batch_size, device=self.mem_current_step.device)
 
                     for m in self.monitors:
                         self.monitors[m].reset_state_variables()
@@ -357,14 +365,24 @@ class Network(torch.nn.Module):
         
         for l in self.layers:
             self.layers[l].update_SAF_mask()
-            
+
+        # TODO: update SAF mask
+        for l in self.layers:
+            self.layers[l].update_SAF_mask()
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
-
+            if self.learning:
+                if t == 0:
+                    self.mem_current_step = torch.max(self.mem_current_step[:]) + timesteps * self.mem_step_matrix + 1
+                else:
+                    self.mem_current_step += 1
+            else:
+                if t == 0:
+                    self.mem_current_step.fill_(torch.max(self.mem_current_step[:]))
 
             # Get input to all layers (synchronous mode).
             current_inputs = {}
@@ -372,6 +390,8 @@ class Network(torch.nn.Module):
                 current_inputs.update(self._get_inputs())
 
             for l in self.layers:
+                self.layers[l].mem_step = self.mem_current_step
+
                 # Update each layer of nodes.
                 if l in inputs:
                     if l in current_inputs:
@@ -388,9 +408,10 @@ class Network(torch.nn.Module):
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
                 
-                if (self.layers[l].traces and self.sim_params['device_name'] != 'trace' and self.learning):
-                    self.total_energy += self.layers[l].transform.mem_array.power.total_Energy
-                    self.average_power += self.layers[l].transform.mem_array.power.average_Power
+                # if (self.layers[l].traces and self.sim_params['device_name'] != 'trace' and self.learning):
+                    # self.total_energy += self.layers[l].transform.mem_array.power.total_Energy
+                    # self.average_power += self.layers[l].transform.mem_array.power.average_Powernergy
+                    # self.average_power += self.layers[l].transform.mem_array.power.average_Power
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
@@ -429,9 +450,9 @@ class Network(torch.nn.Module):
             for m in self.monitors:
                 self.monitors[m].record()
 
-        # Print power results
-        print("total_energy:", self.total_energy)
-        print("average_power:", self.average_power)
+        # # Print power results
+        # print("total_energy:", self.total_energy)
+        # print("average_power:", self.average_power)
 
         # Re-normalize connections.
         for c in self.connections:

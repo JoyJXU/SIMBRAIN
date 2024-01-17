@@ -26,6 +26,7 @@ SOFTWARE.
 
 import csv
 import os
+import matplotlib.pyplot as plt
 
 # Class with utility functions
 
@@ -43,42 +44,19 @@ class utility:
         utility.gpu = _gpu
         utility.par = _par
 
-    #############################################################
+    ############################################################
 
     # Level 1 debug messages
     def v_print_1(*args, **kwargs):
         if utility.verbosity >= 1:
             print(*args, **kwargs)
 
-    #############################################################
+    ############################################################
 
     # Level 2 debug messages
     def v_print_2(*args, **kwargs):
         if utility.verbosity >= 2:
             print(*args, **kwargs)
-
-    #############################################################
-
-    # calculate average of vector
-    def cal_average(num):
-        sum_num = 0
-        for t in num:
-            sum_num = sum_num + t
-
-        avg = sum_num / len(num)
-        return avg
-
-    #############################################################
-
-    # Compare and calculate error between values of two vectors
-    # Raise Exception if passes a delta
-    def compare(reference, modeled, delta):
-        error = reference - modeled
-        if any(abs(x) > delta for x in error):
-            print("Reference:\n", reference)
-            print("Modeled: \n", modeled)
-            raise Exception("Large error: \n", error)
-        return error
 
     #############################################################
 
@@ -90,17 +68,17 @@ class utility:
 
     #############################################################
 
-    def translate_input(input, scale):
-        # TODO translate a number to the resistance
-        r = input*scale
-        return r
-
-    #############################################################
-
-    def translate_output(input, scale):
-        # TODO translate current to number
-        num = input/scale
-        return num
+    # def translate_input(input, scale):
+    #     # TODO translate a number to the resistance
+    #     r = input*scale
+    #     return r
+    #
+    # #############################################################
+    #
+    # def translate_output(input, scale):
+    #     # TODO translate current to number
+    #     num = input/scale
+    #     return num
 
     #############################################################
 
@@ -125,3 +103,37 @@ class utility:
 
     def __str__(self):
         return (f"This is a utility class")
+
+
+    #############################################################
+
+    def plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error):
+        if figs is not None:
+            [ax, bx, cx, dx, ex, fx] = figs
+            ax.cla()
+            bx.cla()
+            cx.cla()
+            dx.cla()
+            ex.cla()
+            fx.cla()
+
+            ax.hist(vector.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+            ax.set_title('vector')
+            bx.hist(matrix.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+            bx.set_title('matrix')
+            cx.hist(golden_model.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+            cx.set_title('golden model')
+            dx.hist(cross.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+            dx.set_title('crossbar')
+            ex.hist(error.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+            ex.set_xlim([-0.2, 0.2])
+            ex.set_ylim([0, 1000])
+            ex.set_title('error')
+            fx.hist(relative_error.flatten().cpu(), bins=100, histtype="stepfilled", alpha=0.6)
+            fx.set_title('relative error')
+
+            file_name = "r" + str(vector.shape[1]) + "_c" + str(vector.shape[2])+".png"
+            plt.savefig(file_name, dpi=300, bbox_inches='tight')
+
+            plt.draw()
+            plt.pause(0.05)
