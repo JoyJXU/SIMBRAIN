@@ -27,7 +27,8 @@
         "SAF_ratio": 9,
         "SAF_delta": 0,
         "Aging_k_on":0,
-        "Aging_k_off":0
+        "Aging_k_off":0,
+        "mem_size":1e-4
     },
     "ferro":
     {
@@ -57,7 +58,8 @@
         "SAF_ratio": 9,
         "SAF_delta": 0,
         "Aging_k_on":0.5,
-        "Aging_k_off":0.5
+        "Aging_k_off":0.5,
+        "mem_size":1e-4
     },
     "hu":
     {

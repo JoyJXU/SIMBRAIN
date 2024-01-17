@@ -221,7 +221,7 @@ class MimoMapping(Mapping):
         assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
         self.set_batch_size(1)
-        self.mem_array.set_batch_size(batch_size=self.batch_size, mem_t=self.mem_t)
+        self.mem_array.set_batch_size(batch_size=self.batch_size)
         
     def mapping_write_mimo(self, target_x):
         # Memristor reset first

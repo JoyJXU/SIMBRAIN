@@ -74,9 +74,14 @@ class MemristorArray(torch.nn.Module):
         self.memristor_info_dict = memristor_info_dict
         self.dt = self.memristor_info_dict[self.device_name]['delta_t']
         self.batch_size = None
+        
+        relax_ratio = 1.25
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
+        length_row = shape[1] * relax_ratio * mem_size
+        length_col = shape[0] * relax_ratio * mem_size
 
-        self.power = Power(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict)
-        self.sim_power : dict = {}
+        self.power = Power(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=length_row, length_col=length_col)
+
         
 
     def set_batch_size(self, batch_size) -> None:
@@ -265,13 +270,6 @@ class MemristorArray(torch.nn.Module):
 
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
-
-        if self.memristor_device != 'trace':
-            #set_power_factor
-            self.power.mem_v = mem_v
-            self.power.mem_c = self.mem_c
-            self.power.mem_t = self.mem_t
-            self.power_energy()
         
         return self.mem_c
 
@@ -325,10 +323,3 @@ class MemristorArray(torch.nn.Module):
                 self.SAF1_mask += (~(self.SAF0_mask + self.SAF1_mask)) & \
                                   ((self.Q_mask >= ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio)) & (self.Q_mask < increase_ratio))
 
-    def power_energy(self):
-        self.power.arrayColSize = self.shape[1]
-        self.power.arrayRowSize = self.shape[0]
-    
-        self.power.totalEnergy() 
-
-        self.sim_power = self.power.sim_power
