@@ -191,6 +191,7 @@ class STDPMapping(Mapping):
         self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
 
 
+
 class MimoMapping(Mapping):
     # language=rst
     """

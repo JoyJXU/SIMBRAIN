@@ -94,7 +94,7 @@ class MemristorArray(torch.nn.Module):
         self.batch_size = batch_size
 
         self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
-        self.mem_c = torch.zeros(batch_size, *self.shape, device=self.mem_c.device)
+        self.mem_c = torch.ones(batch_size, *self.shape, device=self.mem_c.device) * self.memristor_info_dict[self.device_name]['G_on']
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
         self.mem_i = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_c.device)
 
@@ -203,7 +203,7 @@ class MemristorArray(torch.nn.Module):
         Aging_k_on = mem_info['Aging_k_on']
         Aging_k_off = mem_info['Aging_k_off']
 
-        self.mem_t += 1
+        self.mem_t += self.shape[1]
         mem_c_pre = self.mem_c.clone()
 
         if self.d2d_variation in [1, 3]:
@@ -327,3 +327,5 @@ class MemristorArray(torch.nn.Module):
                 self.SAF1_mask += (~(self.SAF0_mask + self.SAF1_mask)) & \
                                   ((self.Q_mask >= ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio)) & (self.Q_mask < increase_ratio))
 
+    def total_energy_calculation(self) -> None:
+        self.power.total_energy_calculation(mem_t=self.mem_t)
