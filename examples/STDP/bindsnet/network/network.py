@@ -366,10 +366,6 @@ class Network(torch.nn.Module):
         for l in self.layers:
             self.layers[l].update_SAF_mask()
 
-        # TODO: update SAF mask
-        for l in self.layers:
-            self.layers[l].update_SAF_mask()
-
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
 

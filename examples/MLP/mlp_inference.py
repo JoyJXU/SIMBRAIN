@@ -9,6 +9,7 @@ from torch.autograd import Variable
 
 import dataset
 import mlp
+from module import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
@@ -44,16 +45,20 @@ print("Running on Device = ", device)
 mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
               'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-              'aging_effect': args.aging_effect, 'processNode': args.processNode, 'batch_interval': None}
+              'aging_effect': args.aging_effect, 'processNode': args.processNode, 'batch_interval': 401}
 
 # Dataset prepare
 print('==> Preparing data..')
 test_loader = dataset.get(batch_size=args.batch_size, data_root=args.data_root, num_workers=1, train=False, val=True)
 
 # Network Model
-model = mlp.mlp_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=True)
-if gpu:
-    model.cuda()
+# model = mlp.mlp_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=True,)
+model = mlp.mem_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=True, mem_device=mem_device)
+# Memristor write
+for layer_name, layer in model.layers.items():
+    if isinstance(layer, Mem_Linear):
+        layer.mem_update()
+model.to(device)
 
 # Repeated Experiment
 out_root = 'MLP_inference_results.txt'
@@ -70,10 +75,9 @@ for test_cnt in range(args.rep):
     test_loss = 0
     correct = 0
     with torch.no_grad():
-        for data, target in test_loader:
+        for batch_idx, (data, target) in enumerate(test_loader):
             indx_target = target.clone()
-            if gpu:
-                data, target = data.cuda(), target.cuda()
+            data, target = data.to(device), target.to(device)
             output = model(data)
             pred = output.data.max(1)[1]  # get the index of the max log-probability
             correct += pred.cpu().eq(indx_target).sum()
