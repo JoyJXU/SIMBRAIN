@@ -105,7 +105,7 @@ class Power(torch.nn.Module):
                 self.static_write_energy += (torch.sum(self.selected_write_energy)+torch.sum(self.half_selected_write_energy))
         else:
             raise Exception("Only trace, mimo and crossbar architecture are supported!") 
-       
+        self.write_energy = self.dynamic_write_energy + self.static_write_energy
             
     def total_energy_calculation(self, mem_t) -> None:
         
