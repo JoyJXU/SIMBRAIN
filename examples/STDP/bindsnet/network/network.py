@@ -82,12 +82,12 @@ class Network(torch.nn.Module):
     """
 
     def __init__(
-        self,
-        dt: float = 1.0,
-        sim_params: dict = {},
-        batch_size: int = 1,
-        learning: bool = True,
-        reward_fn: Optional[Type[AbstractReward]] = None,
+            self,
+            dt: float = 1.0,
+            sim_params: dict = {},
+            batch_size: int = 1,
+            learning: bool = True,
+            reward_fn: Optional[Type[AbstractReward]] = None,
     ) -> None:
         # language=rst
         """
@@ -105,13 +105,6 @@ class Network(torch.nn.Module):
         self.dt = dt
         self.sim_params = sim_params
         self.batch_size = batch_size
-        
-
-        self.register_buffer("mem_current_step", torch.Tensor())
-        self.register_buffer("mem_step_matrix", torch.Tensor())
-        
-        self.mem_current_step = torch.zeros(self.batch_size, device=self.mem_current_step.device)
-        self.mem_step_matrix = torch.arange(self.batch_size, device=self.mem_current_step.device)
 
         self.layers = {}
         self.connections = {}
@@ -143,7 +136,7 @@ class Network(torch.nn.Module):
         layer.set_batch_size(self.batch_size)
 
     def add_connection(
-        self, connection: AbstractConnection, source: str, target: str
+            self, connection: AbstractConnection, source: str, target: str
     ) -> None:
         # language=rst
         """
@@ -259,7 +252,7 @@ class Network(torch.nn.Module):
         return inputs
 
     def run(
-        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, **kwargs
+            self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, **kwargs
     ) -> None:
         # language=rst
         """
@@ -321,8 +314,8 @@ class Network(torch.nn.Module):
         """
         # Check input type
         assert type(inputs) == dict, (
-            "'inputs' must be a dict of names of layers "
-            + f"(str) and relevant input tensors. Got {type(inputs).__name__} instead."
+                "'inputs' must be a dict of names of layers "
+                + f"(str) and relevant input tensors. Got {type(inputs).__name__} instead."
         )
         # Parse keyword arguments.
         clamps = kwargs.get("clamp", {})
@@ -355,8 +348,6 @@ class Network(torch.nn.Module):
 
                     for l in self.layers:
                         self.layers[l].set_batch_size(self.batch_size)
-                        self.mem_current_step = torch.zeros(self.batch_size, device=self.mem_current_step.device)
-                        self.mem_step_matrix = torch.arange(self.batch_size, device=self.mem_current_step.device)
 
                     for m in self.monitors:
                         self.monitors[m].reset_state_variables()
@@ -371,23 +362,12 @@ class Network(torch.nn.Module):
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
-            if self.learning:
-                if t == 0:
-                    self.mem_current_step = torch.max(self.mem_current_step[:]) + timesteps * self.mem_step_matrix + 1
-                else:
-                    self.mem_current_step += 1
-            else:
-                if t == 0:
-                    self.mem_current_step.fill_(torch.max(self.mem_current_step[:]))
-
             # Get input to all layers (synchronous mode).
             current_inputs = {}
             if not one_step:
                 current_inputs.update(self._get_inputs())
 
             for l in self.layers:
-                self.layers[l].mem_step = self.mem_current_step
-
                 # Update each layer of nodes.
                 if l in inputs:
                     if l in current_inputs:
@@ -403,11 +383,6 @@ class Network(torch.nn.Module):
                     self.layers[l].forward(x=current_inputs[l])
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
-                
-                # if (self.layers[l].traces and self.sim_params['device_name'] != 'trace' and self.learning):
-                    # self.total_energy += self.layers[l].transform.mem_array.power.total_Energy
-                    # self.average_power += self.layers[l].transform.mem_array.power.average_Powernergy
-                    # self.average_power += self.layers[l].transform.mem_array.power.average_Power
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
@@ -469,11 +444,10 @@ class Network(torch.nn.Module):
         for monitor in self.monitors:
             self.monitors[monitor].reset_state_variables()
             
-        
-        
+
     def mem_t_update(self) -> None:
         for l in self.layers:
-            if (self.layers[l].traces  and self.learning and self.sim_params['device_name'] != 'trace') :
+            if (self.layers[l].traces and self.learning and self.sim_params['device_name'] != 'trace'):
                 self.layers[l].transform.mem_t_update()
 
     def train(self, mode: bool = True) -> "torch.nn.Module":
