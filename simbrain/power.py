@@ -1,8 +1,12 @@
 import torch
 from typing import Iterable, Optional, Union
-import json
+import pickle
 
 class Power(torch.nn.Module):
+    # language=rst
+    """
+    Abstract base class for power estimation of memristor crossbar.
+    """
 
     def __init__(
         self,
@@ -13,16 +17,21 @@ class Power(torch.nn.Module):
         length_col: float = 0,
         **kwargs,
     ) -> None:
+        # language=rst
+        """
+        Abstract base class constructor.
 
+        :param sim_params: Memristor device to be used in learning.
+        :param shape: The dimensionality of the crossbar.
+        :param memristor_info_dict: The parameters of the memristor device.
+        :param length_row: The physical length of the horizontal wire in the crossbar.
+        :param length_col: The physical length of the vertical wire in the crossbar.
+        """
         super().__init__()
-        
-        with open('../../technology_info.json', 'r') as file:
-            self.tech_info_dict = json.load(file)  
     
         self.shape = shape    
         self.device_name = sim_params['device_name']
-        self.device_structure = sim_params['device_structure'] 
-        self.process_node = sim_params['process_node'] 
+        self.device_structure = sim_params['device_structure']
         self.average_power = 0
         self.total_energy = 0
         self.read_energy = 0
@@ -30,30 +39,20 @@ class Power(torch.nn.Module):
         self.dynamic_read_energy = 0
         self.dynamic_write_energy = 0
         self.static_read_energy = 0
-        self.static_write_energy = 0   
-        self.register_buffer("read_Isum", torch.Tensor()) 
+        self.static_write_energy = 0
         self.register_buffer("selected_write_energy", torch.Tensor())
-        self.register_buffer("half_selected_write_energy", torch.Tensor()) 
-        self.register_buffer("mem_v", torch.Tensor()) 
-        self.register_buffer("mem_v_read", torch.Tensor()) 
-        self.register_buffer("mem_c", torch.Tensor()) 
-        self.register_buffer("mem_c_pre", torch.Tensor()) 
+        self.register_buffer("half_selected_write_energy", torch.Tensor())
         
         self.wire_cap_row = length_row * 0.2e-15/1e-6
         self.wire_cap_col = length_col * 0.2e-15/1e-6
         self.dt = memristor_info_dict[self.device_name]['delta_t']
-        
-        relax_ratio = 1.25
-        mem_size = memristor_info_dict[self.device_name]['mem_size']
-        AR = self.tech_info_dict[str(self.process_node)]['AR']
-        Rho = self.tech_info_dict[str(self.process_node)]['Rho']
-        wire_resistance_unit = relax_ratio * mem_size * Rho / (AR * self.process_node * self.process_node * 1e-18)
-        self.total_wire_resistance = wire_resistance_unit * (torch.arange(1, self.shape[1] + 1, device=self.mem_c.device) + 
-                                                              torch.arange(self.shape[0], 0, -1, device=self.mem_c.device)[:, None])
     
         self.sim_power = {}
-        
 
+        with open('../../memristor_lut.pkl', 'rb') as f:
+            self.memristor_luts = pickle.load(f)
+        assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
+        
 
     def set_batch_size(self, batch_size) -> None:
         # language=rst
@@ -63,50 +62,80 @@ class Power(torch.nn.Module):
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
-
-        self.mem_c = torch.zeros(batch_size, *self.shape, device=self.mem_c.device)
-        self.mem_c_pre = torch.zeros(batch_size, *self.shape, device=self.mem_c_pre.device)
-        self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
-        self.mem_v_read = torch.zeros(batch_size, *(self.shape[0],), device=self.mem_v_read.device)
-        self.read_Isum = torch.zeros(batch_size, *self.shape, device=self.read_Isum.device)
-        self.selected_write_energy = torch.zeros(batch_size, *(1,self.shape[1]), device=self.selected_write_energy.device)
-        self.half_selected_write_energy = torch.zeros(batch_size, *self.shape, device=self.selected_write_energy.device)
-        self.total_wire_resistance = torch.stack([self.total_wire_resistance] * self.batch_size).cuda()
+        self.selected_write_energy = torch.zeros(batch_size, 1, self.shape[1], device=self.selected_write_energy.device)
+        self.half_selected_write_energy = torch.zeros(batch_size, *self.shape, device=self.half_selected_write_energy.device)
         
     
-    def read_energy_calculation(self, mem_v_read, mem_c) -> None:
-        
-        self.mem_v_read = mem_v_read
-        self.mem_c = mem_c
-        self.dynamic_read_energy += torch.sum(self.mem_v_read * self.mem_v_read * self.wire_cap_row)
-        self.read_Isum = self.mem_v_read[:, :, :, None]/(1/self.mem_c + self.total_wire_resistance)[:, None, :, :]
-        self.static_read_energy += torch.sum(self.read_Isum[:, :, :, :] * self.mem_v_read[:, :, :, None] * self.dt * 1/2)
+    def read_energy_calculation(self, mem_v_read, mem_i) -> None:
+        # language=rst
+        """
+        Calculate read energy for memrisotr crossbar. Called when the crossbar is read.
+
+        :param mem_v_read: Read voltage, shape [batchsize, read_no=1, crossbar_row].
+        :param mem_i: Read current of every memristor, shape [batchsize, read_no=1, crossbar_row, crossbar_col].
+        """
+        self.dynamic_read_energy += torch.sum(mem_v_read * mem_v_read * self.wire_cap_row)
+        self.static_read_energy += torch.sum(mem_i * mem_v_read[:, :, :, None] * self.dt * 1/2)
         self.read_energy = self.dynamic_read_energy + self.static_read_energy
 
 
-    def write_energy_calculation(self, mem_v, mem_c, mem_c_pre) -> None:
-        
-        self.mem_v = mem_v
-        self.mem_c = mem_c
-        self.mem_c_pre = mem_c_pre
-        
+    def write_energy_calculation(self, mem_v, mem_c, mem_c_pre, total_wire_resistance) -> None:
+        # language=rst
+        """
+        Calculate write energy for memrisotr crossbar. Called when the crossbar is wrote.
+
+        :param mem_v: Write voltage, shape [batchsize, crossbar_row, crossbar_col].
+        :param mem_c: Memristor crossbar conductance after write, shape [batchsize, crossbar_row, crossbar_col].
+        :param mem_c_pre: Memristor crossbar conductance before write, shape [batchsize, crossbar_row, crossbar_col].
+        :param total_wire_resistance: Wire resistance for every memristor in the crossbar, shape [batchsize, crossbar_row, crossbar_col].
+        """
         if self.device_structure == 'trace':
-            self.dynamic_write_energy += torch.sum(self.mem_v.squeeze() * self.mem_v.squeeze() * self.wire_cap_col)
-            self.selected_write_energy = self.mem_v * self.mem_v * 1/2 * self.dt /(1/2 * (self.mem_c + self.mem_c_pre) + self.total_wire_resistance)
+            mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
+            mem_r = mem_r + total_wire_resistance
+            mem_c = 1.0 / mem_r
+            self.selected_write_energy = mem_v * mem_v * 1 / 2 * self.dt * mem_c
             self.static_write_energy += torch.sum(self.selected_write_energy)
+
         elif self.device_structure in {'crossbar', 'mimo'}:
+            V_write = self.memristor_luts[self.device_name]['voltage']
+
+            # Col cap dynamic write energy
+            self.dynamic_write_energy += torch.sum((V_write - mem_v) * (V_write - mem_v) * self.wire_cap_col)
+
+            # Row cap dynamic write energy
+            # 1 selected using V_write; (self.shape[0] - 1) half selected using 1/2 V_write
+            self.dynamic_write_energy += self.shape[0] * V_write * V_write * self.wire_cap_row * (1 + 1 / 4 * (
+                        self.shape[0] - 1))
+
+            # static write energy
             for write_row in range(self.shape[0]):
-                self.dynamic_write_energy += torch.sum(self.mem_v[:,write_row,:] * self.mem_v[:,write_row,:] * self.wire_cap_col)
-                self.dynamic_write_energy += torch.sum(torch.max(self.mem_v[:,write_row,:], dim=1)[0] * torch.max(self.mem_v[:,write_row,:], dim=1)[0] * self.wire_cap_row * (1 + 1/4 * (self.shape[0] - 1)))
-                self.selected_write_energy = (self.mem_v[:,write_row,:] * self.mem_v[:,write_row,:] * 1/2 * self.dt /(1/2 * (self.mem_c[:,write_row,:] + self.mem_c_pre[:,write_row,:]) + self.total_wire_resistance[:,write_row,:])).unsqueeze(1)
-                half_selected_write_energy_pre = self.mem_v[:,0:write_row,:] * self.mem_v[:,0:write_row,:] * 1/2 * 1/2 * 1/2 * self.dt /(self.mem_c[:,0:write_row,:]+ self.total_wire_resistance[:,0:write_row,:])
-                half_selected_write_energy_post = self.mem_v[:,write_row+1:,:] * self.mem_v[:,write_row+1:,:] * 1/2 * 1/2 * 1/2 * self.dt /(self.mem_c_pre[:,write_row+1:,:] + self.total_wire_resistance[:,write_row+1:,:])
-                self.half_selected_write_energy = torch.cat([half_selected_write_energy_pre,torch.zeros_like(self.selected_write_energy), half_selected_write_energy_post], dim=1)
-                self.static_write_energy += (torch.sum(self.selected_write_energy)+torch.sum(self.half_selected_write_energy))
+                # Selected write energy
+                selected_mem_r = 1.0 / (1/2 * (mem_c[:, write_row, :] + mem_c_pre[:, write_row, :]))
+                selected_mem_r = selected_mem_r + total_wire_resistance[write_row, :].unsqueeze(0)
+                selected_mem_c = 1.0 / selected_mem_r
+                self.selected_write_energy = (mem_v[:, write_row, :] * mem_v[:, write_row, :] * 1/2 * self.dt * selected_mem_c).unsqueeze(1)
+
+                # half selected write energy
+                half_selected_mem_r = 1.0 / mem_c[:, 0:write_row, :]
+                half_selected_mem_r = half_selected_mem_r + total_wire_resistance[0:write_row, :].unsqueeze(0)
+                half_selected_mem_c = 1.0 / half_selected_mem_r
+                self.half_selected_write_energy[:, 0:write_row, :] = (1/2 * V_write) * (1/2 * V_write) * 1/2 * self.dt * half_selected_mem_c
+
+                self.half_selected_write_energy[:, write_row, :] = torch.zeros_like(self.selected_write_energy).squeeze(1)
+
+                half_selected_mem_r = 1.0 / mem_c_pre[:, write_row+1:, :]
+                half_selected_mem_r = half_selected_mem_r + total_wire_resistance[write_row+1:, :].unsqueeze(0)
+                half_selected_mem_c = 1.0 / half_selected_mem_r
+                self.half_selected_write_energy[:, write_row+1:, :] = (1 / 2 * V_write) * (1 / 2 * V_write) * 1/2 * self.dt * half_selected_mem_c
+
+                self.static_write_energy += torch.sum(self.selected_write_energy) + torch.sum(self.half_selected_write_energy)
+
         else:
-            raise Exception("Only trace, mimo and crossbar architecture are supported!") 
+            raise Exception("Only trace, mimo and crossbar architecture are supported!")
+
         self.write_energy = self.dynamic_write_energy + self.static_write_energy
-            
+
+
     def total_energy_calculation(self, mem_t) -> None:
         
         self.total_energy = self.read_energy + self.write_energy

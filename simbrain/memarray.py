@@ -1,7 +1,7 @@
 from typing import Iterable, Optional, Union
 from simbrain.power import Power
 import torch
-import numpy as np
+import json
 
 class MemristorArray(torch.nn.Module):
     # language=rst
@@ -20,7 +20,7 @@ class MemristorArray(torch.nn.Module):
         """
         Abstract base class constructor.
         :param sim_params: Memristor device to be used in learning.
-        :param shape: The dimensionality of the layer.
+        :param shape: The dimensionality of the crossbar.
         :param memristor_info_dict: The parameters of the memristor device.
         """
         super().__init__()
@@ -29,6 +29,8 @@ class MemristorArray(torch.nn.Module):
     
         self.register_buffer("mem_x", torch.Tensor())  # Memristor-based firing traces.
         self.register_buffer("mem_c", torch.Tensor())
+        self.register_buffer("mem_c_pre", torch.Tensor())
+        self.register_buffer("mem_i_matrix", torch.Tensor())
         self.register_buffer("mem_i", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
 
@@ -74,15 +76,25 @@ class MemristorArray(torch.nn.Module):
         self.memristor_info_dict = memristor_info_dict
         self.dt = self.memristor_info_dict[self.device_name]['delta_t']
         self.batch_size = None
-        
-        relax_ratio = 1.25
+
+        with open('../../technology_info.json', 'r') as file:
+            self.tech_info_dict = json.load(file)
+
+        self.process_node = sim_params['process_node']
+        relax_ratio = 1.25 # Leave space for adjacent memristors
         mem_size = self.memristor_info_dict[self.device_name]['mem_size']
         length_row = shape[1] * relax_ratio * mem_size
         length_col = shape[0] * relax_ratio * mem_size
+        AR = self.tech_info_dict[str(self.process_node)]['AR']
+        Rho = self.tech_info_dict[str(self.process_node)]['Rho']
+        wire_resistance_unit = relax_ratio * mem_size * Rho / (AR * self.process_node * self.process_node * 1e-18)
+        self.register_buffer("total_wire_resistance", torch.Tensor())
+        self.total_wire_resistance = wire_resistance_unit * (
+                    torch.arange(1, self.shape[1] + 1, device=self.total_wire_resistance.device) +
+                    torch.arange(self.shape[0], 0, -1, device=self.total_wire_resistance.device)[:, None])
 
         self.power = Power(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=length_row, length_col=length_col)
 
-        
 
     def set_batch_size(self, batch_size) -> None:
         # language=rst
@@ -94,9 +106,13 @@ class MemristorArray(torch.nn.Module):
         self.batch_size = batch_size
 
         self.mem_x = torch.zeros(batch_size, *self.shape, device=self.mem_x.device)
-        self.mem_c = torch.ones(batch_size, *self.shape, device=self.mem_c.device) * self.memristor_info_dict[self.device_name]['G_on']
+        self.mem_c = torch.ones(batch_size, *self.shape, device=self.mem_c.device) * \
+                     self.memristor_info_dict[self.device_name]['G_on']
+        self.mem_c_pre = torch.ones(batch_size, *self.shape, device=self.mem_c_pre.device) * \
+                     self.memristor_info_dict[self.device_name]['G_on']
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
-        self.mem_i = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_c.device)
+        self.mem_i = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_i.device)
+        self.mem_i_matrix = torch.zeros(batch_size, 1, *self.shape, device=self.mem_i_matrix.device)
 
         if self.c2c_variation:
             self.normal_relative = torch.zeros(batch_size, *self.shape, device=self.normal_relative.device)
@@ -175,7 +191,8 @@ class MemristorArray(torch.nn.Module):
             self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
 
         self.power.set_batch_size(batch_size=self.batch_size)
-    
+
+
     def memristor_write(self, mem_v: torch.Tensor, mem_t=None):
         # language=rst
         """
@@ -203,8 +220,8 @@ class MemristorArray(torch.nn.Module):
         Aging_k_on = mem_info['Aging_k_on']
         Aging_k_off = mem_info['Aging_k_off']
 
-        self.mem_t += self.shape[1]
-        mem_c_pre = self.mem_c.clone()
+        self.mem_t += self.shape[0]
+        self.mem_c_pre = self.mem_c.clone()
 
         if self.d2d_variation in [1, 3]:
             self.mem_x = torch.where(mem_v >= v_off, \
@@ -271,9 +288,10 @@ class MemristorArray(torch.nn.Module):
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
         
-        self.power.write_energy_calculation(mem_v=mem_v, mem_c=self.mem_c, mem_c_pre=mem_c_pre)
+        self.power.write_energy_calculation(mem_v=mem_v, mem_c=self.mem_c, mem_c_pre=self.mem_c_pre, total_wire_resistance=self.total_wire_resistance)
         
         return self.mem_c
+
 
     def memristor_read(self, mem_v: torch.Tensor): # TODO: Add Non-idealities
         # language=rst
@@ -289,15 +307,22 @@ class MemristorArray(torch.nn.Module):
         in_threshold = ((mem_v >= v_on) & (mem_v <= v_off)).all().item()
         assert in_threshold, "Read Voltage of the Memristor Array Exceeds the Threshold Voltage!"
 
+        # Take the wire resistance into account
+        mem_r = 1.0 / self.mem_c
+        mem_r = mem_r + self.total_wire_resistance.unsqueeze(0)
+        mem_c = 1.0 / mem_r
+
         # vector multiplication:
         # mem_v shape: [batchsize, read_no=1, array_row],
         # mem_array shape: [batchsize, array_row, array_column],
         # output_i shape: [batchsize, read_no=1, array_column]
-        self.mem_i = torch.matmul(mem_v, self.mem_c)
+        # self.mem_i = torch.matmul(mem_v, mem_c)
+        self.mem_i_matrix = mem_v[:, :, :, None] * mem_c[:, None, :, :]
+        self.mem_i = torch.sum(self.mem_i_matrix, dim=2)
 
         self.mem_t += 1
         
-        self.power.read_energy_calculation(mem_v_read=mem_v, mem_c=self.mem_c)
+        self.power.read_energy_calculation(mem_v_read=mem_v, mem_i=self.mem_i_matrix)
 
         return self.mem_i
 
@@ -309,6 +334,7 @@ class MemristorArray(torch.nn.Module):
         elif self.aging_effect == 2: #equation 2: G=k*t+G_0
             self.Gon_aging = k_on * self.mem_t * self.dt + self.Gon_0
             self.Goff_aging = k_off * self.mem_t * self.dt + self.Goff_0
+
 
     def update_SAF_mask(self) -> None:
         if self.stuck_at_fault:
@@ -326,6 +352,7 @@ class MemristorArray(torch.nn.Module):
                 self.SAF0_mask += (~(self.SAF0_mask + self.SAF1_mask)) & (self.Q_mask < ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio))
                 self.SAF1_mask += (~(self.SAF0_mask + self.SAF1_mask)) & \
                                   ((self.Q_mask >= ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio)) & (self.Q_mask < increase_ratio))
+
 
     def total_energy_calculation(self) -> None:
         self.power.total_energy_calculation(mem_t=self.mem_t)

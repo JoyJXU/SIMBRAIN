@@ -105,7 +105,6 @@ class Network(torch.nn.Module):
         self.dt = dt
         self.sim_params = sim_params
         self.batch_size = batch_size
-        
 
         self.layers = {}
         self.connections = {}
@@ -136,6 +135,7 @@ class Network(torch.nn.Module):
         layer.compute_decays(self.dt)
         layer.set_batch_size(self.batch_size)
 
+
     def add_connection(
         self, connection: AbstractConnection, source: str, target: str
     ) -> None:
@@ -153,6 +153,7 @@ class Network(torch.nn.Module):
         connection.dt = self.dt
         connection.train(self.learning)
 
+
     def add_monitor(self, monitor: AbstractMonitor, name: str) -> None:
         # language=rst
         """
@@ -164,6 +165,7 @@ class Network(torch.nn.Module):
         self.monitors[name] = monitor
         monitor.network = self
         monitor.dt = self.dt
+
 
     def save(self, file_name: str) -> None:
         # language=rst
@@ -200,6 +202,7 @@ class Network(torch.nn.Module):
         """
         torch.save(self, open(file_name, "wb"))
 
+
     def clone(self) -> "Network":
         # language=rst
         """
@@ -211,6 +214,7 @@ class Network(torch.nn.Module):
         torch.save(self, virtual_file)
         virtual_file.seek(0)
         return torch.load(virtual_file)
+
 
     def _get_inputs(self, layers: Iterable = None) -> Dict[str, torch.Tensor]:
         # language=rst
@@ -251,6 +255,7 @@ class Network(torch.nn.Module):
                     inputs[c[1]] += self.connections[c].compute(source.s)
 
         return inputs
+
 
     def run(
         self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, **kwargs
@@ -352,11 +357,11 @@ class Network(torch.nn.Module):
 
                 break
 
-
-        # TODO: update SAF mask
+        # Update SAF mask
         for l in self.layers:
             self.layers[l].update_SAF_mask()
 
+        # Print power results
         if (self.sim_params['device_name'] != 'trace' and self.learning):            
             self.total_energy = 0
             self.average_power = 0
@@ -368,13 +373,11 @@ class Network(torch.nn.Module):
             print("total_energy=", self.total_energy)
             print("average_power=", self.average_power)
                 
-                
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
-
             # Get input to all layers (synchronous mode).
             current_inputs = {}
             if not one_step:
@@ -397,7 +400,6 @@ class Network(torch.nn.Module):
                     self.layers[l].forward(x=current_inputs[l])
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
-
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
@@ -436,10 +438,10 @@ class Network(torch.nn.Module):
             for m in self.monitors:
                 self.monitors[m].record()
 
-
         # Re-normalize connections.
         for c in self.connections:
             self.connections[c].normalize()
+
 
     def reset_state_variables(self) -> None:
         # language=rst
@@ -455,13 +457,13 @@ class Network(torch.nn.Module):
 
         for monitor in self.monitors:
             self.monitors[monitor].reset_state_variables()
-            
-        
+
         
     def mem_t_update(self) -> None:
         for l in self.layers:
-            if (self.layers[l].traces  and self.learning and self.sim_params['device_name'] != 'trace') :
+            if self.layers[l].traces and self.learning and self.sim_params['device_name'] != 'trace':
                 self.layers[l].transform.mem_t_update()
+
 
     def train(self, mode: bool = True) -> "torch.nn.Module":
         # language=rst
