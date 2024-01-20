@@ -136,7 +136,7 @@ class STDPMapping(Mapping):
         self.mem_v[self.mem_v == 0] = self.vneg
         self.mem_v[self.mem_v == 1] = self.vpos      
 
-        mem_c = self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)
+        mem_c = self.mem_array.memristor_write(mem_v=self.mem_v)
         
         # mem to nn
         self.x = (mem_c - self.Gon) * self.trans_ratio
@@ -184,12 +184,11 @@ class STDPMapping(Mapping):
         self.mem_v.fill_(-self.vpos)
         
         # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)
+        self.mem_array.memristor_write(mem_v=self.mem_v)
 
 
     def mem_t_update(self) -> None:
         self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
-
 
 
 class MimoMapping(Mapping):
@@ -236,7 +235,7 @@ class MimoMapping(Mapping):
         # Memristor reset first
         self.mem_v.fill_(-100)  # TODO: check the reset voltage
         # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_write(mem_v=self.mem_v)
+        self.mem_array.memristor_reset(mem_v=self.mem_v)
 
         # Vector to Pulse Serial
         self.write_pulse_no = self.m2v(target_x)
@@ -296,7 +295,7 @@ class MimoMapping(Mapping):
         self.mem_v.fill_(-100)
         
         # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)
+        self.mem_array.memristor_reset(mem_v=self.mem_v)
 
 
     def mem_t_update(self) -> None:

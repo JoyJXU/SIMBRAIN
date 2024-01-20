@@ -36,10 +36,13 @@ class Power(torch.nn.Module):
         self.total_energy = 0
         self.read_energy = 0
         self.write_energy = 0
+        self.reset_energy = 0
         self.dynamic_read_energy = 0
         self.dynamic_write_energy = 0
+        self.dynamic_reset_energy = 0
         self.static_read_energy = 0
         self.static_write_energy = 0
+        self.static_reset_energy = 0
         self.register_buffer("selected_write_energy", torch.Tensor())
         self.register_buffer("half_selected_write_energy", torch.Tensor())
         
@@ -90,8 +93,12 @@ class Power(torch.nn.Module):
         :param total_wire_resistance: Wire resistance for every memristor in the crossbar, shape [batchsize, crossbar_row, crossbar_col].
         """
         if self.device_structure == 'trace':
+            # Dynamic write energy
+            self.dynamic_write_energy += torch.sum(mem_v * mem_v * self.wire_cap_col)
+
+            # Static write energy
             mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
-            mem_r = mem_r + total_wire_resistance
+            mem_r = mem_r + total_wire_resistance.unsqueeze(0)
             mem_c = 1.0 / mem_r
             self.selected_write_energy = mem_v * mem_v * 1 / 2 * self.dt * mem_c
             self.static_write_energy += torch.sum(self.selected_write_energy)
@@ -136,11 +143,52 @@ class Power(torch.nn.Module):
         self.write_energy = self.dynamic_write_energy + self.static_write_energy
 
 
+    def reset_energy_calculation(self, mem_v, mem_c, mem_c_pre, total_wire_resistance) -> None:
+        # language=rst
+        """
+        Calculate reset energy for memrisotr crossbar. Called when the crossbar is reset.
+
+        :param mem_v: Reset voltage, shape [batchsize, crossbar_row, crossbar_col].
+        :param mem_c: Memristor crossbar conductance after reset, shape [batchsize, crossbar_row, crossbar_col].
+        :param mem_c_pre: Memristor crossbar conductance before reset, shape [batchsize, crossbar_row, crossbar_col].
+        :param total_wire_resistance: Wire resistance for every memristor in the crossbar, shape [batchsize, crossbar_row, crossbar_col].
+        """
+        if self.device_structure == 'trace':
+            raise Exception("In the trace architecture, mem_write is used instead of mem_reset!")
+
+        elif self.device_structure in {'crossbar', 'mimo'}:
+            # Dynamic reset energy
+            self.dynamic_reset_energy += torch.sum(mem_v[:, 0, :] * mem_v[:, 0, :] * self.wire_cap_col)
+
+            # Static write energy
+            mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
+            mem_r = mem_r + total_wire_resistance.unsqueeze(0)
+            mem_c = 1.0 / mem_r
+            self.static_reset_energy += torch.sum(mem_v * mem_v * 1 / 2 * self.dt * mem_c)
+
+        else:
+            raise Exception("Only trace, mimo and crossbar architecture are supported!")
+
+        self.reset_energy = self.dynamic_reset_energy + self.static_reset_energy
+
+
     def total_energy_calculation(self, mem_t) -> None:
-        
-        self.total_energy = self.read_energy + self.write_energy
+        # language=rst
+        """
+        Calculate total energy for memrisotr crossbar. Called when power is reported.
+
+        :param mem_t: Time of the memristor crossbar.
+        """
+        self.total_energy = self.read_energy + self.write_energy + self.reset_energy
         self.average_power = self.total_energy / (torch.max(mem_t) * self.dt)
-        self.sim_power = {'dynamic_read_energy': self.dynamic_read_energy, 'dynamic_write_energy': self.dynamic_write_energy,
-                 'static_read_energy': self.static_read_energy, 'static_write_energy': self.static_write_energy,
-                 'read_energy':self.read_energy, 'write_energy': self.write_energy,
-                 'total_energy':self.total_energy, 'average_power':self.average_power}        
+        self.sim_power = {'dynamic_read_energy': self.dynamic_read_energy,
+                          'dynamic_write_energy': self.dynamic_write_energy,
+                          'dynamic_reset_energy': self.dynamic_reset_energy,
+                          'static_read_energy': self.static_read_energy,
+                          'static_write_energy': self.static_write_energy,
+                          'static_reset_energy': self.static_reset_energy,
+                          'read_energy': self.read_energy,
+                          'write_energy': self.write_energy,
+                          'reset_energy': self.reset_energy,
+                          'total_energy': self.total_energy,
+                          'average_power': self.average_power}

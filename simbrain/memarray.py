@@ -193,13 +193,12 @@ class MemristorArray(torch.nn.Module):
         self.power.set_batch_size(batch_size=self.batch_size)
 
 
-    def memristor_write(self, mem_v: torch.Tensor, mem_t=None):
+    def memristor_write(self, mem_v: torch.Tensor):
         # language=rst
         """
         Memristor write operation for a single simulation step.
     
         :param mem_v: Voltage inputs to the memristor array.
-        :param mem_t: Real-time simulation time of the memristor array.
         """
 
         mem_info = self.memristor_info_dict[self.device_name]
@@ -325,6 +324,107 @@ class MemristorArray(torch.nn.Module):
         self.power.read_energy_calculation(mem_v_read=mem_v, mem_i=self.mem_i_matrix)
 
         return self.mem_i
+
+    def memristor_reset(self, mem_v: torch.Tensor):
+        # language=rst
+        """
+        Memristor reset operation for a single simulation step.
+
+        :param mem_v: Voltage inputs to the memristor array.
+        """
+
+        mem_info = self.memristor_info_dict[self.device_name]
+        k_off = mem_info['k_off']
+        k_on = mem_info['k_on']
+        v_off = mem_info['v_off']
+        v_on = mem_info['v_on']
+        alpha_off = mem_info['alpha_off']
+        alpha_on = mem_info['alpha_on']
+        P_off = mem_info['P_off']
+        P_on = mem_info['P_on']
+        G_off = mem_info['G_off']
+        G_on = mem_info['G_on']
+        sigma_relative = mem_info['sigma_relative']
+        sigma_absolute = mem_info['sigma_absolute']
+        retention_loss_tau = mem_info['retention_loss_tau']
+        retention_loss_beta = mem_info['retention_loss_beta']
+        Aging_k_on = mem_info['Aging_k_on']
+        Aging_k_off = mem_info['Aging_k_off']
+
+        self.mem_t += 1
+        self.mem_c_pre = self.mem_c.clone()
+
+        if self.d2d_variation in [1, 3]:
+            self.mem_x = torch.where(mem_v >= v_off, \
+                                     self.mem_x + self.dt * (k_off * (mem_v / v_off - 1) ** alpha_off) * ( \
+                                                 1 - self.mem_x) ** self.Poff_d2d, self.mem_x)
+
+            self.mem_x = torch.where(mem_v <= v_on, \
+                                     self.mem_x + self.dt * (k_on * (mem_v / v_on - 1) ** alpha_on) * ( \
+                                         self.mem_x) ** self.Pon_d2d, self.mem_x)
+
+        else:
+            self.mem_x = torch.where(mem_v >= v_off, \
+                                     self.mem_x + self.dt * (k_off * (mem_v / v_off - 1) ** alpha_off) * ( \
+                                                 1 - self.mem_x) ** P_off, self.mem_x)
+
+            self.mem_x = torch.where(mem_v <= v_on, \
+                                     self.mem_x + self.dt * (k_on * (mem_v / v_on - 1) ** alpha_on) * ( \
+                                         self.mem_x) ** P_on, self.mem_x)
+
+        self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
+
+        # Retention Loss
+        if self.retention_loss == 1:
+            # G(t) = G(0) * e^(- t*tau)^beta
+            self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
+            self.mem_x *= torch.exp(torch.tensor(-(1 / 2 * self.dt * retention_loss_tau) ** retention_loss_beta))
+            self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
+            self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
+            # tau = 0.012478 , beta = 1.066  or  tau = 0.01245 , beta = 1.073
+
+        if self.retention_loss == 2:
+            # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)
+            self.mem_v_threshold = torch.where((mem_v > v_on) & (mem_v < v_off), torch.zeros_like(mem_v),
+                                               torch.ones_like(mem_v))
+            self.mem_loss_time[self.mem_v_threshold == 0] += 2 * self.dt
+            self.mem_loss_time[self.mem_v_threshold == 1] = 0
+            self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
+            self.mem_x -= self.mem_x * self.dt * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (
+                        retention_loss_beta - 1)
+            self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
+            self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
+
+        if self.c2c_variation:
+            self.normal_relative.normal_(mean=0., std=sigma_relative)
+            self.normal_absolute.normal_(mean=0., std=sigma_absolute)
+
+            device_v = torch.mul(self.mem_x, self.normal_relative) + self.normal_absolute
+            self.x2 = self.mem_x + device_v
+
+            self.x2 = torch.clamp(self.x2, min=0, max=1)
+
+        else:
+            self.x2 = self.mem_x
+
+        if self.stuck_at_fault:
+            self.x2.masked_fill_(self.SAF0_mask, 0)
+            self.x2.masked_fill_(self.SAF1_mask, 1)
+
+        if self.aging_effect:
+            self.cal_Gon_Goff(Aging_k_on, Aging_k_off)
+            self.mem_c = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
+
+        elif self.d2d_variation in [1, 2]:
+            self.mem_c = self.Goff_d2d * self.x2 + self.Gon_d2d * (1 - self.x2)
+
+        else:
+            self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
+
+        self.power.reset_energy_calculation(mem_v=mem_v, mem_c=self.mem_c, mem_c_pre=self.mem_c_pre,
+                                            total_wire_resistance=self.total_wire_resistance)
+
+        return self.mem_c
 
 
     def cal_Gon_Goff(self, k_on, k_off) -> None:
