@@ -362,7 +362,7 @@ class Network(torch.nn.Module):
             self.layers[l].update_SAF_mask()
 
         # Print power results
-        if (self.sim_params['device_name'] != 'trace' and self.learning):            
+        if (self.sim_params['device_name'] != 'trace' and self.learning):
             self.total_energy = 0
             self.average_power = 0
             for l in self.layers:
@@ -372,19 +372,27 @@ class Network(torch.nn.Module):
                 self.average_power += self.sim_power['average_power']
             print("total_energy=", self.total_energy)
             print("average_power=", self.average_power)
-                
+
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
+            if self.learning:
+                if t == 0:
+                    self.mem_current_step = torch.max(self.mem_current_step[:]) + timesteps * self.mem_step_matrix + 1
+                else:
+                    self.mem_current_step += 1
+            else:
+                if t == 0:
+                    self.mem_current_step.fill_(torch.max(self.mem_current_step[:]))
+
             # Get input to all layers (synchronous mode).
             current_inputs = {}
             if not one_step:
                 current_inputs.update(self._get_inputs())
 
             for l in self.layers:
-
                 # Update each layer of nodes.
                 if l in inputs:
                     if l in current_inputs:
