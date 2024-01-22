@@ -378,15 +378,6 @@ class Network(torch.nn.Module):
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
-            if self.learning:
-                if t == 0:
-                    self.mem_current_step = torch.max(self.mem_current_step[:]) + timesteps * self.mem_step_matrix + 1
-                else:
-                    self.mem_current_step += 1
-            else:
-                if t == 0:
-                    self.mem_current_step.fill_(torch.max(self.mem_current_step[:]))
-
             # Get input to all layers (synchronous mode).
             current_inputs = {}
             if not one_step:
