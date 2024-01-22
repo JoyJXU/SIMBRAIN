@@ -352,6 +352,9 @@ class Network(torch.nn.Module):
                 if inputs[key].size(1) != self.batch_size:
                     self.batch_size = inputs[key].size(1)
 
+                    for l in self.layers:
+                        self.layers[l].set_batch_size(self.batch_size)
+
                     for m in self.monitors:
                         self.monitors[m].reset_state_variables()
 
