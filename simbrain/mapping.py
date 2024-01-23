@@ -325,6 +325,7 @@ class MLPMapping(Mapping):
             shape=shape
         )
 
+        self.register_buffer("norm_ratio", torch.Tensor())
         self.register_buffer("write_pulse_no", torch.Tensor())
         self.write_pulse_no = torch.zeros(*self.shape, device=self.mem_v.device)
 
@@ -336,6 +337,7 @@ class MLPMapping(Mapping):
 
     def set_batch_size_mlp(self, batch_size) -> None:
         self.set_batch_size(batch_size)
+        self.norm_ratio = torch.zeros(batch_size, device=self.norm_ratio.device)
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
         self.mem_array.mem_t = self.mem_t
@@ -344,10 +346,12 @@ class MLPMapping(Mapping):
         # Memristor reset first
         self.mem_v.fill_(-100)  # TODO: check the reset voltage
         # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_write(mem_v=self.mem_v)
+        self.mem_array.memristor_reset(mem_v=self.mem_v)
 
         # Vector to Pulse Serial
-        self.write_pulse_no = self.m2v(target_x)
+        # Transform target_x to [0, 1]
+        self.norm_ratio = torch.max(target_x.reshape(target_x.shape[0], -1), dim=1)[0]
+        self.write_pulse_no = self.m2v(target_x / self.norm_ratio)
         total_wr_cycle = self.memristor_luts[self.device_name]['total_no']
         write_voltage = self.memristor_luts[self.device_name]['voltage']
 
@@ -370,10 +374,10 @@ class MLPMapping(Mapping):
         v_thre = v_thre / v_ratio
         v_read = target_v * v_thre
 
-        mem_i = self.mem_array.memristor_read(mem_v=v_read)
+        mem_i = self.mem_array.memristor_read(mem_v=v_read.unsqueeze(0))
 
         # Current to results
-        self.mem_x_read = self.trans_ratio * (
+        self.mem_x_read = self.norm_ratio * self.trans_ratio * (
                 mem_i / v_thre - torch.matmul(target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon))
 
         return self.mem_x_read.squeeze(0)

@@ -65,7 +65,7 @@ class Power(torch.nn.Module):
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
-        self.selected_write_energy = torch.zeros(batch_size, 1, self.shape[1], device=self.selected_write_energy.device)
+        self.selected_write_energy = torch.zeros(batch_size, *self.shape, device=self.selected_write_energy.device)
         self.half_selected_write_energy = torch.zeros(batch_size, *self.shape, device=self.half_selected_write_energy.device)
         
     
@@ -115,27 +115,49 @@ class Power(torch.nn.Module):
                         self.shape[0] - 1))
 
             # static write energy
-            for write_row in range(self.shape[0]):
-                # Selected write energy
-                selected_mem_r = 1.0 / (1/2 * (mem_c[:, write_row, :] + mem_c_pre[:, write_row, :]))
-                selected_mem_r = selected_mem_r + total_wire_resistance[write_row, :].unsqueeze(0)
-                selected_mem_c = 1.0 / selected_mem_r
-                self.selected_write_energy = (mem_v[:, write_row, :] * mem_v[:, write_row, :] * 1/2 * self.dt * selected_mem_c).unsqueeze(1)
+            # Seleceted write energy
+            selected_mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
+            selected_mem_r = selected_mem_r + total_wire_resistance.unsqueeze(0)
+            selected_mem_c = 1.0 / selected_mem_r
+            self.selected_write_energy = (mem_v * mem_v * 1 / 2 * self.dt * selected_mem_c)
 
-                # half selected write energy
-                half_selected_mem_r = 1.0 / mem_c[:, 0:write_row, :]
-                half_selected_mem_r = half_selected_mem_r + total_wire_resistance[0:write_row, :].unsqueeze(0)
-                half_selected_mem_c = 1.0 / half_selected_mem_r
-                self.half_selected_write_energy[:, 0:write_row, :] = (1/2 * V_write) * (1/2 * V_write) * 1/2 * self.dt * half_selected_mem_c
+            # half selected write energy
+            r_after = 1.0 / mem_c
+            r_after = r_after + total_wire_resistance.unsqueeze(0)
+            c_after = 1.0 / r_after
 
-                self.half_selected_write_energy[:, write_row, :] = torch.zeros_like(self.selected_write_energy).squeeze(1)
+            r_pre = 1.0 / mem_c_pre
+            r_pre = r_pre + total_wire_resistance.unsqueeze(0)
+            c_pre = 1.0 / r_pre
 
-                half_selected_mem_r = 1.0 / mem_c_pre[:, write_row+1:, :]
-                half_selected_mem_r = half_selected_mem_r + total_wire_resistance[write_row+1:, :].unsqueeze(0)
-                half_selected_mem_c = 1.0 / half_selected_mem_r
-                self.half_selected_write_energy[:, write_row+1:, :] = (1 / 2 * V_write) * (1 / 2 * V_write) * 1/2 * self.dt * half_selected_mem_c
+            counter = torch.arange(self.shape[0], device=self.selected_write_energy.device)
+            self.half_selected_write_energy = (1 / 2 * V_write) * (1 / 2 * V_write) * 1 / 2 * self.dt * (
+                        counter[None, :, None] * c_pre + counter.flip(0)[None, :, None] * c_after)
 
-                self.static_write_energy += torch.sum(self.selected_write_energy) + torch.sum(self.half_selected_write_energy)
+            self.static_write_energy += torch.sum(self.selected_write_energy) + torch.sum(self.half_selected_write_energy)
+
+            # # static write energy
+            # for write_row in range(self.shape[0]):
+                # # Selected write energy
+                # selected_mem_r = 1.0 / (1/2 * (mem_c[:, write_row, :] + mem_c_pre[:, write_row, :]))
+                # selected_mem_r = selected_mem_r + total_wire_resistance[write_row, :].unsqueeze(0)
+                # selected_mem_c = 1.0 / selected_mem_r
+                # self.selected_write_energy = (mem_v[:, write_row, :] * mem_v[:, write_row, :] * 1/2 * self.dt * selected_mem_c).unsqueeze(1)
+
+                # # half selected write energy
+                # self.half_selected_write_energy.zero_()
+                #
+                # half_selected_mem_r = 1.0 / mem_c[:, 0:write_row, :]
+                # half_selected_mem_r = half_selected_mem_r + total_wire_resistance[0:write_row, :].unsqueeze(0)
+                # half_selected_mem_c = 1.0 / half_selected_mem_r
+                # self.half_selected_write_energy[:, 0:write_row, :] = (1/2 * V_write) * (1/2 * V_write) * 1/2 * self.dt * half_selected_mem_c
+                #
+                # half_selected_mem_r = 1.0 / mem_c_pre[:, write_row+1:, :]
+                # half_selected_mem_r = half_selected_mem_r + total_wire_resistance[write_row+1:, :].unsqueeze(0)
+                # half_selected_mem_c = 1.0 / half_selected_mem_r
+                # self.half_selected_write_energy[:, write_row+1:, :] = (1 / 2 * V_write) * (1 / 2 * V_write) * 1/2 * self.dt * half_selected_mem_c
+                #
+                # self.static_write_energy += torch.sum(self.selected_write_energy) + torch.sum(self.half_selected_write_energy)
 
         else:
             raise Exception("Only trace, mimo and crossbar architecture are supported!")

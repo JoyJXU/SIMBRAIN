@@ -24,7 +24,7 @@ parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variatio
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
-parser.add_argument("--processNode", type=int, default=32)
+parser.add_argument("--process_node", type=int, default=10000)
 args = parser.parse_args()
 
 # Sets up Gpu use
@@ -45,7 +45,7 @@ print("Running on Device = ", device)
 mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
               'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-              'aging_effect': args.aging_effect, 'processNode': args.processNode, 'batch_interval': 401}
+              'aging_effect': args.aging_effect, 'process_node': args.process_node, 'batch_interval': 100}
 
 # Dataset prepare
 print('==> Preparing data..')
@@ -55,12 +55,33 @@ test_loader = dataset.get(batch_size=args.batch_size, data_root=args.data_root, 
 # model = mlp.mlp_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=True,)
 model = mlp.mem_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=True, mem_device=mem_device)
 # Memristor write
+print('==> Write Memristor..')
+start_time = time.time()
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
         layer.mem_update()
+end_time = time.time()
+exe_time = end_time - start_time
+print("Execution time: ", exe_time)
+
+# print write power results
+total_energy = 0
+average_power = 0
+for layer_name, layer in model.layers.items():
+    if isinstance(layer, Mem_Linear):
+        layer.crossbar_pos.mem_array.total_energy_calculation()
+        layer.crossbar_neg.mem_array.total_energy_calculation()
+        sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
+        sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
+        total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
+        average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+print("\ttotal_write_energy=", total_energy)
+print("\taverage_write_power=", average_power)
+
 model.to(device)
 
 # Repeated Experiment
+print('==> Read Memristor..')
 out_root = 'MLP_inference_results.txt'
 for test_cnt in range(args.rep):
     # Reset Dataset
@@ -84,6 +105,20 @@ for test_cnt in range(args.rep):
 
     acc = 100. * correct / len(test_loader.dataset)
     print('\tTest Accuracy: {}/{} ({:.0f}%)'.format(correct, len(test_loader.dataset), acc))
+
+    # print power results
+    total_energy = 0
+    average_power = 0
+    for layer_name, layer in model.layers.items():
+        if isinstance(layer, Mem_Linear):
+            layer.crossbar_pos.mem_array.total_energy_calculation()
+            layer.crossbar_neg.mem_array.total_energy_calculation()
+            sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
+            sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
+            total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
+            average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+    print("\ttotal_energy=", total_energy)
+    print("\taverage_power=", average_power)
 
     out_txt = 'Accuracy:' + str(acc) + '\n'
     out.write(out_txt)

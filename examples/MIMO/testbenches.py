@@ -503,7 +503,7 @@ def run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows
             print("<==============>")
 
             utility.plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error)
-            print('Visualization Dome')
+            print('Visualization Done')
             print("<==============>")
 
             # data = [str(_var_abs), str(_var_rel)]
