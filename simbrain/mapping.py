@@ -338,6 +338,8 @@ class MLPMapping(Mapping):
     def set_batch_size_mlp(self, batch_size) -> None:
         self.set_batch_size(batch_size)
         self.norm_ratio = torch.zeros(batch_size, device=self.norm_ratio.device)
+        # TODO: For MLP, batch_interval consist of reset + write + read?
+        self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
         self.mem_array.mem_t = self.mem_t

@@ -10,28 +10,39 @@ from torch.autograd import Variable
 
 import dataset
 import mlp
+from module import *
 
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('--wd', type=float, default=0.0001, help='weight decay')
-parser.add_argument('--batch_size', type=int, default=200, help='input batch size for training (default: 64)')
+parser.add_argument('--batch_size', type=int, default=1000, help='input batch size for training (default: 64)')
 parser.add_argument('--epochs', type=int, default=40, help='number of epochs to train (default: 10)')
 parser.add_argument('--lr', type=float, default=0.01, help='learning rate (default: 1e-3)')
-parser.add_argument('--gpu', default=None, help='index of gpus to use')
-parser.add_argument('--ngpu', type=int, default=1, help='number of gpus to use')
+parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument('--seed', type=int, default=117, help='random seed (default: 1)')
-parser.add_argument('--log_interval', type=int, default=100,  help='how many batches to wait before logging training status')
+parser.add_argument('--log_interval', type=int, default=10,  help='how many batches to wait before logging training status')
 parser.add_argument('--test_interval', type=int, default=5,  help='how many epochs to wait before another test')
 parser.add_argument('--logdir', default='log/default', help='folder to save to the log')
-parser.add_argument('--data_root', default='/tmp/public_dataset/pytorch/', help='folder to save the model')
+parser.add_argument('--data_root', default='data/', help='folder to save the model')
 parser.add_argument('--decreasing_lr', default='80,120', help='decreasing strategy')
+parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
+parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
+parser.add_argument("--c2c_variation", type=bool, default=False)
+parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
+parser.add_argument("--stuck_at_fault", type=bool, default=False)
+parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
+parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
+parser.add_argument("--process_node", type=int, default=10000)
 args = parser.parse_args()
 args.logdir = os.path.join(os.path.dirname(__file__), args.logdir)
 misc.logger.init(args.logdir, 'train_log')
 print = misc.logger.info
 
-# select gpu
-args.gpu = misc.auto_select_gpu(utility_bound=0, num_gpu=args.ngpu, selected_gpus=args.gpu)
-args.ngpu = len(args.gpu)
+
+# Mem device setup
+mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
+              'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
+              'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
+              'aging_effect': args.aging_effect, 'process_node': args.process_node, 'batch_interval': 1}
 
 # logger
 misc.ensure_dir(args.logdir)
@@ -40,20 +51,33 @@ for k, v in args.__dict__.items():
     print('{}: {}'.format(k, v))
 print("========================================")
 
-# seed
-args.cuda = torch.cuda.is_available()
-torch.manual_seed(args.seed)
-if args.cuda:
-    torch.cuda.manual_seed(args.seed)
+# Sets up Gpu use
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+seed = args.seed
+gpu = args.gpu
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if gpu and torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
+else:
+    torch.manual_seed(seed)
+    device = "cpu"
+    if gpu:
+        gpu = False
+print("Running on Device = " + str(device))
 
 # data loader
 train_loader, test_loader = dataset.get(batch_size=args.batch_size, data_root=args.data_root, num_workers=1)
 
 # model
-model = model.mnist(input_dims=784, n_hiddens=[256, 256], n_class=10)
-model = torch.nn.DataParallel(model, device_ids= range(args.ngpu))
-if args.cuda:
-    model.cuda()
+# model = mlp.mlp_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=False)
+model = mlp.mem_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=False, mem_device=mem_device)
+model.to(device)
+
+# Memristor write
+for layer_name, layer in model.layers.items():
+    if isinstance(layer, Mem_Linear):
+        layer.mem_update()
+
 
 # optimizer
 optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=0.9)
@@ -69,15 +93,21 @@ try:
             optimizer.param_groups[0]['lr'] *= 0.1
         for batch_idx, (data, target) in enumerate(train_loader):
             indx_target = target.clone()
-            if args.cuda:
-                data, target = data.cuda(), target.cuda()
-            data, target = Variable(data), Variable(target)
+            data, target = data.to(device), target.to(device)
 
             optimizer.zero_grad()
             output = model(data)
             loss = F.cross_entropy(output, target)
             loss.backward()
             optimizer.step()
+
+            # Memristor write
+            for layer_name, layer in model.layers.items():
+                if isinstance(layer, Mem_Linear):
+                    layer.mem_update()
+                    # mem_t update
+                    layer.crossbar_neg.mem_t_update()
+                    layer.crossbar_pos.mem_t_update()
 
             if batch_idx % args.log_interval == 0 and batch_idx > 0:
                 pred = output.data.max(1)[1]  # get the index of the max log-probability
@@ -95,19 +125,40 @@ try:
             elapse_time, speed_epoch, speed_batch, eta))
         misc.model_snapshot(model, os.path.join(args.logdir, 'latest.pth'))
 
+        # print power results
+        total_energy = 0
+        average_power = 0
+        total_read_energy = 0
+        total_write_energy = 0
+        total_reset_energy = 0
+        for layer_name, layer in model.layers.items():
+            if isinstance(layer, Mem_Linear):
+                layer.crossbar_pos.mem_array.total_energy_calculation()
+                layer.crossbar_neg.mem_array.total_energy_calculation()
+                sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
+                sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
+                total_read_energy += sim_power_pos['read_energy'] + sim_power_neg['read_energy']
+                total_write_energy += sim_power_pos['write_energy'] + sim_power_neg['write_energy']
+                total_reset_energy += sim_power_pos['reset_energy'] + sim_power_neg['reset_energy']
+                total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
+                average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+        print("total_energy=" + str(total_energy))
+        print("total_read_energy=" + str(total_read_energy))
+        print("total_write_energy=" + str(total_write_energy))
+        print("total_reset_energy=" + str(total_reset_energy))
+        print("average_power=" + str(average_power))
+
         if epoch % args.test_interval == 0:
             model.eval()
             test_loss = 0
             correct = 0
-            for data, target in test_loader:
-                indx_target = target.clone()
-                if args.cuda:
-                    data, target = data.cuda(), target.cuda()
-                data, target = Variable(data, volatile=True), Variable(target)
-                output = model(data)
-                test_loss += F.cross_entropy(output, target).data
-                pred = output.data.max(1)[1]  # get the index of the max log-probability
-                correct += pred.cpu().eq(indx_target).sum()
+            with torch.no_grad():
+                for batch_idx, (data, target) in enumerate(test_loader):
+                    indx_target = target.clone()
+                    data, target = data.to(device), target.to(device)
+                    output = model(data)
+                    pred = output.data.max(1)[1]  # get the index of the max log-probability
+                    correct += pred.cpu().eq(indx_target).sum()
 
             test_loss = test_loss / len(test_loader) # average over number of mini-batch
             acc = 100. * correct / len(test_loader.dataset)
@@ -118,6 +169,7 @@ try:
                 misc.model_snapshot(model, new_file, old_file=old_file, verbose=True)
                 best_acc = acc
                 old_file = new_file
+
 except Exception as e:
     import traceback
     traceback.print_exc()

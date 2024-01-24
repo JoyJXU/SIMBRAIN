@@ -6,7 +6,6 @@ import time
 import numpy as np
 import hashlib
 
-from IPython import embed
 
 class Logger(object):
     def __init__(self):
