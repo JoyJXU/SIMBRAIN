@@ -287,17 +287,6 @@ class MimoMapping(Mapping):
         return nearest_pulse_no
 
 
-    def reset_memristor_variables(self) -> None:
-        # language=rst
-        """
-        Abstract base class method for resetting state variables.
-        """
-        self.mem_v.fill_(-100)
-        
-        # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_reset(mem_v=self.mem_v)
-
-
     def mem_t_update(self) -> None:
         self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
 
@@ -401,15 +390,6 @@ class MLPMapping(Mapping):
 
         return nearest_pulse_no
 
-    def reset_memristor_variables(self) -> None:
-        # language=rst
-        """
-        Abstract base class method for resetting state variables.
-        """
-        self.mem_v.fill_(-100)
-
-        # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_write(mem_v=self.mem_v, mem_t=None)
 
     def mem_t_update(self) -> None:
         self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
