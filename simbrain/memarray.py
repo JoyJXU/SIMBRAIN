@@ -1,5 +1,6 @@
 from typing import Iterable, Optional, Union
 from simbrain.power import Power
+from simbrain.area import Area
 import torch
 import json
 
@@ -94,6 +95,7 @@ class MemristorArray(torch.nn.Module):
                     torch.arange(self.shape[0], 0, -1, device=self.total_wire_resistance.device)[:, None])
 
         self.power = Power(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=length_row, length_col=length_col)
+        self.area = Area(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=length_row, length_col=length_col)
 
 
     def set_batch_size(self, batch_size) -> None:

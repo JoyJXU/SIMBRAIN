@@ -122,6 +122,13 @@ def main():
         _crossbar_neg = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
         _crossbar_pos.to(device)
         _crossbar_neg.to(device)
+
+        # Area print
+        total_area = 0
+        total_area += _crossbar_pos.mem_array.area.array_area
+        total_area += _crossbar_neg.mem_array.area.array_area
+        print("total crossbar area=", total_area, " m2")
+
         run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _cols, mem_device, device, _logs, figs)
 
 

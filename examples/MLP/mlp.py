@@ -73,7 +73,7 @@ def mlp_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=None)
 
 def mem_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, mem_device={}, pretrained=None):
     model = Mem_MLP(input_dims, n_hiddens, n_class, mem_device)
-    if pretrained is not None:
+    if pretrained is True:
         m = model_zoo.load_url(model_urls['mnist'])
         state_dict = m.state_dict() if isinstance(m, nn.Module) else m
         assert isinstance(state_dict, (dict, OrderedDict)), type(state_dict)

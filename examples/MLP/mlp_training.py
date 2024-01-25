@@ -73,6 +73,14 @@ train_loader, test_loader = dataset.get(batch_size=args.batch_size, data_root=ar
 model = mlp.mem_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=False, mem_device=mem_device)
 model.to(device)
 
+# Area print
+total_area = 0
+for layer_name, layer in model.layers.items():
+    if isinstance(layer, Mem_Linear):
+        total_area += layer.crossbar_pos.mem_array.area.array_area
+        total_area += layer.crossbar_neg.mem_array.area.array_area
+print("total crossbar area=" + str(total_area) + " m2")
+
 # Memristor write
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
