@@ -83,7 +83,7 @@ sim_params = {'device_structure':args.memristor_structure, 'device_name': args.m
                  'aging_effect': args.aging_effect, 'processNode': args.processNode, 'batch_interval': args.time*2+1}
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
