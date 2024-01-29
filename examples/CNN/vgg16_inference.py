@@ -128,8 +128,42 @@ for test_cnt in range(args.rep):
             #              % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
     
     acc = 100.*correct/total
-    
     print('Accuracy Results:' + str(acc))
+
+    # print power results
+    total_energy = 0
+    average_power = 0
+    total_read_energy = 0
+    total_write_energy = 0
+    total_reset_energy = 0
+    for layer in net.features.children():
+        if isinstance(layer, Mem_Conv2d):
+            layer.crossbar_pos.mem_array.total_energy_calculation()
+            layer.crossbar_neg.mem_array.total_energy_calculation()
+            sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
+            sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
+            total_read_energy += sim_power_pos['read_energy'] + sim_power_neg['read_energy']
+            total_write_energy += sim_power_pos['write_energy'] + sim_power_neg['write_energy']
+            total_reset_energy += sim_power_pos['reset_energy'] + sim_power_neg['reset_energy']
+            total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
+            average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+    if isinstance(net.classifier, Mem_Linear):
+        layer = net.classifier
+        layer.crossbar_pos.mem_array.total_energy_calculation()
+        layer.crossbar_neg.mem_array.total_energy_calculation()
+        sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
+        sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
+        total_read_energy += sim_power_pos['read_energy'] + sim_power_neg['read_energy']
+        total_write_energy += sim_power_pos['write_energy'] + sim_power_neg['write_energy']
+        total_reset_energy += sim_power_pos['reset_energy'] + sim_power_neg['reset_energy']
+        total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
+        average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+
+    print("total_energy=" + str(total_energy))
+    print("total_read_energy=" + str(total_read_energy))
+    print("total_write_energy=" + str(total_write_energy))
+    print("total_reset_energy=" + str(total_reset_energy))
+    print("average_power=" + str(average_power))
     
     out_txt = 'Accuracy:' + str(acc) + '\n'
     out.write(out_txt)

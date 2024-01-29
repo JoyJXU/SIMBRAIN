@@ -67,19 +67,7 @@ class Power(torch.nn.Module):
         self.batch_size = batch_size
         self.selected_write_energy = torch.zeros(batch_size, *self.shape, device=self.selected_write_energy.device)
         self.half_selected_write_energy = torch.zeros(batch_size, *self.shape, device=self.half_selected_write_energy.device)
-        
-    
-    # def read_energy_calculation(self, mem_v_read, mem_i) -> None:
-    #     # language=rst
-    #     """
-    #     Calculate read energy for memrisotr crossbar. Called when the crossbar is read.
-    #
-    #     :param mem_v_read: Read voltage, shape [batchsize, read_no=1, crossbar_row].
-    #     :param mem_i: Read current of every memristor, shape [batchsize, read_no=1, crossbar_row, crossbar_col].
-    #     """
-    #     self.dynamic_read_energy += torch.sum(mem_v_read * mem_v_read * self.wire_cap_row)
-    #     self.static_read_energy += torch.sum(mem_i * mem_v_read[:, :, :, None] * self.dt * 1/2)
-    #     self.read_energy = self.dynamic_read_energy + self.static_read_energy
+
 
     def read_energy_calculation(self, mem_v_read, mem_c, total_wire_resistance) -> None:
         # language=rst
@@ -87,7 +75,8 @@ class Power(torch.nn.Module):
         Calculate read energy for memrisotr crossbar. Called when the crossbar is read.
 
         :param mem_v_read: Read voltage, shape [batchsize, read_no=1, crossbar_row].
-        :param mem_i: Read current of every memristor, shape [batchsize, read_no=1, crossbar_row, crossbar_col].
+        :param mem_c: Memristor crossbar conductance, shape [batchsize, crossbar_row, crossbar_col].
+        :param total_wire_resistance: Wire resistance for every memristor in the crossbar, shape [batchsize, crossbar_row, crossbar_col].
         """
         self.dynamic_read_energy += torch.sum(mem_v_read * mem_v_read * self.wire_cap_row)
 
