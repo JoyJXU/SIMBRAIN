@@ -317,13 +317,14 @@ class MemristorArray(torch.nn.Module):
         # mem_v shape: [batchsize, read_no=1, array_row],
         # mem_array shape: [batchsize, array_row, array_column],
         # output_i shape: [batchsize, read_no=1, array_column]
-        # self.mem_i = torch.matmul(mem_v, mem_c)
-        self.mem_i_matrix = mem_v[:, :, :, None] * mem_c[:, None, :, :]
-        self.mem_i = torch.sum(self.mem_i_matrix, dim=2)
+        self.mem_i = torch.matmul(mem_v, mem_c)
+        # self.mem_i_matrix = mem_v[:, :, :, None] * mem_c[:, None, :, :]
+        # self.mem_i = torch.sum(self.mem_i_matrix, dim=2)
 
         self.mem_t += mem_v.shape[1]
         
-        self.power.read_energy_calculation(mem_v_read=mem_v, mem_i=self.mem_i_matrix)
+        # self.power.read_energy_calculation(mem_v_read=mem_v, mem_i=self.mem_i_matrix)
+        self.power.read_energy_calculation(mem_v_read=mem_v, mem_c=self.mem_c, total_wire_resistance=self.total_wire_resistance)
 
         return self.mem_i
 

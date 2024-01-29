@@ -7,8 +7,6 @@ Created on Wed Jul 19 18:46:30 2023
 """
 
 import argparse
-import torch
-import torch.backends.cudnn as cudnn
 import torchvision
 import torchvision.transforms as transforms
 from collections import OrderedDict
@@ -17,13 +15,13 @@ import os
 import sys
 sys.path.append('../../')
 
-from models import *
-from simbrain.mapping import ANNMapping
+from vgg import VGG, mem_VGG
+from module import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
-parser.add_argument("--rep", type=int, default=100)
+parser.add_argument("--rep", type=int, default=10)
 parser.add_argument("--batch_size", type=int, default=100)
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
 parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
@@ -32,7 +30,7 @@ parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variatio
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
-parser.add_argument("--processNode", type=int, default=32)
+parser.add_argument("--process_node", type=int, default=10000)
 args = parser.parse_args()
 
 # Sets up Gpu use
@@ -53,7 +51,7 @@ print("Running on Device = ", device)
 mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
               'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-              'aging_effect': args.aging_effect, 'processNode': args.processNode, 'batch_interval': None}
+              'aging_effect': args.aging_effect, 'process_node': args.process_node, 'batch_interval': None}
 
 # Dataset prepare
 print('==> Preparing data..')
@@ -64,17 +62,14 @@ transform_test = transforms.Compose([
 testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
-    testset, batch_size=100, shuffle=False, num_workers=2)
+    testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
 
 # Network Model
-print('==> Building golden model..')
-net = VGG('VGG16')
+print('==> Building memristor-based model..')
+net = mem_VGG('VGG16', mem_device=mem_device)
 net = net.to(device)
-if device == 'cuda':
-    net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
 
 # Load Pre-trained Model
 checkpoint = torch.load('./checkpoint/ckpt.pth')
@@ -84,40 +79,32 @@ recorded_best_acc = checkpoint['acc']
 out_root = 'Inference_results.txt'
 for test_cnt in range(args.rep):
     # Reset Dataset
-    testloader.idx=0
+    testloader.idx = 0
     
     # Record
     out = open(out_root, 'a')
 
     # Reload Weight
     state_dict = checkpoint['net']
-    mem_state_dict = OrderedDict()
-
-    print('==> Memristor Write..')
-    for k, v in state_dict.items():
-        if 'weight' in k and len(v.size())>1:
-            scale_factor = 1 #(v.abs()).max()
-            
-            v_norm = v.clone()
-            v_norm = torch.div(v_norm, scale_factor)
-
-            crossbar_pos = CNNMapping(sim_params=mem_device, shape=v.shape)
-            crossbar_neg = CNNMapping(sim_params=mem_device, shape=v.shape)
-            
-            # normal_relative = torch.normal(0., sigma_relative, size = v_norm.size()).to(v_norm.device)
-            # normal_absolute = torch.normal(0., sigma_absolute, size = v_norm.size()).to(v_norm.device)
-            # device_v = torch.mul(v_norm, normal_relative) + normal_absolute
-            #
-            # v_norm = v_norm + device_v
-            # v_norm = torch.mul(v_norm, scale_factor)
-            
+    # State_dict adaption
+    adapt_state_dict = OrderedDict()
+    for k, v in net.state_dict().items():
+        match_str = [s for s in state_dict.keys() if k in s]
+        if len(match_str) > 0:
+            adapt_state_dict[k] = state_dict[match_str[0]]
         else:
-            v_norm = v
-        
-        variation_state_dict[k] = v_norm
-    
-    net.load_state_dict(variation_state_dict)
-    
+            adapt_state_dict[k] = v
+    net.load_state_dict(adapt_state_dict)
+
+    # Memristor write
+    for layer in net.features.children():
+        if isinstance(layer, Mem_Conv2d):
+            layer.mem_update()
+    if isinstance(net.classifier, Mem_Linear):
+        net.classifier.mem_update()
+
+    net = net.to(device)
+
     # Evaluate
     print('==> Evaluate..')
     criterion = nn.CrossEntropyLoss()
