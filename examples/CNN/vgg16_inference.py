@@ -34,7 +34,7 @@ parser.add_argument("--process_node", type=int, default=10000)
 args = parser.parse_args()
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -70,6 +70,20 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 print('==> Building memristor-based model..')
 net = mem_VGG('VGG16', mem_device=mem_device)
 net = net.to(device)
+
+# print power results
+total_area = 0
+for layer in net.features.children():
+    if isinstance(layer, Mem_Conv2d):
+        layer.crossbar.total_area_calculation()
+        sim_area = layer.crossbar.sim_area
+        total_area += sim_area['mem_area']
+if isinstance(net.classifier, Mem_Linear):
+    layer = net.classifier
+    layer.crossbar.total_area_calculation()
+    sim_area = layer.crossbar.sim_area
+    total_area += sim_area['mem_area']
+print("total_area=" + str(total_area))
 
 # Load Pre-trained Model
 checkpoint = torch.load('./checkpoint/ckpt.pth')
@@ -138,26 +152,22 @@ for test_cnt in range(args.rep):
     total_reset_energy = 0
     for layer in net.features.children():
         if isinstance(layer, Mem_Conv2d):
-            layer.crossbar_pos.mem_array.total_energy_calculation()
-            layer.crossbar_neg.mem_array.total_energy_calculation()
-            sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
-            sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
-            total_read_energy += sim_power_pos['read_energy'] + sim_power_neg['read_energy']
-            total_write_energy += sim_power_pos['write_energy'] + sim_power_neg['write_energy']
-            total_reset_energy += sim_power_pos['reset_energy'] + sim_power_neg['reset_energy']
-            total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
-            average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+            layer.crossbar.total_energy_calculation()
+            sim_power = layer.crossbar.sim_power
+            total_read_energy += sim_power['read_energy']
+            total_write_energy += sim_power['write_energy']
+            total_reset_energy += sim_power['reset_energy']
+            total_energy += sim_power['total_energy']
+            average_power += sim_power['average_power']
     if isinstance(net.classifier, Mem_Linear):
         layer = net.classifier
-        layer.crossbar_pos.mem_array.total_energy_calculation()
-        layer.crossbar_neg.mem_array.total_energy_calculation()
-        sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
-        sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
-        total_read_energy += sim_power_pos['read_energy'] + sim_power_neg['read_energy']
-        total_write_energy += sim_power_pos['write_energy'] + sim_power_neg['write_energy']
-        total_reset_energy += sim_power_pos['reset_energy'] + sim_power_neg['reset_energy']
-        total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
-        average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+        layer.crossbar.total_energy_calculation()
+        sim_power = layer.crossbar.sim_power
+        total_read_energy += sim_power['read_energy']
+        total_write_energy += sim_power['write_energy']
+        total_reset_energy += sim_power['reset_energy']
+        total_energy += sim_power['total_energy']
+        average_power += sim_power['average_power']
 
     print("total_energy=" + str(total_energy))
     print("total_read_energy=" + str(total_read_energy))

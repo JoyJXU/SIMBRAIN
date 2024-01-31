@@ -59,6 +59,7 @@ class Mapping(torch.nn.Module):
         self.learning = None
 
         self.sim_power = {}
+        self.sim_area = {}
 
 
     def set_batch_size(self, batch_size) -> None:
@@ -338,10 +339,10 @@ class MLPMapping(Mapping):
 
     def set_batch_size_mlp(self, batch_size) -> None:
         self.set_batch_size(batch_size)
-        self.mem_pos_pos.set_batch_size(batch_size=self.batch_size)
-        self.mem_neg_pos.set_batch_size(batch_size=self.batch_size)
-        self.mem_pos_neg.set_batch_size(batch_size=self.batch_size)
-        self.mem_neg_neg.set_batch_size(batch_size=self.batch_size)
+        self.mem_pos_pos.set_batch_size(batch_size=batch_size)
+        self.mem_neg_pos.set_batch_size(batch_size=batch_size)
+        self.mem_pos_neg.set_batch_size(batch_size=batch_size)
+        self.mem_neg_neg.set_batch_size(batch_size=batch_size)
 
         self.norm_ratio = torch.zeros(batch_size, device=self.norm_ratio.device)
         # TODO: For MLP, batch_interval consist of reset + write + read?
@@ -460,6 +461,15 @@ class MLPMapping(Mapping):
                           for key in self.mem_pos_pos.power.sim_power.keys()}
 
 
+    def total_area_calculation(self) -> None:
+        # language=rst
+        """
+        Calculate total area for memristor-based architecture. Called when power is reported.
+        """
+        self.sim_area = {'mem_area': self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area +
+                               self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area}
+
+
 class CNNMapping(Mapping):
     # language=rst
     """
@@ -491,35 +501,75 @@ class CNNMapping(Mapping):
             self.memristor_luts = pickle.load(f)
         assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
+        # Corssbar for positive input and positive weight
+        self.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
+                                          memristor_info_dict=self.memristor_info_dict)
+        # Corssbar for negative input and positive weight
+        self.mem_neg_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
+                                          memristor_info_dict=self.memristor_info_dict)
+        # Corssbar for positive input and negative weight
+        self.mem_pos_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
+                                          memristor_info_dict=self.memristor_info_dict)
+        # Corssbar for negative input and negative weight
+        self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
+                                          memristor_info_dict=self.memristor_info_dict)
+
         self.batch_interval = sim_params['batch_interval']
 
     def set_batch_size_cnn(self, batch_size) -> None:
         self.set_batch_size(batch_size)
+        self.mem_pos_pos.set_batch_size(batch_size=batch_size)
+        self.mem_neg_pos.set_batch_size(batch_size=batch_size)
+        self.mem_pos_neg.set_batch_size(batch_size=batch_size)
+        self.mem_neg_neg.set_batch_size(batch_size=batch_size)
+
         self.norm_ratio = torch.zeros(batch_size, device=self.norm_ratio.device)
         self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
-        self.mem_array.mem_t = self.mem_t
+
+        self.mem_pos_pos.mem_t = self.mem_t.clone()
+        self.mem_neg_pos.mem_t = self.mem_t.clone()
+        self.mem_pos_neg.mem_t = self.mem_t.clone()
+        self.mem_neg_neg.mem_t = self.mem_t.clone()
 
     def mapping_write_cnn(self, target_x):
         # Memristor reset first
         self.mem_v.fill_(-100)  # TODO: check the reset voltage
         # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_reset(mem_v=self.mem_v)
+        self.mem_pos_pos.memristor_reset(mem_v=self.mem_v)
+        self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
+        self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
+        self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
 
-        # Vector to Pulse Serial
         # Transform target_x to [0, 1]
-        self.norm_ratio = torch.max(target_x.reshape(target_x.shape[0], -1), dim=1)[0]
-        self.write_pulse_no = self.m2v(target_x / self.norm_ratio)
+        self.norm_ratio = torch.max(torch.abs(target_x.reshape(target_x.shape[0], -1)), dim=1)[0]
         total_wr_cycle = self.memristor_luts[self.device_name]['total_no']
         write_voltage = self.memristor_luts[self.device_name]['voltage']
-
-        # Matrix to memristor
         counter = torch.ones_like(self.mem_v)
+
+        # Positive weight write
+        matrix_pos = torch.relu(target_x)
+        # Vector to Pulse Serial
+        self.write_pulse_no = self.m2v(matrix_pos / self.norm_ratio)
+        # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
-            self.mem_array.memristor_write(mem_v=self.mem_v)
+            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)
+            self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
+
+        # Negative weight write
+        matrix_neg = torch.relu(target_x * -1)
+        # Vector to Pulse Serial
+        self.write_pulse_no = self.m2v(matrix_neg / self.norm_ratio)
+        # Matrix to memristor
+        # Memristor programming using multiple identical pulses (up to 400)
+        for t in range(total_wr_cycle):
+            self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
+            self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
+            self.mem_neg_neg.memristor_write(mem_v=self.mem_v)
+
 
     def mapping_read_cnn(self, target_v):
         # Get threshold voltage
@@ -533,7 +583,13 @@ class CNNMapping(Mapping):
         v_thre = v_thre / v_ratio
         v_read = target_v * v_thre
 
-        mem_i = self.mem_array.memristor_read(mem_v=v_read.unsqueeze(0))
+        v_read_pos = torch.relu(v_read)
+        v_read_neg = torch.relu(v_read * -1)
+
+        mem_i = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(0))
+        mem_i -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(0))
+        mem_i -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(0))
+        mem_i += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
 
         # Current to results
         self.mem_x_read = self.norm_ratio * self.trans_ratio * (
@@ -567,4 +623,32 @@ class CNNMapping(Mapping):
 
 
     def mem_t_update(self) -> None:
-        self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_pos_pos.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_neg_pos.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_pos_neg.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_neg_neg.mem_t += self.batch_interval * (self.batch_size - 1)
+
+
+    def total_energy_calculation(self) -> None:
+        # language=rst
+        """
+        Calculate total energy for memristor-based architecture. Called when power is reported.
+        """
+        self.mem_pos_pos.total_energy_calculation()
+        self.mem_neg_pos.total_energy_calculation()
+        self.mem_pos_neg.total_energy_calculation()
+        self.mem_neg_neg.total_energy_calculation()
+
+        self.sim_power = {key: self.mem_pos_pos.power.sim_power[key] + self.mem_neg_pos.power.sim_power[key] +
+                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key]
+                          for key in self.mem_pos_pos.power.sim_power.keys()}
+
+
+    def total_area_calculation(self) -> None:
+        # language=rst
+        """
+        Calculate total area for memristor-based architecture. Called when power is reported.
+        """
+        self.sim_area = {'mem_area': self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area +
+                               self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area}
+
