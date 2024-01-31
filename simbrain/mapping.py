@@ -523,7 +523,8 @@ class CNNMapping(Mapping):
         self.mem_pos_neg.set_batch_size(batch_size=batch_size)
         self.mem_neg_neg.set_batch_size(batch_size=batch_size)
 
-        self.norm_ratio = torch.zeros(batch_size, device=self.norm_ratio.device)
+        self.norm_ratio_pos = torch.zeros(batch_size, device=self.norm_ratio.device)
+        self.norm_ratio_neg = torch.zeros(batch_size, device=self.norm_ratio.device)
         self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
@@ -543,7 +544,8 @@ class CNNMapping(Mapping):
         self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
 
         # Transform target_x to [0, 1]
-        self.norm_ratio = torch.max(torch.abs(target_x.reshape(target_x.shape[0], -1)), dim=1)[0]
+        self.norm_ratio_pos = torch.max(torch.relu(target_x).reshape(target_x.shape[0], -1), dim=1)[0]
+        self.norm_ratio_neg = torch.max(torch.relu(target_x * -1).reshape(target_x.shape[0], -1), dim=1)[0]
         total_wr_cycle = self.memristor_luts[self.device_name]['total_no']
         write_voltage = self.memristor_luts[self.device_name]['voltage']
         counter = torch.ones_like(self.mem_v)
@@ -551,7 +553,7 @@ class CNNMapping(Mapping):
         # Positive weight write
         matrix_pos = torch.relu(target_x)
         # Vector to Pulse Serial
-        self.write_pulse_no = self.m2v(matrix_pos / self.norm_ratio)
+        self.write_pulse_no = self.m2v(matrix_pos / self.norm_ratio_pos)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
@@ -562,7 +564,7 @@ class CNNMapping(Mapping):
         # Negative weight write
         matrix_neg = torch.relu(target_x * -1)
         # Vector to Pulse Serial
-        self.write_pulse_no = self.m2v(matrix_neg / self.norm_ratio)
+        self.write_pulse_no = self.m2v(matrix_neg / self.norm_ratio_neg)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
@@ -588,12 +590,17 @@ class CNNMapping(Mapping):
 
         mem_i = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(0))
         mem_i -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(0))
-        mem_i -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(0))
-        mem_i += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
-
         # Current to results
-        self.mem_x_read = self.norm_ratio * self.trans_ratio * (
+        self.mem_x_read = self.norm_ratio_pos * self.trans_ratio * (
                 mem_i / v_thre - torch.matmul(target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon))
+
+        mem_i = self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(0))
+        mem_i -= self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
+        # Current to results
+        self.mem_x_read -= self.norm_ratio_neg * self.trans_ratio * (
+                mem_i / v_thre - torch.matmul(target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon))
+
+
 
         return self.mem_x_read.squeeze(0)
 
