@@ -424,7 +424,7 @@ def run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows
     for _var_abs in sigma_list:
         for _var_rel in sigma_list:
             device_name = sim_params['device_name']
-            batch_interval = 1 + _crossbar_pos.memristor_luts[device_name]['total_no'] + 1  # reset + write + read
+            batch_interval = 1 + _crossbar_pos.memristor_luts[device_name]['total_no'] * _rows + 1  # reset + write + read
             _crossbar_pos.batch_interval = batch_interval
             _crossbar_neg.batch_interval = batch_interval
 
@@ -484,6 +484,16 @@ def run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows
                 _crossbar_pos.mem_t_update()
                 _crossbar_neg.mem_t_update()
 
+                # print power results
+                _crossbar_pos.mem_array.total_energy_calculation()
+                _crossbar_neg.mem_array.total_energy_calculation()
+                sim_power_pos = _crossbar_pos.mem_array.power.sim_power
+                sim_power_neg = _crossbar_neg.mem_array.power.sim_power
+                total_energy = sim_power_pos['total_energy'] + sim_power_neg['total_energy']
+                average_power = sim_power_pos['average_power'] + sim_power_neg['average_power']
+                print("total_energy=", total_energy)
+                print("average_power=", average_power)
+
             # Error calculation
             error = utility.cal_error(golden_model, cross)
             relative_error = error / golden_model
@@ -493,7 +503,7 @@ def run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows
             print("<==============>")
 
             utility.plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error)
-            print('Visualization Dome')
+            print('Visualization Done')
             print("<==============>")
 
             # data = [str(_var_abs), str(_var_rel)]
