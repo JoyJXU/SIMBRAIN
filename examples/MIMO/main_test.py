@@ -59,8 +59,8 @@ parser.add_argument("--process_node", type=int, default=10000) # In practice, pr
 args = parser.parse_args()
 
 def main():
-    # seed = args.seed # Fixe Seed
-    seed = int(time.time()) # Random Seed
+    seed = args.seed # Fixe Seed
+    # seed = int(time.time()) # Random Seed
     gpu = args.gpu
     # Sets up Gpu use
     os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))

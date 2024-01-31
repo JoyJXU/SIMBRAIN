@@ -464,13 +464,9 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
                 matrix_batch = matrix[(step * _batch_size):(step * _batch_size + _batch_size)]
                 vector_batch = vector[(step * _batch_size):(step * _batch_size + _batch_size)]
 
-                # Enable signed matrix
-                matrix_pos = torch.relu(matrix_batch)
-                matrix_neg = torch.relu(matrix_batch * -1)
-
                 # Memristor-based results simulation
                 # Memristor crossbar program
-                _crossbar.mapping_write_mimo(target_x=matrix_pos)
+                _crossbar.mapping_write_mimo(target_x=matrix_batch)
                 # Memristor crossbar perform matrix vector multiplication
                 cross[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
                     target_v=vector_batch)
@@ -491,7 +487,7 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
             relative_error = error / golden_model
             error = error.flatten(0, 2)
             relative_error = relative_error.flatten(0, 2)
-            print('Error Calculation Dome')
+            print('Error Calculation Done')
             print("<==============>")
 
             utility.plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error)
