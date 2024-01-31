@@ -1,6 +1,6 @@
 from typing import Iterable, Optional, Union
-from simbrain.power import Power
-from simbrain.area import Area
+from simbrain.mempower import Power
+from simbrain.memarea import Area
 import torch
 import json
 

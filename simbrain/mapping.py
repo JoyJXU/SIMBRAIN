@@ -43,8 +43,6 @@ class Mapping(torch.nn.Module):
         self.register_buffer("mem_x_read", torch.Tensor())
         self.register_buffer("x", torch.Tensor())
         self.register_buffer("s", torch.Tensor())
-        self.register_buffer("readEnergy", torch.Tensor())
-        self.register_buffer("writeEnergy", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
 
         with open('../../memristor_device_info.json', 'r') as f:
@@ -76,8 +74,6 @@ class Mapping(torch.nn.Module):
         self.mem_x_read = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_v.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
         self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
-        self.readEnergy = torch.zeros(batch_size, *self.shape, device=self.readEnergy.device)
-        self.writeEnergy = torch.zeros(batch_size, *self.shape, device=self.writeEnergy.device)
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
 
         self.mem_array.set_batch_size(batch_size=self.batch_size)
