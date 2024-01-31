@@ -88,13 +88,6 @@ def main():
                  'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                  'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
                  'aging_effect': args.aging_effect, 'process_node': args.process_node, 'batch_interval': None}
-    
-
-    # # Run c2c & d2d variation
-    # _crossbar = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
-    # _crossbar.to(device)
-    # run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
-    # run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
 
     # plot
     plt.figure(figsize=(13, 4.5))
@@ -107,29 +100,18 @@ def main():
     fx = plt.subplot(grid[5:9, 10:14])
     figs = [ax, bx, cx, dx, ex, fx]
 
-    # # Run signed c2c variation
-    # _crossbar_pos = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
-    # _crossbar_neg = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
-    # _crossbar_pos.to(device)
-    # _crossbar_neg.to(device)
-    # run_signed_c2c_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _cols, mem_device, device, _logs, figs)
-
     # Run crossbar size experiments
     size_list = [8, 16, 32, 64, 128, 256, 512, 1024, 2048]
     # size_list = [2048, 256]
     for _rows in size_list:
-        _crossbar_pos = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
-        _crossbar_neg = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
-        _crossbar_pos.to(device)
-        _crossbar_neg.to(device)
+        _crossbar = MimoMapping(sim_params=mem_device, shape=(_rows, _cols))
+        _crossbar.to(device)
 
         # Area print
-        total_area = 0
-        total_area += _crossbar_pos.mem_array.area.array_area
-        total_area += _crossbar_neg.mem_array.area.array_area
-        print("total crossbar area=", total_area, " m2")
+        _crossbar.total_area_calculation()
+        print("total crossbar area=", _crossbar.sim_area['mem_area'], " m2")
 
-        run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _cols, mem_device, device, _logs, figs)
+        run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs, figs)
 
 
 if __name__ == "__main__":

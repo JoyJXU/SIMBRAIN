@@ -220,33 +220,73 @@ class MimoMapping(Mapping):
             self.memristor_luts = pickle.load(f)
         assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
+        # Corssbar for positive input and positive weight
+        self.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
+                                          memristor_info_dict=self.memristor_info_dict)
+        # Corssbar for negative input and positive weight
+        self.mem_neg_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
+                                          memristor_info_dict=self.memristor_info_dict)
+        # Corssbar for positive input and negative weight
+        self.mem_pos_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
+                                          memristor_info_dict=self.memristor_info_dict)
+        # Corssbar for negative input and negative weight
+        self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
+                                          memristor_info_dict=self.memristor_info_dict)
+
         self.batch_interval = sim_params['batch_interval']
 
 
     def set_batch_size_mimo(self, batch_size) -> None:
         self.set_batch_size(batch_size)
+        self.mem_pos_pos.set_batch_size(batch_size=batch_size)
+        self.mem_neg_pos.set_batch_size(batch_size=batch_size)
+        self.mem_pos_neg.set_batch_size(batch_size=batch_size)
+        self.mem_neg_neg.set_batch_size(batch_size=batch_size)
+
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
-        self.mem_array.mem_t = self.mem_t
+
+        self.mem_pos_pos.mem_t = self.mem_t.clone()
+        self.mem_neg_pos.mem_t = self.mem_t.clone()
+        self.mem_pos_neg.mem_t = self.mem_t.clone()
+        self.mem_neg_neg.mem_t = self.mem_t.clone()
 
 
     def mapping_write_mimo(self, target_x):
         # Memristor reset first
         self.mem_v.fill_(-100)  # TODO: check the reset voltage
         # Adopt large negative pulses to reset the memristor array
-        self.mem_array.memristor_reset(mem_v=self.mem_v)
+        # self.mem_array.memristor_reset(mem_v=self.mem_v)
+        self.mem_pos_pos.memristor_reset(mem_v=self.mem_v)
+        self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
+        self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
+        self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
 
-        # Vector to Pulse Serial
-        self.write_pulse_no = self.m2v(target_x)
         total_wr_cycle = self.memristor_luts[self.device_name]['total_no']
         write_voltage = self.memristor_luts[self.device_name]['voltage']
-
-        # Matrix to memristor
         counter = torch.ones_like(self.mem_v)
+
+        # Positive weight write
+        matrix_pos = torch.relu(target_x)
+        # Vector to Pulse Serial
+        self.write_pulse_no = self.m2v(matrix_pos)
+        # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
-            self.mem_array.memristor_write(mem_v=self.mem_v)
+            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)
+            self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
+
+        # Negative weight write
+        matrix_neg = torch.relu(target_x * -1)
+        # Vector to Pulse Serial
+        self.write_pulse_no = self.m2v(matrix_neg)
+        # Matrix to memristor
+        # Memristor programming using multiple identical pulses (up to 400)
+        for t in range(total_wr_cycle):
+            self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
+            self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
+            self.mem_neg_neg.memristor_write(mem_v=self.mem_v)
 
 
     def mapping_read_mimo(self, target_v):
@@ -259,7 +299,13 @@ class MimoMapping(Mapping):
         # Read voltage generation
         v_read = target_v * v_thre
 
-        mem_i = self.mem_array.memristor_read(mem_v=v_read)
+        v_read_pos = torch.relu(v_read)
+        v_read_neg = torch.relu(v_read * -1)
+
+        mem_i = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(0))
+        mem_i -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(0))
+        mem_i -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(0))
+        mem_i += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
 
         # Current to results
         self.mem_x_read = self.trans_ratio * (
@@ -287,7 +333,34 @@ class MimoMapping(Mapping):
 
 
     def mem_t_update(self) -> None:
-        self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_pos_pos.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_neg_pos.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_pos_neg.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_neg_neg.mem_t += self.batch_interval * (self.batch_size - 1)
+
+
+    def total_energy_calculation(self) -> None:
+        # language=rst
+        """
+        Calculate total energy for memristor-based architecture. Called when power is reported.
+        """
+        self.mem_pos_pos.total_energy_calculation()
+        self.mem_neg_pos.total_energy_calculation()
+        self.mem_pos_neg.total_energy_calculation()
+        self.mem_neg_neg.total_energy_calculation()
+
+        self.sim_power = {key: self.mem_pos_pos.power.sim_power[key] + self.mem_neg_pos.power.sim_power[key] +
+                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key]
+                          for key in self.mem_pos_pos.power.sim_power.keys()}
+
+
+    def total_area_calculation(self) -> None:
+        # language=rst
+        """
+        Calculate total area for memristor-based architecture. Called when power is reported.
+        """
+        self.sim_area = {'mem_area': self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area +
+                                     self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area}
 
 
 class MLPMapping(Mapping):
@@ -599,8 +672,6 @@ class CNNMapping(Mapping):
         # Current to results
         self.mem_x_read -= self.norm_ratio_neg * self.trans_ratio * (
                 mem_i / v_thre - torch.matmul(target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon))
-
-
 
         return self.mem_x_read.squeeze(0)
 

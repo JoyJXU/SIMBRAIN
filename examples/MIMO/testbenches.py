@@ -393,8 +393,8 @@ def run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
     print("Execution time: ", exe_time)
 
 
-def run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows, _cols, sim_params, device,
-                          _logs=[None, None, False, False, None], figs=None):
+def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device,
+                              _logs=[None, None, False, False, None], figs=None):
     print("<========================================>")
     print("Test case: ", _rep)
     file_name = "crossbar_size_test_case_r"+str(_rows)+"_c" + \
@@ -424,24 +424,25 @@ def run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows
     for _var_abs in sigma_list:
         for _var_rel in sigma_list:
             device_name = sim_params['device_name']
-            batch_interval = 1 + _crossbar_pos.memristor_luts[device_name]['total_no'] * _rows + 1  # reset + write + read
-            _crossbar_pos.batch_interval = batch_interval
-            _crossbar_neg.batch_interval = batch_interval
+            batch_interval = 1 + _crossbar.memristor_luts[device_name]['total_no'] * _rows + 1  # reset + write + read
+            _crossbar.batch_interval = batch_interval
 
             # Perform c2c variation only
             sim_params['c2c_variation'] = True
             sim_params['d2d_variation'] = 0
-            memristor_info_dict = _crossbar_pos.memristor_info_dict
+            memristor_info_dict = _crossbar.memristor_info_dict
             memristor_info_dict[device_name]['sigma_relative'] = _var_rel
             memristor_info_dict[device_name]['sigma_absolute'] = _var_abs
-            _crossbar_pos.mem_array = MemristorArray(sim_params=sim_params, shape=_crossbar_pos.shape,
+            _crossbar.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=_crossbar.shape,
                                                      memristor_info_dict=memristor_info_dict)
-            _crossbar_neg.mem_array = MemristorArray(sim_params=sim_params, shape=_crossbar_neg.shape,
-                                                     memristor_info_dict=memristor_info_dict)
-            _crossbar_pos.to(device)
-            _crossbar_neg.to(device)
-            _crossbar_pos.set_batch_size_mimo(_batch_size)
-            _crossbar_neg.set_batch_size_mimo(_batch_size)
+            _crossbar.mem_neg_pos = MemristorArray(sim_params=sim_params, shape=_crossbar.shape,
+                                                   memristor_info_dict=memristor_info_dict)
+            _crossbar.mem_pos_neg = MemristorArray(sim_params=sim_params, shape=_crossbar.shape,
+                                                   memristor_info_dict=memristor_info_dict)
+            _crossbar.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=_crossbar.shape,
+                                                   memristor_info_dict=memristor_info_dict)
+            _crossbar.to(device)
+            _crossbar.set_batch_size_mimo(_batch_size)
 
             # matrix and vector random generation
             # matrix = torch.rand(_rep, _rows, _cols, device=device)
@@ -457,8 +458,6 @@ def run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows
 
             n_step = int(_rep / _batch_size)
             cross = torch.zeros_like(golden_model, device=device)
-            cross_pos = torch.zeros_like(golden_model, device=device)
-            cross_neg = torch.zeros_like(golden_model, device=device)
 
             for step in range(n_step):
                 # print(step)
@@ -471,26 +470,19 @@ def run_crossbar_size_sim(_crossbar_pos, _crossbar_neg, _rep, _batch_size, _rows
 
                 # Memristor-based results simulation
                 # Memristor crossbar program
-                _crossbar_pos.mapping_write_mimo(target_x=matrix_pos)
-                _crossbar_neg.mapping_write_mimo(target_x=matrix_neg)
+                _crossbar.mapping_write_mimo(target_x=matrix_pos)
                 # Memristor crossbar perform matrix vector multiplication
-                cross_pos[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar_pos.mapping_read_mimo(
+                cross[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
                     target_v=vector_batch)
-                cross_neg[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar_neg.mapping_read_mimo(
-                    target_v=(vector_batch * -1))
-                cross = cross_pos + cross_neg
 
                 # mem_t update
-                _crossbar_pos.mem_t_update()
-                _crossbar_neg.mem_t_update()
+                _crossbar.mem_t_update()
 
                 # print power results
-                _crossbar_pos.mem_array.total_energy_calculation()
-                _crossbar_neg.mem_array.total_energy_calculation()
-                sim_power_pos = _crossbar_pos.mem_array.power.sim_power
-                sim_power_neg = _crossbar_neg.mem_array.power.sim_power
-                total_energy = sim_power_pos['total_energy'] + sim_power_neg['total_energy']
-                average_power = sim_power_pos['average_power'] + sim_power_neg['average_power']
+                _crossbar.total_energy_calculation()
+                sim_power = _crossbar.sim_power
+                total_energy = sim_power['total_energy']
+                average_power = sim_power['average_power']
                 print("total_energy=", total_energy)
                 print("average_power=", average_power)
 
