@@ -28,7 +28,7 @@ parser.add_argument("--process_node", type=int, default=10000)
 args = parser.parse_args()
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -59,8 +59,10 @@ model = mlp.mem_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrain
 total_area = 0
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
-        total_area += layer.crossbar_pos.mem_array.area.array_area
-        total_area += layer.crossbar_neg.mem_array.area.array_area
+        total_area += layer.crossbar.mem_pos_pos.area.array_area
+        total_area += layer.crossbar.mem_neg_pos.area.array_area
+        total_area += layer.crossbar.mem_pos_neg.area.array_area
+        total_area += layer.crossbar.mem_neg_neg.area.array_area
 print("total crossbar area=", total_area, " m2")
 
 # Memristor write
@@ -78,12 +80,10 @@ total_energy = 0
 average_power = 0
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
-        layer.crossbar_pos.mem_array.total_energy_calculation()
-        layer.crossbar_neg.mem_array.total_energy_calculation()
-        sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
-        sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
-        total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
-        average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+        layer.crossbar.total_energy_calculation()
+        sim_power = layer.crossbar.sim_power
+        total_energy += sim_power['total_energy']
+        average_power += sim_power['average_power']
 print("\ttotal_write_energy=", total_energy)
 print("\taverage_write_power=", average_power)
 
@@ -120,12 +120,10 @@ for test_cnt in range(args.rep):
     average_power = 0
     for layer_name, layer in model.layers.items():
         if isinstance(layer, Mem_Linear):
-            layer.crossbar_pos.mem_array.total_energy_calculation()
-            layer.crossbar_neg.mem_array.total_energy_calculation()
-            sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
-            sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
-            total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
-            average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+            layer.crossbar.total_energy_calculation()
+            sim_power = layer.crossbar.sim_power
+            total_energy += sim_power['total_energy']
+            average_power += sim_power['average_power']
     print("\ttotal_energy=", total_energy)
     print("\taverage_power=", average_power)
 
