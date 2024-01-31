@@ -490,7 +490,7 @@ class CNNMapping(Mapping):
 
         # Find the nearest conductance value
         len_luts = len(luts)
-        section = 4
+        section = 1 + (len_luts - 1) // 100
         seg_len = len_luts // section
         nearest_pulse_no = torch.zeros_like(target_c)
         for i in range(section):

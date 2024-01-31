@@ -78,13 +78,14 @@ class Power(torch.nn.Module):
         :param mem_c: Memristor crossbar conductance, shape [batchsize, crossbar_row, crossbar_col].
         :param total_wire_resistance: Wire resistance for every memristor in the crossbar, shape [batchsize, crossbar_row, crossbar_col].
         """
-        self.dynamic_read_energy += torch.sum(mem_v_read * mem_v_read * self.wire_cap_row)
+        mem_v2 = mem_v_read ** 2
+        self.dynamic_read_energy += torch.sum(mem_v2 * self.wire_cap_row)
 
         mem_r = 1.0 / mem_c
         mem_r = mem_r + total_wire_resistance.unsqueeze(0)
         memristor_c = 1.0 / mem_r
-        mem_v2 = mem_v_read ** 2
         self.static_read_energy += torch.sum(torch.matmul(mem_v2, memristor_c)) * self.dt * 1/2
+
         self.read_energy = self.dynamic_read_energy + self.static_read_energy
 
 

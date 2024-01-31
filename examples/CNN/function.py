@@ -81,9 +81,20 @@ class MemConv2dFunction(Function):
         return output
 
     @staticmethod
-    def backward(ctx, grad_output: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
-        input, weight = ctx.saved_tensors
-        grad_input = grad_output @ weight
-        grad_weight = grad_output.T @ input
-        grad_bias = grad_output.sum(0)
-        return grad_input, grad_weight, grad_bias, None, None
+    def backward(ctx, grad_output: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+        input, weight, bias = ctx.saved_tensors
+        stride = ctx.stride
+        padding = ctx.padding
+
+        # Compute gradient of loss w.r.t. weights
+        grad_weight = torch.nn.grad.conv2d_weight(input, weight.shape, grad_output, stride=stride, padding=padding)
+
+        # Compute gradient of loss w.r.t. input
+        grad_input = torch.nn.grad.conv2d_input(input.shape, weight.data, grad_output, stride=stride, padding=padding)
+
+        if bias is not None:
+            grad_bias = grad_output.sum(dim=[0, 2, 3])
+        else:
+            grad_bias = None
+
+        return grad_input, grad_weight, grad_bias, None, None, None, None
