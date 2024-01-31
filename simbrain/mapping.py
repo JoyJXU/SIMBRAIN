@@ -487,8 +487,7 @@ class MLPMapping(Mapping):
         mem_i += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
 
         # Current to results
-        self.mem_x_read = self.norm_ratio * self.trans_ratio * (
-                mem_i / v_thre - (target_v.sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
+        self.mem_x_read = self.norm_ratio * self.trans_ratio * mem_i / v_thre
 
         return self.mem_x_read.squeeze(0)
 
