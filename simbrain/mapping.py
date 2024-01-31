@@ -308,8 +308,7 @@ class MimoMapping(Mapping):
         mem_i += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
 
         # Current to results
-        self.mem_x_read = self.trans_ratio * (
-                    mem_i / v_thre - torch.matmul(target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon))
+        self.mem_x_read = self.trans_ratio * mem_i / v_thre
 
         return self.mem_x_read
 
