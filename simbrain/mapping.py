@@ -349,10 +349,10 @@ class MLPMapping(Mapping):
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
 
-        self.mem_pos_pos.mem_t = self.mem_t
-        self.mem_neg_pos.mem_t = self.mem_t
-        self.mem_pos_neg.mem_t = self.mem_t
-        self.mem_neg_neg.mem_t = self.mem_t
+        self.mem_pos_pos.mem_t = self.mem_t.clone()
+        self.mem_neg_pos.mem_t = self.mem_t.clone()
+        self.mem_pos_neg.mem_t = self.mem_t.clone()
+        self.mem_neg_neg.mem_t = self.mem_t.clone()
 
 
     def mapping_write_mlp(self, target_x):
@@ -439,7 +439,10 @@ class MLPMapping(Mapping):
 
 
     def mem_t_update(self) -> None:
-        self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_pos_pos.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_neg_pos.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_pos_neg.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_neg_neg.mem_t += self.batch_interval * (self.batch_size - 1)
 
 
     def total_energy_calculation(self) -> None:

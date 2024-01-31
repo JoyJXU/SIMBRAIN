@@ -25,7 +25,7 @@ parser.add_argument('--logdir', default='log/default', help='folder to save to t
 parser.add_argument('--data_root', default='data/', help='folder to save the model')
 parser.add_argument('--decreasing_lr', default='80,120', help='decreasing strategy')
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
-parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
+parser.add_argument("--memristor_device", type=str, default='new_ferro') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
@@ -52,7 +52,7 @@ for k, v in args.__dict__.items():
 print("========================================")
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -77,15 +77,16 @@ model.to(device)
 total_area = 0
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
-        total_area += layer.crossbar_pos.mem_array.area.array_area
-        total_area += layer.crossbar_neg.mem_array.area.array_area
+        total_area += layer.crossbar.mem_pos_pos.area.array_area
+        total_area += layer.crossbar.mem_neg_pos.area.array_area
+        total_area += layer.crossbar.mem_pos_neg.area.array_area
+        total_area += layer.crossbar.mem_neg_neg.area.array_area
 print("total crossbar area=" + str(total_area) + " m2")
 
 # Memristor write
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
         layer.mem_update()
-
 
 # optimizer
 optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.wd, momentum=0.9)
@@ -114,8 +115,7 @@ try:
                 if isinstance(layer, Mem_Linear):
                     layer.mem_update()
                     # mem_t update
-                    layer.crossbar_neg.mem_t_update()
-                    layer.crossbar_pos.mem_t_update()
+                    layer.crossbar.mem_t_update()
 
             if batch_idx % args.log_interval == 0 and batch_idx > 0:
                 pred = output.data.max(1)[1]  # get the index of the max log-probability
@@ -141,15 +141,13 @@ try:
         total_reset_energy = 0
         for layer_name, layer in model.layers.items():
             if isinstance(layer, Mem_Linear):
-                layer.crossbar_pos.mem_array.total_energy_calculation()
-                layer.crossbar_neg.mem_array.total_energy_calculation()
-                sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
-                sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
-                total_read_energy += sim_power_pos['read_energy'] + sim_power_neg['read_energy']
-                total_write_energy += sim_power_pos['write_energy'] + sim_power_neg['write_energy']
-                total_reset_energy += sim_power_pos['reset_energy'] + sim_power_neg['reset_energy']
-                total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
-                average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+                layer.crossbar.total_energy_calculation()
+                sim_power = layer.crossbar.sim_power
+                total_read_energy += sim_power['read_energy']
+                total_write_energy += sim_power['write_energy']
+                total_reset_energy += sim_power['reset_energy']
+                total_energy += sim_power['total_energy']
+                average_power += sim_power['average_power']
         print("total_energy=" + str(total_energy))
         print("total_read_energy=" + str(total_read_energy))
         print("total_write_energy=" + str(total_write_energy))

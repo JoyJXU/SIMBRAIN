@@ -10,7 +10,6 @@ class MemLinearFunction(Function):
     @staticmethod
     def forward(ctx, input: Tensor, weight: Tensor, bias: Tensor, crossbar: MLPMapping) -> Tensor:
         # output_ref = input @ weight.T + bias[None, ...]
-
         output = crossbar.mapping_read_mlp(target_v=input)
 
         if bias is not None:

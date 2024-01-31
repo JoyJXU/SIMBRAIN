@@ -328,6 +328,7 @@ class MemristorArray(torch.nn.Module):
 
         return self.mem_i
 
+
     def memristor_reset(self, mem_v: torch.Tensor):
         # language=rst
         """
