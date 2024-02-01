@@ -638,7 +638,7 @@ class CNNMapping(Mapping):
         self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.norm_ratio_pos = torch.zeros(batch_size, device=self.norm_ratio.device)
         self.norm_ratio_neg = torch.zeros(batch_size, device=self.norm_ratio.device)
-        self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
+        # self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
 
@@ -692,14 +692,36 @@ class CNNMapping(Mapping):
         v_off = mem_info['v_off']
         v_on = mem_info['v_on']
         v_thre = min(abs(v_off), abs(v_on)) * 0.95
-
-        # Read voltage generation
+        #
+        # # Read voltage generation
         v_ratio = torch.max(torch.abs(target_v))
         v_thre = v_thre / v_ratio
-        v_read = target_v * v_thre
+        # v_read = target_v * v_thre
 
-        v_read_pos = torch.relu(v_read)
-        v_read_neg = torch.relu(v_read * -1)
+        # Get normalization ratio
+        read_norm = torch.max(torch.abs(target_v), dim=1)[0]
+
+        # increase one dimension of the input by input_bit
+        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device)
+
+        # positive read sequence generation
+        v_read_pos = torch.relu(target_v)
+        v_read_pos = v_read_pos / read_norm.unsqueeze(1)
+        v_read_pos = torch.round(v_read_pos * (2 ** self.input_bit - 1))
+        v_read_pos = torch.clamp(v_read_pos, 0, 2 ** self.input_bit - 1)
+        v_read_pos = read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * v_read_pos
+        v_read_pos = v_read_pos * v_thre
+
+        # negative read sequence generation
+        v_read_neg = torch.relu(target_v * -1)
+        v_read_neg = v_read_neg / read_norm.unsqueeze(1)
+        v_read_neg = torch.round(v_read_neg * (2 ** self.input_bit - 1))
+        v_read_neg = torch.clamp(v_read_neg, 0, 2 ** self.input_bit - 1)
+        v_read_neg = read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * v_read_neg
+        v_read_neg = v_read_neg * v_thre
+
+        # v_read_pos = torch.relu(v_read)
+        # v_read_neg = torch.relu(v_read * -1)
 
         mem_i = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(0))
         mem_i -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(0))
