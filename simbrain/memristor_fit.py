@@ -61,24 +61,24 @@ class MemristorFitting(object):
             if None not in [k_off, k_on, v_off, v_on, alpha_off, alpha_on, P_off, P_on, G_off, G_on]:
                 pass
 
-            elif os.path.isfile("../IV_curve.xlsx") and os.path.isfile("../conductance.xlsx"):
+            elif os.path.isfile("../memristordata/IV_curve.xlsx") and os.path.isfile("../memristordata/conductance.xlsx"):
                 if None in [v_off, v_on]:
-                    v_off, v_on = 1, -1
+                    # v_off, v_on = 1, -1
                     mem_info.update({"v_off": v_off, "v_on": v_on})
                     pass
 
                 if None in [G_off, G_on]:
-                    G_off, G_on = 1e-6, 1e-8
+                    # G_off, G_on = 1e-6, 1e-8
                     mem_info.update({"G_off": G_off, "G_on": G_on})
                     pass
 
                 if None in [alpha_off, alpha_on]:
-                    alpha_off, alpha_on = IV_curve_fitting.IV_curve_fitting("../IV_curve.xlsx", mem_info)
+                    alpha_off, alpha_on = IV_curve_fitting.IV_curve_fitting("../memristordata/IV_curve.xlsx", mem_info)
                     mem_info.update({"alpha_off": alpha_off, "alpha_on": alpha_on})
                     pass
 
                 if None in [k_off, k_on, P_off, P_on]:
-                    k_off, k_on, P_off, P_on = conductance_fitting.conductance_fitting("../conductance.xlsx", mem_info)
+                    k_off, k_on, P_off, P_on = conductance_fitting.conductance_fitting("../memristordata/conductance.xlsx", mem_info)
                     mem_info.update({"k_off": k_off, "k_on": k_on})
                     pass
 
@@ -144,6 +144,7 @@ class MemristorFitting(object):
             self.fitting_record = mem_info
 
         return self.fitting_record
+
 
 def main():
     # Read dictionary from json
