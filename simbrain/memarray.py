@@ -81,6 +81,8 @@ class MemristorArray(torch.nn.Module):
         with open('../../technology_info.json', 'r') as file:
             self.tech_info_dict = json.load(file)
 
+        self.input_bit = sim_params['input_bit']
+
         self.process_node = sim_params['process_node']
         relax_ratio = 1.25 # Leave space for adjacent memristors
         mem_size = self.memristor_info_dict[self.device_name]['mem_size']
@@ -321,7 +323,8 @@ class MemristorArray(torch.nn.Module):
         # self.mem_i_matrix = mem_v[:, :, :, None] * mem_c[:, None, :, :]
         # self.mem_i = torch.sum(self.mem_i_matrix, dim=2)
 
-        self.mem_t += mem_v.shape[1]
+        # mem_t update according to the sequential read
+        self.mem_t += mem_v.shape[1] * mem_v.shape[2]
         
         # self.power.read_energy_calculation(mem_v_read=mem_v, mem_i=self.mem_i_matrix)
         self.power.read_energy_calculation(mem_v_read=mem_v, mem_c=self.mem_c, total_wire_resistance=self.total_wire_resistance)

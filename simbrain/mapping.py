@@ -26,7 +26,7 @@ class Mapping(torch.nn.Module):
 
         self.device_name = sim_params['device_name'] 
         self.device_structure = sim_params['device_structure']
-
+        self.input_bit = sim_params['input_bit']
 
         if self.device_structure == 'trace':
             self.shape = [1, 1]  # Shape of the memristor crossbar
@@ -52,6 +52,7 @@ class Mapping(torch.nn.Module):
         self.vpos = self.memristor_info_dict[self.device_name]['vinput_pos']
         self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
+        self.v_read = self.memristor_info_dict[self.device_name]['v_read']
 
         self.trans_ratio = 1 / (self.Goff - self.Gon)
 
@@ -214,7 +215,6 @@ class MimoMapping(Mapping):
         )
 
         self.register_buffer("write_pulse_no", torch.Tensor())
-        self.write_pulse_no = torch.zeros(*self.shape, device=self.mem_v.device)
 
         with open('../../memristor_lut.pkl', 'rb') as f:
             self.memristor_luts = pickle.load(f)
@@ -242,6 +242,8 @@ class MimoMapping(Mapping):
         self.mem_neg_pos.set_batch_size(batch_size=batch_size)
         self.mem_pos_neg.set_batch_size(batch_size=batch_size)
         self.mem_neg_neg.set_batch_size(batch_size=batch_size)
+
+        self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
 
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
@@ -387,7 +389,6 @@ class MLPMapping(Mapping):
 
         self.register_buffer("norm_ratio", torch.Tensor())
         self.register_buffer("write_pulse_no", torch.Tensor())
-        self.write_pulse_no = torch.zeros(*self.shape, device=self.mem_v.device)
 
         with open('../../memristor_lut.pkl', 'rb') as f:
             self.memristor_luts = pickle.load(f)
@@ -416,9 +417,11 @@ class MLPMapping(Mapping):
         self.mem_pos_neg.set_batch_size(batch_size=batch_size)
         self.mem_neg_neg.set_batch_size(batch_size=batch_size)
 
+        self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
+
         self.norm_ratio = torch.zeros(batch_size, device=self.norm_ratio.device)
         # TODO: For MLP, batch_interval consist of reset + write + read?
-        self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
+        # self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
 
@@ -467,29 +470,50 @@ class MLPMapping(Mapping):
 
 
     def mapping_read_mlp(self, target_v):
-        # Get threshold voltage
-        mem_info = self.memristor_info_dict[self.device_name]
-        v_off = mem_info['v_off']
-        v_on = mem_info['v_on']
-        v_thre = min(abs(v_off), abs(v_on)) * 0.95
+        # Get normalization ratio
+        read_norm = torch.max(torch.abs(target_v), dim=1)[0]
 
-        # Read voltage generation
-        v_ratio = torch.max(torch.abs(target_v))
-        v_thre = v_thre / v_ratio
-        v_read = target_v * v_thre
+        # increase one dimension of the input by input_bit
+        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device)
 
-        v_read_pos = torch.relu(v_read)
-        v_read_neg = torch.relu(v_read * -1)
+        # positive read sequence generation
+        v_read_pos = torch.relu(target_v)
+        v_read_pos = v_read_pos / read_norm.unsqueeze(1)
+        v_read_pos = torch.round(v_read_pos * (2 ** self.input_bit - 1))
+        v_read_pos = torch.clamp(v_read_pos, 0, 2 ** self.input_bit - 1)
+        v_read_pos = v_read_pos.to(torch.uint8)
+        for i in range(self.input_bit):
+            bit = torch.bitwise_and(v_read_pos, 2 ** i).bool()
+            read_sequence[i] = bit
+        v_read_pos = read_sequence * self.v_read
 
-        mem_i = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(0))
-        mem_i -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(0))
-        mem_i -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(0))
-        mem_i += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
+        # negative read sequence generation
+        v_read_neg = torch.relu(target_v * -1)
+        v_read_neg = v_read_neg / read_norm.unsqueeze(1)
+        v_read_neg = torch.round(v_read_neg * (2 ** self.input_bit - 1))
+        v_read_neg = torch.clamp(v_read_neg, 0, 2 ** self.input_bit - 1)
+        v_read_neg = v_read_neg.to(torch.uint8)
+        for i in range(self.input_bit):
+            bit = torch.bitwise_and(v_read_neg, 2 ** i).bool()
+            read_sequence[i] = bit
+        v_read_neg = read_sequence * self.v_read
+
+        # memrstor sequential read
+        mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(0))
+        mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(0))
+        mem_i_sequence -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(0))
+        mem_i_sequence += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
+
+        # Shift add to get the output current
+        mem_i = torch.zeros(self.batch_size, target_v.shape[0], self.shape[1], device=target_v.device)
+        for i in range(self.input_bit):
+            mem_i += mem_i_sequence[:, i, :, :] * 2**i
 
         # Current to results
-        self.mem_x_read = self.norm_ratio * self.trans_ratio * mem_i / v_thre
+        self.mem_x_read = read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * self.norm_ratio * self.trans_ratio \
+                          * mem_i.squeeze(0) / self.v_read
 
-        return self.mem_x_read.squeeze(0)
+        return self.mem_x_read
 
 
     def m2v(self, target_matrix):
@@ -566,7 +590,6 @@ class CNNMapping(Mapping):
 
         self.register_buffer("norm_ratio", torch.Tensor())
         self.register_buffer("write_pulse_no", torch.Tensor())
-        self.write_pulse_no = torch.zeros(*self.shape, device=self.mem_v.device)
 
         with open('../../memristor_lut.pkl', 'rb') as f:
             self.memristor_luts = pickle.load(f)
@@ -594,6 +617,7 @@ class CNNMapping(Mapping):
         self.mem_pos_neg.set_batch_size(batch_size=batch_size)
         self.mem_neg_neg.set_batch_size(batch_size=batch_size)
 
+        self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.norm_ratio_pos = torch.zeros(batch_size, device=self.norm_ratio.device)
         self.norm_ratio_neg = torch.zeros(batch_size, device=self.norm_ratio.device)
         self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]

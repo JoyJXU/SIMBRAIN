@@ -25,6 +25,7 @@ parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--process_node", type=int, default=10000)
+parser.add_argument("--input_bit", type=int, default=8)
 args = parser.parse_args()
 
 # Sets up Gpu use
@@ -45,7 +46,8 @@ print("Running on Device = ", device)
 mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
               'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-              'aging_effect': args.aging_effect, 'process_node': args.process_node, 'batch_interval': 100}
+              'aging_effect': args.aging_effect, 'process_node': args.process_node, 'input_bit': args.input_bit,
+              'batch_interval': 1}
 
 # Dataset prepare
 print('==> Preparing data..')
