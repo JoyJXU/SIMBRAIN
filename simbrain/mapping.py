@@ -292,6 +292,7 @@ class MimoMapping(Mapping):
 
 
     def mapping_read_mimo(self, target_v):
+        # target_v shape [write_batch_size, read_batch_size, row_no]
         # increase one dimension of the input by input_bit
         read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device)
 
@@ -315,27 +316,16 @@ class MimoMapping(Mapping):
             read_sequence[i] = bit
         v_read_neg = read_sequence * self.v_read
 
-        # # Get threshold voltage
-        # mem_info = self.memristor_info_dict[self.device_name]
-        # v_off = mem_info['v_off']
-        # v_on = mem_info['v_on']
-        # v_thre = min(abs(v_off), abs(v_on)) * 0.95
-        #
-        # # Read voltage generation
-        # v_read = (v_read_pos - v_read_neg) / (2 ** self.input_bit - 1) * v_thre
-        #
-        # v_read_pos = torch.relu(v_read)
-        # v_read_neg = torch.relu(v_read * -1)
-
-        mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(0))
-        mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(0))
-        mem_i_sequence -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(0))
-        mem_i_sequence += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
+        # memrstor sequential read
+        mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
+        mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
+        mem_i_sequence -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
+        mem_i_sequence += self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
 
         # Shift add to get the output current
-        mem_i = torch.zeros(self.batch_size, target_v.shape[0], self.shape[1], device=target_v.device)
+        mem_i = torch.zeros(self.batch_size, target_v.shape[1], self.shape[1], device=target_v.device)
         for i in range(self.input_bit):
-            mem_i += mem_i_sequence[:, i, :, :] * 2 ** i
+            mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
 
         # Current to results
         self.mem_x_read = self.trans_ratio * mem_i / (2 ** self.input_bit - 1) / self.v_read
@@ -527,21 +517,21 @@ class MLPMapping(Mapping):
         v_read_neg = read_sequence * self.v_read
 
         # memrstor sequential read
-        mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(0))
-        mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(0))
-        mem_i_sequence -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(0))
-        mem_i_sequence += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
+        mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(1))
+        mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(1))
+        mem_i_sequence -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(1))
+        mem_i_sequence += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(1))
 
         # Shift add to get the output current
         mem_i = torch.zeros(self.batch_size, target_v.shape[0], self.shape[1], device=target_v.device)
         for i in range(self.input_bit):
-            mem_i += mem_i_sequence[:, i, :, :] * 2**i
+            mem_i += mem_i_sequence[i, :, :, :] * 2**i
 
         # Current to results
-        self.mem_x_read = read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * self.norm_ratio * self.trans_ratio \
-                          * mem_i.squeeze(0) / self.v_read
+        self.mem_x_read = read_norm.unsqueeze(1) / (
+                    2 ** self.input_bit - 1) * self.norm_ratio * self.trans_ratio * mem_i / self.v_read
 
-        return self.mem_x_read
+        return self.mem_x_read.squeeze(0)
 
 
     def m2v(self, target_matrix):
