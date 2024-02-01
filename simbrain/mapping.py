@@ -687,17 +687,6 @@ class CNNMapping(Mapping):
 
 
     def mapping_read_cnn(self, target_v):
-        # Get threshold voltage
-        mem_info = self.memristor_info_dict[self.device_name]
-        v_off = mem_info['v_off']
-        v_on = mem_info['v_on']
-        v_thre = min(abs(v_off), abs(v_on)) * 0.95
-        #
-        # # Read voltage generation
-        v_ratio = torch.max(torch.abs(target_v))
-        v_thre = v_thre / v_ratio
-        # v_read = target_v * v_thre
-
         # Get normalization ratio
         read_norm = torch.max(torch.abs(target_v), dim=1)[0]
 
@@ -709,31 +698,55 @@ class CNNMapping(Mapping):
         v_read_pos = v_read_pos / read_norm.unsqueeze(1)
         v_read_pos = torch.round(v_read_pos * (2 ** self.input_bit - 1))
         v_read_pos = torch.clamp(v_read_pos, 0, 2 ** self.input_bit - 1)
-        v_read_pos = read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * v_read_pos
-        v_read_pos = v_read_pos * v_thre
+        v_read_pos = v_read_pos.to(torch.uint8)
+        for i in range(self.input_bit):
+            bit = torch.bitwise_and(v_read_pos, 2 ** i).bool()
+            read_sequence[i] = bit
+        v_read_pos = read_sequence * self.v_read
+        # v_read_pos = read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * v_read_pos
+        # v_read_pos = v_read_pos * v_thre
 
         # negative read sequence generation
         v_read_neg = torch.relu(target_v * -1)
         v_read_neg = v_read_neg / read_norm.unsqueeze(1)
         v_read_neg = torch.round(v_read_neg * (2 ** self.input_bit - 1))
         v_read_neg = torch.clamp(v_read_neg, 0, 2 ** self.input_bit - 1)
-        v_read_neg = read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * v_read_neg
-        v_read_neg = v_read_neg * v_thre
+        v_read_neg = v_read_neg.to(torch.uint8)
+        for i in range(self.input_bit):
+            bit = torch.bitwise_and(v_read_neg, 2 ** i).bool()
+            read_sequence[i] = bit
+        v_read_neg = read_sequence * self.v_read
+        # v_read_neg = read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * v_read_neg
+        # v_read_neg = v_read_neg * v_thre
 
         # v_read_pos = torch.relu(v_read)
         # v_read_neg = torch.relu(v_read * -1)
 
-        mem_i = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(0))
-        mem_i -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(0))
-        # Current to results
-        self.mem_x_read = self.norm_ratio_pos * self.trans_ratio * (
-                mem_i / v_thre - torch.matmul(target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon))
+        mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(1))
+        mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(1))
 
-        mem_i = self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(0))
-        mem_i -= self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(0))
-        # Current to results
-        self.mem_x_read -= self.norm_ratio_neg * self.trans_ratio * (
-                mem_i / v_thre - torch.matmul(target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon))
+        # Shift add to get the output current
+        mem_i = torch.zeros(self.batch_size, target_v.shape[0], self.shape[1], device=target_v.device)
+        for i in range(self.input_bit):
+            mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
+
+        # Current to results #TODO: need to fix
+        self.mem_x_read = self.norm_ratio_pos * self.trans_ratio * (
+                read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * mem_i - torch.matmul(
+            target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon)) / self.v_read
+
+        mem_i_sequence = self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(1))
+        mem_i_sequence -= self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(1))
+
+        # Shift add to get the output current
+        mem_i.zero_()
+        for i in range(self.input_bit):
+            mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
+
+        # Current to results #TODO: need to fix
+        self.mem_x_read -= self.norm_ratio_pos * self.trans_ratio * (
+                read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * mem_i - torch.matmul(
+            target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon)) / self.v_read
 
         return self.mem_x_read.squeeze(0)
 
