@@ -424,7 +424,8 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
     for _var_abs in sigma_list:
         for _var_rel in sigma_list:
             device_name = sim_params['device_name']
-            batch_interval = 1 + _crossbar.memristor_luts[device_name]['total_no'] * _rows + 1  # reset + write + read
+            input_bit = sim_params['input_bit']
+            batch_interval = 1 + _crossbar.memristor_luts[device_name]['total_no'] * _rows + 1 * input_bit  # reset + write + read
             _crossbar.batch_interval = batch_interval
 
             # Perform c2c variation only

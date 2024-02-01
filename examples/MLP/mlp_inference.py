@@ -49,6 +49,8 @@ mem_device = {'device_structure': args.memristor_structure, 'device_name': args.
               'aging_effect': args.aging_effect, 'process_node': args.process_node, 'input_bit': args.input_bit,
               'batch_interval': 1}
 
+t_begin = time.time()
+
 # Dataset prepare
 print('==> Preparing data..')
 test_loader = dataset.get(batch_size=args.batch_size, data_root=args.data_root, num_workers=1, train=False, val=True)
@@ -132,3 +134,6 @@ for test_cnt in range(args.rep):
     out_txt = 'Accuracy:' + str(acc) + '\n'
     out.write(out_txt)
     out.close()
+
+elapse_time = time.time() - t_begin
+print("Total Elapse: {:.2f}".format(time.time() - t_begin))
