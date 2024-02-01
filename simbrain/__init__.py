@@ -1,3 +1,3 @@
-from simbrain import (mapping, memarray, power,)
+from simbrain import (mapping, memarray, mempower, memarea)
 from simbrain.mapping import Mapping
-__all__ = ["mapping", "memarray", "power","Mapping",]
+__all__ = ["mapping", "memarray", "mempower", "Mapping", "memarea"]
