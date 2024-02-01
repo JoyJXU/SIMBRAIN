@@ -52,96 +52,144 @@ class MemristorFitting(object):
         Aging_k_on = mem_info['Aging_k_on']
 
         # Baseline Model Parameters
-        if self.device_name == "mine":
-            # # if keys exist
-            # if {"k_off", "k_on", "v_off", "v_on", "alpha_off", "alpha_on", "P_off", "P_on", "G_off", "G_on"}.issubset(
-            #         mem_info.keys()):
+        '''
+        # Keys don't exist
+        if {"k_off", "k_on", "v_off", "v_on", "alpha_off", "alpha_on", "P_off", "P_on", "G_off", "G_on"}.issubset(
+        mem_info.keys()):
+        '''
+        # Values are null
+        if None not in [k_off, k_on, v_off, v_on, alpha_off, alpha_on, P_off, P_on, G_off, G_on]:
+            pass
 
-            # if values are None
-            if None not in [k_off, k_on, v_off, v_on, alpha_off, alpha_on, P_off, P_on, G_off, G_on]:
+        elif os.path.isfile("../memristordata/IV_curve.xlsx") and os.path.isfile("../memristordata/conductance.xlsx"):
+            if None in [v_off, v_on]:
+                # v_off, v_on = 1, -1
+                mem_info.update(
+                    {
+                        "v_off": v_off,
+                        "v_on": v_on
+                    }
+                )
                 pass
 
-            elif os.path.isfile("../memristordata/IV_curve.xlsx") and os.path.isfile("../memristordata/conductance.xlsx"):
-                if None in [v_off, v_on]:
-                    # v_off, v_on = 1, -1
-                    mem_info.update({"v_off": v_off, "v_on": v_on})
-                    pass
+            if None in [G_off, G_on]:
+                # G_off, G_on = 1e-6, 1e-8
+                mem_info.update(
+                    {
+                        "G_off": G_off,
+                        "G_on": G_on
+                    }
+                )
+                pass
 
-                if None in [G_off, G_on]:
-                    # G_off, G_on = 1e-6, 1e-8
-                    mem_info.update({"G_off": G_off, "G_on": G_on})
-                    pass
+            if None in [alpha_off, alpha_on]:
+                alpha_off, alpha_on = IV_curve_fitting.IV_curve_fitting("../memristordata/IV_curve.xlsx", mem_info)
+                mem_info.update(
+                    {
+                        "alpha_off": alpha_off,
+                        "alpha_on": alpha_on
+                    }
+                )
+                pass
 
-                if None in [alpha_off, alpha_on]:
-                    alpha_off, alpha_on = IV_curve_fitting.IV_curve_fitting("../memristordata/IV_curve.xlsx", mem_info)
-                    mem_info.update({"alpha_off": alpha_off, "alpha_on": alpha_on})
-                    pass
-
-                if None in [k_off, k_on, P_off, P_on]:
-                    k_off, k_on, P_off, P_on = conductance_fitting.conductance_fitting("../memristordata/conductance.xlsx", mem_info)
-                    mem_info.update({"k_off": k_off, "k_on": k_on})
-                    pass
-
-                self.fitting_record = mem_info
-
-            else:
-                print("Error")
-
-        # Non-ideal Model Parameters
-        if self.device_name == "mine":
-            if self.c2c_variation:
-                if None not in [sigma_relative, sigma_absolute]:
-                    pass
-                # elif os.path.isfile(...):
-                else:
-                    # sigma_relative, sigma_absolute = ...
-                    mem_info.update({"sigma_relative": sigma_relative, "sigma_absolute": sigma_absolute})
-                # else:
-                #     print("Error")
-
-            if self.d2d_variation:
-                if None not in [Gon_sigma, Goff_sigma, Pon_sigma, Poff_sigma]:
-                    pass
-                # elif...
-                else:
-                    # Goff_sigma, Gon_sigma, Poff_sigma, Pon_sigma = ...
-                    mem_info.update({"Gon_sigma": Gon_sigma, "Goff_sigma": Goff_sigma,
-                                     "Poff_sigma": Pon_sigma, "Pon_sigma": Poff_sigma})
-                # else:
-                #     print("Error")
-
-            if self.stuck_at_fault:
-                if None not in [SAF_lambda, SAF_ratio, SAF_delta]:
-                    pass
-                # elif...
-                else:
-                    # SAF_lambda, SAF_ratio, SAF_delta = ...
-                    mem_info.update({"SAF_lambda": SAF_lambda, "SAF_ratio": SAF_ratio, "SAF_delta": SAF_delta})
-                # else:
-                #     print("Error")
-
-            if self.retention_loss:
-                if None not in [retention_loss_tau, retention_loss_beta]:
-                    pass
-                # elif...
-                else:
-                    # retention_loss_tau, retention_loss_beta = ...
-                    mem_info.update({"retention_loss_tau": retention_loss_tau,
-                                     "retention_loss_beta": retention_loss_beta})
-                # else:
-                #     print("Error")
-
-            if self.aging_effect:
-                if None not in [Aging_k_off, Aging_k_on]:
-                    pass
-                # elif...
-                else:
-                    # Aging_k_off, Aging_k_on = ...
-                    mem_info.update({"Aging_k_off": Aging_k_off, "Aging_k_on": Aging_k_on})
-                # else:
-                #     print("Error")
+            if None in [k_off, k_on, P_off, P_on]:
+                k_off, k_on, P_off, P_on = conductance_fitting.conductance_fitting("../memristordata/conductance.xlsx",
+                                                                                   mem_info)
+                mem_info.update(
+                    {
+                        "k_off": k_off,
+                        "k_on": k_on,
+                        "P_off": P_off,
+                        "P_on": P_on
+                    }
+                )
+                pass
 
             self.fitting_record = mem_info
+
+        else:
+            print("Error")
+
+        # Non-ideal Model Parameters
+        if self.c2c_variation:
+            if None not in [sigma_relative, sigma_absolute]:
+                pass
+            # elif os.path.isfile(...):
+            else:
+                # sigma_relative, sigma_absolute = ...
+                mem_info.update(
+                    {
+                        "sigma_relative": sigma_relative,
+                        "sigma_absolute": sigma_absolute
+                    }
+                )
+            # else:
+            #     print("Error")
+
+        if self.d2d_variation:
+            if None not in [Gon_sigma, Goff_sigma, Pon_sigma, Poff_sigma]:
+                pass
+            # elif...
+            else:
+                # Goff_sigma, Gon_sigma, Poff_sigma, Pon_sigma = ...
+                mem_info.update(
+                    {
+                        "Goff_sigma": Goff_sigma,
+                        "Gon_sigma": Gon_sigma,
+                        "Poff_sigma": Pon_sigma,
+                        "Pon_sigma": Poff_sigma
+                    }
+                )
+            # else:
+            #     print("Error")
+
+        if self.stuck_at_fault:
+            if None not in [SAF_lambda, SAF_ratio, SAF_delta]:
+                pass
+            # elif...
+            else:
+                # SAF_lambda, SAF_ratio, SAF_delta = ...
+                mem_info.update(
+                    {
+                        "SAF_lambda": SAF_lambda,
+                        "SAF_ratio": SAF_ratio,
+                        "SAF_delta": SAF_delta
+                    }
+                )
+            # else:
+            #     print("Error")
+
+        if self.retention_loss:
+            if None not in [retention_loss_tau, retention_loss_beta]:
+                pass
+            # elif...
+            else:
+                # retention_loss_tau, retention_loss_beta = ...
+                mem_info.update(
+                    {
+                        "retention_loss_tau": retention_loss_tau,
+                        "retention_loss_beta": retention_loss_beta
+                    }
+                )
+            # else:
+            #     print("Error")
+
+        if self.aging_effect:
+            if None not in [Aging_k_off, Aging_k_on]:
+                pass
+            # elif...
+            else:
+                # Aging_k_off, Aging_k_on = ...
+                mem_info.update(
+                    {
+                        "Aging_k_off": Aging_k_off,
+                        "Aging_k_on": Aging_k_on
+                    }
+                )
+            # else:
+            #     print("Error")
+
+        self.fitting_record = mem_info
 
         return self.fitting_record
 
@@ -160,8 +208,11 @@ def main():
 
     # Run MemristorFitting
     exp = MemristorFitting(sim_params_r, my_memristor_r)
-    exp.mem_fitting()
-    fitting_record_w = exp.fitting_record
+    if exp.device_name == "mine":
+        exp.mem_fitting()
+        fitting_record_w = exp.fitting_record
+    else:
+        fitting_record_w = my_memristor_r
 
     print(fitting_record_w)
 
