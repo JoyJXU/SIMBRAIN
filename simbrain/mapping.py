@@ -732,8 +732,8 @@ class CNNMapping(Mapping):
 
         # Current to results #TODO: need to fix
         self.mem_x_read = self.norm_ratio_pos * self.trans_ratio * (
-                read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * mem_i - torch.matmul(
-            target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon)) / self.v_read
+                    read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i - (
+                        target_v.sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
 
         mem_i_sequence = self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(1))
         mem_i_sequence -= self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(1))
@@ -744,9 +744,9 @@ class CNNMapping(Mapping):
             mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
 
         # Current to results #TODO: need to fix
-        self.mem_x_read -= self.norm_ratio_pos * self.trans_ratio * (
-                read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * mem_i - torch.matmul(
-            target_v.unsqueeze(0), torch.ones_like(self.x) * self.Gon)) / self.v_read
+        self.mem_x_read -= self.norm_ratio_neg * self.trans_ratio * (
+                    read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i - (
+                        target_v.sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
 
         return self.mem_x_read.squeeze(0)
 

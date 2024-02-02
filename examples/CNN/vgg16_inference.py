@@ -22,7 +22,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--rep", type=int, default=10)
-parser.add_argument("--batch_size", type=int, default=100)
+parser.add_argument("--batch_size", type=int, default=10)
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
 parser.add_argument("--memristor_device", type=str, default='new_ferro') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=False)
