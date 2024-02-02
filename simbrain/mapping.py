@@ -730,7 +730,7 @@ class CNNMapping(Mapping):
         for i in range(self.input_bit):
             mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
 
-        # Current to results #TODO: need to fix
+        # Current to results
         self.mem_x_read = self.norm_ratio_pos * self.trans_ratio * (
                     read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i - (
                         target_v.sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
@@ -743,7 +743,7 @@ class CNNMapping(Mapping):
         for i in range(self.input_bit):
             mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
 
-        # Current to results #TODO: need to fix
+        # Current to results
         self.mem_x_read -= self.norm_ratio_neg * self.trans_ratio * (
                     read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i - (
                         target_v.sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
