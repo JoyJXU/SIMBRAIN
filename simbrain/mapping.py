@@ -296,7 +296,7 @@ class MimoMapping(Mapping):
     def mapping_read_mimo(self, target_v):
         # target_v shape [write_batch_size, read_batch_size, row_no]
         # increase one dimension of the input by input_bit
-        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device)
+        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device, dtype=bool)
 
         # positive read sequence generation
         v_read_pos = torch.relu(target_v)
@@ -306,7 +306,8 @@ class MimoMapping(Mapping):
         for i in range(self.input_bit):
             bit = torch.bitwise_and(v_read_pos, 2 ** i).bool()
             read_sequence[i] = bit
-        v_read_pos = read_sequence * self.v_read
+        v_read_pos = read_sequence.clone()
+        read_sequence.zero_()
 
         # negative read sequence generation
         v_read_neg = torch.relu(target_v * -1)
@@ -316,7 +317,7 @@ class MimoMapping(Mapping):
         for i in range(self.input_bit):
             bit = torch.bitwise_and(v_read_neg, 2 ** i).bool()
             read_sequence[i] = bit
-        v_read_neg = read_sequence * self.v_read
+        v_read_neg = read_sequence.clone()
 
         # memrstor sequential read
         mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
@@ -505,7 +506,8 @@ class MLPMapping(Mapping):
         for i in range(self.input_bit):
             bit = torch.bitwise_and(v_read_pos, 2 ** i).bool()
             read_sequence[i] = bit
-        v_read_pos = read_sequence * self.v_read
+        v_read_pos = read_sequence.clone()
+        read_sequence.zero_()
 
         # negative read sequence generation
         v_read_neg = torch.relu(target_v * -1)
@@ -516,7 +518,7 @@ class MLPMapping(Mapping):
         for i in range(self.input_bit):
             bit = torch.bitwise_and(v_read_neg, 2 ** i).bool()
             read_sequence[i] = bit
-        v_read_neg = read_sequence * self.v_read
+        v_read_neg = read_sequence.clone()
 
         # memrstor sequential read
         mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(1))
@@ -703,8 +705,8 @@ class CNNMapping(Mapping):
         for i in range(self.input_bit):
             bit = torch.bitwise_and(v_read_pos, 2 ** i).bool()
             read_sequence[i] = bit
-        v_read_pos = read_sequence
-        read_sequence = None
+        v_read_pos = read_sequence.clone()
+        read_sequence.zero_()
         bit = None
 
         # negative read sequence generation
@@ -714,11 +716,11 @@ class CNNMapping(Mapping):
         v_read_neg = torch.clamp(v_read_neg, 0, 2 ** self.input_bit - 1)
         v_read_neg = v_read_neg.to(torch.uint8)
         # increase one dimension of the input by input_bit
-        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device, dtype=bool)
+        # read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device, dtype=bool)
         for i in range(self.input_bit):
             bit = torch.bitwise_and(v_read_neg, 2 ** i).bool()
             read_sequence[i] = bit
-        v_read_neg = read_sequence
+        v_read_neg = read_sequence.clone()
         read_sequence = None
         bit = None
 
