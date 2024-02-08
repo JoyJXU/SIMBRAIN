@@ -31,7 +31,6 @@ class MemristorArray(torch.nn.Module):
         self.register_buffer("mem_x", torch.Tensor())  # Memristor-based firing traces.
         self.register_buffer("mem_c", torch.Tensor())
         self.register_buffer("mem_c_pre", torch.Tensor())
-        self.register_buffer("mem_i_matrix", torch.Tensor())
         self.register_buffer("mem_i", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
 
@@ -116,7 +115,6 @@ class MemristorArray(torch.nn.Module):
                      self.memristor_info_dict[self.device_name]['G_on']
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
         self.mem_i = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_i.device)
-        self.mem_i_matrix = torch.zeros(batch_size, 1, *self.shape, device=self.mem_i_matrix.device)
 
         if self.c2c_variation:
             self.normal_relative = torch.zeros(batch_size, *self.shape, device=self.normal_relative.device)
@@ -301,13 +299,14 @@ class MemristorArray(torch.nn.Module):
         """
         Memristor read operation for a single simulation step.
 
-        :param mem_v: Voltage inputs to the memristor array.
+        :param mem_v: Voltage inputs to the memristor array, type: bool
         """
         # Detect v_read and threshold voltage
         mem_info = self.memristor_info_dict[self.device_name]
+        v_read = mem_info['v_read']
         v_off = mem_info['v_off']
         v_on = mem_info['v_on']
-        in_threshold = ((mem_v >= v_on) & (mem_v <= v_off)).all().item()
+        in_threshold = (v_read >= v_on) & (v_read <= v_off)
         assert in_threshold, "Read Voltage of the Memristor Array Exceeds the Threshold Voltage!"
 
         # Take the wire resistance into account
@@ -319,15 +318,12 @@ class MemristorArray(torch.nn.Module):
         # mem_v shape: [input_bit, batchsize, read_no=1, array_row],
         # mem_array shape: [batchsize, array_row, array_column],
         # output_i shape: [input_bit, batchsize, read_no=1, array_column]
-        self.mem_i = torch.matmul(mem_v, mem_c)
-        # self.mem_i_matrix = mem_v[:, :, :, None] * mem_c[:, None, :, :]
-        # self.mem_i = torch.sum(self.mem_i_matrix, dim=2)
+        self.mem_i = torch.matmul(mem_v * v_read, mem_c)
 
         # mem_t update according to the sequential read
         self.mem_t += mem_v.shape[0] * mem_v.shape[2]
-        
-        # self.power.read_energy_calculation(mem_v_read=mem_v, mem_i=self.mem_i_matrix)
-        self.power.read_energy_calculation(mem_v_read=mem_v, mem_c=self.mem_c, total_wire_resistance=self.total_wire_resistance)
+
+        self.power.read_energy_calculation(mem_v_bool=mem_v, mem_c=self.mem_c, total_wire_resistance=self.total_wire_resistance)
 
         return self.mem_i
 

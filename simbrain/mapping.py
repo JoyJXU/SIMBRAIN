@@ -39,10 +39,7 @@ class Mapping(torch.nn.Module):
             raise Exception("Only trace, mimo and crossbar architecture are supported!")
         
         self.register_buffer("mem_v", torch.Tensor())
-        self.register_buffer("mem_v_read", torch.Tensor())
         self.register_buffer("mem_x_read", torch.Tensor())
-        self.register_buffer("x", torch.Tensor())
-        self.register_buffer("s", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
 
         with open('../../memristor_device_info.json', 'r') as f:
@@ -72,10 +69,7 @@ class Mapping(torch.nn.Module):
         """
         self.batch_size = batch_size
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
-        self.mem_v_read = torch.zeros(batch_size, 1, self.shape[0], device=self.mem_v.device)
-        self.mem_x_read = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_v.device)
-        self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
-        self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
+        self.mem_x_read = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_x_read.device)
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
        
 
@@ -110,10 +104,18 @@ class STDPMapping(Mapping):
                                         memristor_info_dict=self.memristor_info_dict)
         self.batch_interval = sim_params['batch_interval']
 
+        self.register_buffer("mem_v_read", torch.Tensor())
+        self.register_buffer("x", torch.Tensor())
+        self.register_buffer("s", torch.Tensor())
+
     def set_batch_size_stdp(self, batch_size, learning) -> None:
         self.learning = learning
         self.set_batch_size(batch_size)
         self.mem_array.set_batch_size(batch_size=self.batch_size)
+
+        self.mem_v_read = torch.zeros(batch_size, 1, self.shape[0], device=self.mem_v_read.device)
+        self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
+        self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
 
         if self.learning:
             mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
@@ -435,7 +437,7 @@ class MLPMapping(Mapping):
         self.mem_pos_neg.set_batch_size(batch_size=batch_size)
         self.mem_neg_neg.set_batch_size(batch_size=batch_size)
 
-        self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
+        self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.write_pulse_no.device)
 
         self.norm_ratio = torch.zeros(batch_size, device=self.norm_ratio.device)
         # TODO: For MLP, batch_interval consist of reset + write + read?
@@ -607,7 +609,7 @@ class CNNMapping(Mapping):
         )
 
         self.register_buffer("norm_ratio", torch.Tensor())
-        self.register_buffer("write_pulse_no", torch.Tensor())
+        # self.register_buffer("write_pulse_no", torch.Tensor())
 
         with open('../../memristor_lut.pkl', 'rb') as f:
             self.memristor_luts = pickle.load(f)
@@ -635,7 +637,7 @@ class CNNMapping(Mapping):
         self.mem_pos_neg.set_batch_size(batch_size=batch_size)
         self.mem_neg_neg.set_batch_size(batch_size=batch_size)
 
-        self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
+        # self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.norm_ratio_pos = torch.zeros(batch_size, device=self.norm_ratio.device)
         self.norm_ratio_neg = torch.zeros(batch_size, device=self.norm_ratio.device)
         # self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
@@ -666,22 +668,22 @@ class CNNMapping(Mapping):
         # Positive weight write
         matrix_pos = torch.relu(target_x)
         # Vector to Pulse Serial
-        self.write_pulse_no = self.m2v(matrix_pos / self.norm_ratio_pos)
+        write_pulse_no = self.m2v(matrix_pos / self.norm_ratio_pos)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
-            self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
+            self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
             self.mem_pos_pos.memristor_write(mem_v=self.mem_v)
             self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
 
         # Negative weight write
         matrix_neg = torch.relu(target_x * -1)
         # Vector to Pulse Serial
-        self.write_pulse_no = self.m2v(matrix_neg / self.norm_ratio_neg)
+        write_pulse_no = self.m2v(matrix_neg / self.norm_ratio_neg)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
-            self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
+            self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
             self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
             self.mem_neg_neg.memristor_write(mem_v=self.mem_v)
 
@@ -690,21 +692,20 @@ class CNNMapping(Mapping):
         # Get normalization ratio
         read_norm = torch.max(torch.abs(target_v), dim=1)[0]
 
-        # increase one dimension of the input by input_bit
-        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device)
-
         # positive read sequence generation
         v_read_pos = torch.relu(target_v)
         v_read_pos = v_read_pos / read_norm.unsqueeze(1)
         v_read_pos = torch.round(v_read_pos * (2 ** self.input_bit - 1))
         v_read_pos = torch.clamp(v_read_pos, 0, 2 ** self.input_bit - 1)
         v_read_pos = v_read_pos.to(torch.uint8)
+        # increase one dimension of the input by input_bit
+        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device, dtype=bool)
         for i in range(self.input_bit):
             bit = torch.bitwise_and(v_read_pos, 2 ** i).bool()
             read_sequence[i] = bit
-        v_read_pos = read_sequence * self.v_read
-        # v_read_pos = read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * v_read_pos
-        # v_read_pos = v_read_pos * v_thre
+        v_read_pos = read_sequence
+        read_sequence = None
+        bit = None
 
         # negative read sequence generation
         v_read_neg = torch.relu(target_v * -1)
@@ -712,15 +713,14 @@ class CNNMapping(Mapping):
         v_read_neg = torch.round(v_read_neg * (2 ** self.input_bit - 1))
         v_read_neg = torch.clamp(v_read_neg, 0, 2 ** self.input_bit - 1)
         v_read_neg = v_read_neg.to(torch.uint8)
+        # increase one dimension of the input by input_bit
+        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device, dtype=bool)
         for i in range(self.input_bit):
             bit = torch.bitwise_and(v_read_neg, 2 ** i).bool()
             read_sequence[i] = bit
-        v_read_neg = read_sequence * self.v_read
-        # v_read_neg = read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) * v_read_neg
-        # v_read_neg = v_read_neg * v_thre
-
-        # v_read_pos = torch.relu(v_read)
-        # v_read_neg = torch.relu(v_read * -1)
+        v_read_neg = read_sequence
+        read_sequence = None
+        bit = None
 
         mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(1))
         mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(1))
