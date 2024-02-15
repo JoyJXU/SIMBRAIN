@@ -60,8 +60,8 @@ parser.add_argument("--input_bit", type=int, default=8)
 args = parser.parse_args()
 
 def main():
-    seed = args.seed # Fixe Seed
-    # seed = int(time.time()) # Random Seed
+    # seed = args.seed # Fixe Seed
+    seed = int(time.time()) # Random Seed
     gpu = args.gpu
     # Sets up Gpu use
     os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
@@ -93,14 +93,18 @@ def main():
 
     # plot
     plt.figure(figsize=(13, 4.5))
-    grid = plt.GridSpec(9, 14, wspace=0.5, hspace=0.5)
+    grid = plt.GridSpec(9, 24, wspace=0.5, hspace=0.5)
     ax = plt.subplot(grid[0:4, 0:4])
     bx = plt.subplot(grid[5:9, 0:4])
     cx = plt.subplot(grid[0:4, 5:9])
     dx = plt.subplot(grid[5:9, 5:9])
     ex = plt.subplot(grid[0:4, 10:14])
     fx = plt.subplot(grid[5:9, 10:14])
-    figs = [ax, bx, cx, dx, ex, fx]
+    gx = plt.subplot(grid[0:4, 15:19])
+    hx = plt.subplot(grid[5:9, 15:19])
+    ix = plt.subplot(grid[0:4, 20:24])
+    jx = plt.subplot(grid[5:9, 20:24])
+    figs = [ax, bx, cx, dx, ex, fx, gx, hx, ix, jx]
 
     # Run crossbar size experiments
     size_list = [8, 16, 32, 64, 128, 256, 512, 1024, 2048]

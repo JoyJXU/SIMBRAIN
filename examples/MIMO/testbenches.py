@@ -400,7 +400,7 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
     file_name = "crossbar_size_test_case_r"+str(_rows)+"_c" + \
         str(_cols)+"_rep"+str(_rep)+".csv"
     file_path = _logs[0] #main file path
-    header = ['size']
+    header = ['size', 'me', 'mae', 'rmse', 'rmae', 'rrmse1', 'rrmse2', 'rpd1', 'rpd2', 'rpd3', 'rpd4']
     file = file_path+"/"+file_name # Location to the file for the main results
     # Only write header once
     if not (os.path.isfile(file)):
@@ -486,12 +486,21 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
             # Error calculation
             error = utility.cal_error(golden_model, cross)
             relative_error = error / golden_model
+            rpd1_error = 2 * abs(error / (torch.abs(golden_model) + torch.abs(cross)))
+            rpd2_error = abs(error / torch.max(torch.abs(golden_model), torch.abs(cross)))
+            rpd3_error = error / (torch.abs(golden_model) + 0.001)
+            rpd4_error = error / (torch.abs(golden_model) + 1)
+
             error = error.flatten(0, 2)
             relative_error = relative_error.flatten(0, 2)
+            rpd1_error = rpd1_error.flatten(0, 2)
+            rpd2_error = rpd2_error.flatten(0, 2)
+            rpd3_error = rpd3_error.flatten(0, 2)
+            rpd4_error = rpd4_error.flatten(0, 2)
             print('Error Calculation Done')
             print("<==============>")
 
-            utility.plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error)
+            utility.plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error, rpd1_error, rpd2_error, rpd3_error, rpd4_error)
             print('Visualization Done')
             print("<==============>")
 
@@ -503,8 +512,14 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
             mae = torch.mean(abs(error))
             rmse = torch.sqrt(torch.mean(error**2))
             rmae = torch.mean(abs(relative_error))
-            rrmse = torch.sqrt(torch.mean(relative_error**2))
-            metrics = [me, mae, rmse, rmae, rrmse]
+            rrmse1 = torch.sqrt(torch.mean(relative_error**2))
+            rrmse2 = torch.sqrt(torch.sum(error ** 2) / torch.sum(golden_model.flatten(0, 2) ** 2))
+            rpd1 = torch.mean(rpd1_error)
+            rpd2 = torch.mean(rpd2_error)
+            rpd3 = torch.mean(abs(rpd3_error))
+            rpd4 = torch.mean(abs(rpd4_error))
+            metrics = [me, mae, rmse, rmae, rrmse1, rrmse2, rpd1, rpd2, rpd3, rpd4]
+
 
             data = [str(_rows)]
             [data.append(str(e.item())) for e in metrics]
