@@ -302,7 +302,7 @@ class MimoMapping(Mapping):
         v_read_pos = torch.relu(target_v)
         v_read_pos = torch.round(v_read_pos * (2 ** self.input_bit - 1))
         v_read_pos = torch.clamp(v_read_pos, 0, 2 ** self.input_bit - 1)
-        v_read_pos = v_read_pos.to(torch.uint8)
+        v_read_pos = v_read_pos.to(torch.int64)
         for i in range(self.input_bit):
             bit = torch.bitwise_and(v_read_pos, 2 ** i).bool()
             read_sequence[i] = bit
@@ -313,7 +313,7 @@ class MimoMapping(Mapping):
         v_read_neg = torch.relu(target_v * -1)
         v_read_neg = torch.round(v_read_neg * (2 ** self.input_bit - 1))
         v_read_neg = torch.clamp(v_read_neg, 0, 2 ** self.input_bit - 1)
-        v_read_neg = v_read_neg.to(torch.uint8)
+        v_read_neg = v_read_neg.to(torch.int64)
         for i in range(self.input_bit):
             bit = torch.bitwise_and(v_read_neg, 2 ** i).bool()
             read_sequence[i] = bit
