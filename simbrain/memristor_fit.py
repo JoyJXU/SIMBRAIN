@@ -1,5 +1,6 @@
 import os
 import json
+import copy
 import Fitting_Functions.IV_curve_fitting as IV_curve_fitting
 import Fitting_Functions.conductance_fitting as conductance_fitting
 
@@ -20,7 +21,7 @@ class MemristorFitting(object):
         self.fitting_record = my_memristor
 
     def mem_fitting(self):
-        mem_info = self.fitting_record
+        mem_info = copy.copy(self.fitting_record)
 
         k_off = mem_info['k_off']
         k_on = mem_info['k_on']
@@ -63,7 +64,7 @@ class MemristorFitting(object):
 
         elif os.path.isfile("../memristordata/IV_curve.xlsx") and os.path.isfile("../memristordata/conductance.xlsx"):
             if None in [v_off, v_on]:
-                # v_off, v_on = 1, -1
+                v_off, v_on = 1, -1
                 mem_info.update(
                     {
                         "v_off": v_off,
@@ -73,7 +74,7 @@ class MemristorFitting(object):
                 pass
 
             if None in [G_off, G_on]:
-                # G_off, G_on = 1e-6, 1e-8
+                G_off, G_on = 1e-6, 1e-8
                 mem_info.update(
                     {
                         "G_off": G_off,
@@ -83,7 +84,10 @@ class MemristorFitting(object):
                 pass
 
             if None in [alpha_off, alpha_on]:
-                alpha_off, alpha_on = IV_curve_fitting.IV_curve_fitting("../memristordata/IV_curve.xlsx", mem_info)
+                alpha_off, alpha_on = IV_curve_fitting.IVCurve(
+                    "../memristordata/IV_curve_ferro.xlsx",
+                    mem_info
+                ).fitting()
                 mem_info.update(
                     {
                         "alpha_off": alpha_off,
@@ -92,15 +96,17 @@ class MemristorFitting(object):
                 )
                 pass
 
-            if None in [k_off, k_on, P_off, P_on]:
-                k_off, k_on, P_off, P_on = conductance_fitting.conductance_fitting("../memristordata/conductance.xlsx",
-                                                                                   mem_info)
+            if None in [P_off, P_on, k_off, k_on]:
+                P_off, P_on, k_off, k_on = conductance_fitting.Conductance(
+                    "../memristordata/conductance_ferro.xlsx",
+                    mem_info
+                ).fitting()
                 mem_info.update(
                     {
+                        "P_off": P_off,
+                        "P_on": P_on,
                         "k_off": k_off,
                         "k_on": k_on,
-                        "P_off": P_off,
-                        "P_on": P_on
                     }
                 )
                 pass
@@ -196,15 +202,15 @@ class MemristorFitting(object):
 
 def main():
     # Read dictionary from json
-    file = "../sim_params.json"
+    file = "../memristordata/sim_params.json"
     with open(file) as f:
         sim_params_r = json.load(f)
-    file = "../my_memristor.json"
+    file = "../memristordata/my_memristor_ferro.json"
     with open(file) as f:
         my_memristor_r = json.load(f)
 
-    print(sim_params_r)
-    print(my_memristor_r)
+    print(json.dumps(sim_params_r, indent=4, separators=(',', ':')))
+    # print(json.dumps(my_memristor_r, indent=4, separators=(',', ':')))
 
     # Run MemristorFitting
     exp = MemristorFitting(sim_params_r, my_memristor_r)
@@ -213,11 +219,15 @@ def main():
         fitting_record_w = exp.fitting_record
     else:
         fitting_record_w = my_memristor_r
-
-    print(fitting_record_w)
+    # print(json.dumps(fitting_record_w, indent=4, separators=(',', ':')))
+    # Updated parameters
+    diff_1 = {k: my_memristor_r[k] for k in my_memristor_r if my_memristor_r[k] != fitting_record_w[k]}
+    diff_2 = {k: fitting_record_w[k] for k in fitting_record_w if my_memristor_r[k] != fitting_record_w[k]}
+    print('Before update:\n', json.dumps(diff_1, indent=4, separators=(',', ':')))
+    print('After update:\n', json.dumps(diff_2, indent=4, separators=(',', ':')))
 
     # Write dictionary into json
-    file = "../fitting_record.json"
+    file = "../memristordata/fitting_record.json"
     with open(file, "w") as f:
         json.dump(fitting_record_w, f, indent=2)
 
