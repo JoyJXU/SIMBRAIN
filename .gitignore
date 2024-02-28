@@ -140,6 +140,7 @@ plots/
 
 # Analyzer log default directory.
 logs/
+**/log/
 
 # PyTorch tensorboard log default directory.
 runs/

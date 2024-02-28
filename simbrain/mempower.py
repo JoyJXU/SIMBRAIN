@@ -45,6 +45,8 @@ class Power(torch.nn.Module):
         self.static_reset_energy = 0
         self.register_buffer("selected_write_energy", torch.Tensor())
         self.register_buffer("half_selected_write_energy", torch.Tensor())
+
+        self.v_read = memristor_info_dict[self.device_name]['v_read']
         
         self.wire_cap_row = length_row * 0.2e-15/1e-6
         self.wire_cap_col = length_col * 0.2e-15/1e-6
@@ -69,22 +71,24 @@ class Power(torch.nn.Module):
         self.half_selected_write_energy = torch.zeros(batch_size, *self.shape, device=self.half_selected_write_energy.device)
 
 
-    def read_energy_calculation(self, mem_v_read, mem_c, total_wire_resistance) -> None:
+    def read_energy_calculation(self, mem_v_bool, mem_c, total_wire_resistance) -> None:
         # language=rst
         """
         Calculate read energy for memrisotr crossbar. Called when the crossbar is read.
 
-        :param mem_v_read: Read voltage, shape [batchsize, read_no=1, crossbar_row].
+        :param mem_v_bool: Read voltage, shape [batchsize, read_no=1, crossbar_row], type: bool.
         :param mem_c: Memristor crossbar conductance, shape [batchsize, crossbar_row, crossbar_col].
         :param total_wire_resistance: Wire resistance for every memristor in the crossbar, shape [batchsize, crossbar_row, crossbar_col].
         """
-        mem_v2 = mem_v_read ** 2
-        self.dynamic_read_energy += torch.sum(mem_v2 * self.wire_cap_row)
+        # Use nonzero instead of torch.sum() to save memory
+        v_sum = torch.nonzero(mem_v_bool).size(0)
+        self.dynamic_read_energy += self.v_read ** 2 * v_sum * self.wire_cap_row
 
         mem_r = 1.0 / mem_c
         mem_r = mem_r + total_wire_resistance.unsqueeze(0)
         memristor_c = 1.0 / mem_r
-        self.static_read_energy += torch.sum(torch.matmul(mem_v2, memristor_c)) * self.dt * 1/2
+        for i in range(mem_v_bool.size(0)):
+            self.static_read_energy += self.v_read ** 2 * torch.sum(torch.matmul(mem_v_bool[i].float(), memristor_c)) * self.dt * 1/2
 
         self.read_energy = self.dynamic_read_energy + self.static_read_energy
 

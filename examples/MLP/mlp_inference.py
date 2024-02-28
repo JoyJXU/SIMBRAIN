@@ -18,17 +18,18 @@ parser.add_argument("--rep", type=int, default=10)
 parser.add_argument("--batch_size", type=int, default=100)
 parser.add_argument('--data_root', default='data/', help='folder to save the model')
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
-parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
+parser.add_argument("--memristor_device", type=str, default='new_ferro') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--process_node", type=int, default=10000)
+parser.add_argument("--input_bit", type=int, default=8)
 args = parser.parse_args()
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,7 +46,10 @@ print("Running on Device = ", device)
 mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
               'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-              'aging_effect': args.aging_effect, 'process_node': args.process_node, 'batch_interval': 100}
+              'aging_effect': args.aging_effect, 'process_node': args.process_node, 'input_bit': args.input_bit,
+              'batch_interval': 1}
+
+t_begin = time.time()
 
 # Dataset prepare
 print('==> Preparing data..')
@@ -59,8 +63,10 @@ model = mlp.mem_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrain
 total_area = 0
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
-        total_area += layer.crossbar_pos.mem_array.area.array_area
-        total_area += layer.crossbar_neg.mem_array.area.array_area
+        total_area += layer.crossbar.mem_pos_pos.area.array_area
+        total_area += layer.crossbar.mem_neg_pos.area.array_area
+        total_area += layer.crossbar.mem_pos_neg.area.array_area
+        total_area += layer.crossbar.mem_neg_neg.area.array_area
 print("total crossbar area=", total_area, " m2")
 
 # Memristor write
@@ -78,12 +84,10 @@ total_energy = 0
 average_power = 0
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
-        layer.crossbar_pos.mem_array.total_energy_calculation()
-        layer.crossbar_neg.mem_array.total_energy_calculation()
-        sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
-        sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
-        total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
-        average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+        layer.crossbar.total_energy_calculation()
+        sim_power = layer.crossbar.sim_power
+        total_energy += sim_power['total_energy']
+        average_power += sim_power['average_power']
 print("\ttotal_write_energy=", total_energy)
 print("\taverage_write_power=", average_power)
 
@@ -120,15 +124,16 @@ for test_cnt in range(args.rep):
     average_power = 0
     for layer_name, layer in model.layers.items():
         if isinstance(layer, Mem_Linear):
-            layer.crossbar_pos.mem_array.total_energy_calculation()
-            layer.crossbar_neg.mem_array.total_energy_calculation()
-            sim_power_pos = layer.crossbar_pos.mem_array.power.sim_power
-            sim_power_neg = layer.crossbar_neg.mem_array.power.sim_power
-            total_energy += sim_power_pos['total_energy'] + sim_power_neg['total_energy']
-            average_power += sim_power_pos['average_power'] + sim_power_neg['average_power']
+            layer.crossbar.total_energy_calculation()
+            sim_power = layer.crossbar.sim_power
+            total_energy += sim_power['total_energy']
+            average_power += sim_power['average_power']
     print("\ttotal_energy=", total_energy)
     print("\taverage_power=", average_power)
 
     out_txt = 'Accuracy:' + str(acc) + '\n'
     out.write(out_txt)
     out.close()
+
+elapse_time = time.time() - t_begin
+print("Total Elapse: {:.2f}".format(time.time() - t_begin))
