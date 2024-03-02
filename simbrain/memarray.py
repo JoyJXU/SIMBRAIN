@@ -77,7 +77,7 @@ class MemristorArray(torch.nn.Module):
         self.dt = self.memristor_info_dict[self.device_name]['delta_t']
         self.batch_size = None
 
-        with open('../../technology_info.json', 'r') as file:
+        with open('../../wire_tech_info.json', 'r') as file:
             self.tech_info_dict = json.load(file)
 
         self.input_bit = sim_params['input_bit']
