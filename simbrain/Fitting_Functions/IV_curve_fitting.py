@@ -148,7 +148,6 @@ class IVCurve(object):
                     min_x = j
                     # k_off_best = self.k_off
                     indicator_temp_p = INDICATOR_p[i][j]
-                    print(indicator_temp_p)
 
         # negative
         self.k_off = k_off_list[0]
@@ -170,7 +169,6 @@ class IVCurve(object):
                     min_y = j
                     # k_on_best = self.k_on
                     indicator_temp_n = INDICATOR_n[i][j]
-                    print(indicator_temp_n)
 
         self.alpha_off = alpha_off_list[min_x]
         self.alpha_on = alpha_on_list[min_y]
