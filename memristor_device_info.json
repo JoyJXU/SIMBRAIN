@@ -61,7 +61,7 @@
         "vinput_pos": 6.0,
         "vinput_neg": -2.55,
         "v_read": 0.1,
-        "mem_size":1e-4
+        "mem_size":3.5e-7
     },
     "hu":
     {

@@ -55,7 +55,7 @@ parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variatio
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
-parser.add_argument("--process_node", type=int, default=10000) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:;
+parser.add_argument("--process_node", type=int, default=200) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:;
 parser.add_argument("--input_bit", type=int, default=8)
 args = parser.parse_args()
 
@@ -103,7 +103,8 @@ def main():
         _crossbar.total_area_calculation()
         print("total crossbar area=", _crossbar.sim_area['mem_area'], " m2")
 
-        run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
+        # run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
+        run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
 
     # # plot
     # plt.figure(figsize=(13, 4.5))
