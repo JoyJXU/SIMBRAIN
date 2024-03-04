@@ -11,6 +11,7 @@ import torch
 import argparse
 import numpy as np
 import math
+import json
 
 import sys
 sys.path.append('../../')
@@ -24,7 +25,7 @@ from bindsnet.encoding import PoissonEncoder
 from bindsnet.models import IncreasingInhibitionNetwork
 from bindsnet.network.monitors import Monitor
 from bindsnet.evaluation import all_activity, proportion_weighting, assign_labels
-
+from simbrain.memristor_fit import MemristorFitting
 
 # %% Argument
 parser = argparse.ArgumentParser()
@@ -104,6 +105,31 @@ if n_workers == -1:
 
 n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
+
+# %% Obtain memristor parameters
+with open("../../memristordata/sim_params.json") as f:
+    sim_params_r = json.load(f)
+with open("../../memristordata/my_memristor.json") as f:
+    my_memristor_r = json.load(f)
+print(json.dumps(sim_params_r, indent=4, separators=(',', ':')))
+
+exp = MemristorFitting(sim_params_r, my_memristor_r)
+if exp.device_name == "mine":
+    if exp.mem_size is None:
+        print("Error! Missing mem_size.")
+    else:
+        exp.mem_fitting()
+    fitting_record_w = exp.fitting_record
+else:
+    fitting_record_w = my_memristor_r
+
+diff_1 = {k: my_memristor_r[k] for k in my_memristor_r if my_memristor_r[k] != fitting_record_w[k]}
+diff_2 = {k: fitting_record_w[k] for k in fitting_record_w if my_memristor_r[k] != fitting_record_w[k]}
+print('Before update:\n', json.dumps(diff_1, indent=4, separators=(',', ':')))
+print('After update:\n', json.dumps(diff_2, indent=4, separators=(',', ':')))
+
+with open("../../memristordata/fitting_record.json", "w") as f:
+    json.dump(fitting_record_w, f, indent=2)
 
 # %% Multiple test
 out_root = 'Test_Accuracy_Results.txt'
