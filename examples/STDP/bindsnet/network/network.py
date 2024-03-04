@@ -105,18 +105,13 @@ class Network(torch.nn.Module):
         self.dt = dt
         self.sim_params = sim_params
         self.batch_size = batch_size
-        
-
-        self.register_buffer("mem_current_step", torch.Tensor())
-        self.register_buffer("mem_step_matrix", torch.Tensor())
-        
-        self.mem_current_step = torch.zeros(self.batch_size, device=self.mem_current_step.device)
-        self.mem_step_matrix = torch.arange(self.batch_size, device=self.mem_current_step.device)
 
         self.layers = {}
         self.connections = {}
         self.monitors = {}
-
+        self.sim_power = {}
+        self.total_energy = 0
+        self.average_power = 0
         self.train(learning)
 
         if reward_fn is not None:
@@ -124,8 +119,6 @@ class Network(torch.nn.Module):
         else:
             self.reward_fn = None
 
-        self.total_energy = 0
-        self.average_power = 0
 
     def add_layer(self, layer: Nodes, name: str) -> None:
         # language=rst
@@ -141,6 +134,7 @@ class Network(torch.nn.Module):
         layer.train(self.learning)
         layer.compute_decays(self.dt)
         layer.set_batch_size(self.batch_size)
+
 
     def add_connection(
         self, connection: AbstractConnection, source: str, target: str
@@ -159,6 +153,7 @@ class Network(torch.nn.Module):
         connection.dt = self.dt
         connection.train(self.learning)
 
+
     def add_monitor(self, monitor: AbstractMonitor, name: str) -> None:
         # language=rst
         """
@@ -170,6 +165,7 @@ class Network(torch.nn.Module):
         self.monitors[name] = monitor
         monitor.network = self
         monitor.dt = self.dt
+
 
     def save(self, file_name: str) -> None:
         # language=rst
@@ -206,6 +202,7 @@ class Network(torch.nn.Module):
         """
         torch.save(self, open(file_name, "wb"))
 
+
     def clone(self) -> "Network":
         # language=rst
         """
@@ -217,6 +214,7 @@ class Network(torch.nn.Module):
         torch.save(self, virtual_file)
         virtual_file.seek(0)
         return torch.load(virtual_file)
+
 
     def _get_inputs(self, layers: Iterable = None) -> Dict[str, torch.Tensor]:
         # language=rst
@@ -257,6 +255,7 @@ class Network(torch.nn.Module):
                     inputs[c[1]] += self.connections[c].compute(source.s)
 
         return inputs
+
 
     def run(
         self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, **kwargs
@@ -355,43 +354,39 @@ class Network(torch.nn.Module):
 
                     for l in self.layers:
                         self.layers[l].set_batch_size(self.batch_size)
-                        self.mem_current_step = torch.zeros(self.batch_size, device=self.mem_current_step.device)
-                        self.mem_step_matrix = torch.arange(self.batch_size, device=self.mem_current_step.device)
 
                     for m in self.monitors:
                         self.monitors[m].reset_state_variables()
 
                 break
-        
+
+        # Update SAF mask
         for l in self.layers:
             self.layers[l].update_SAF_mask()
 
-        # TODO: update SAF mask
-        for l in self.layers:
-            self.layers[l].update_SAF_mask()
+        # Print power results
+        if (self.sim_params['device_name'] != 'trace' and self.learning):
+            self.total_energy = 0
+            self.average_power = 0
+            for l in self.layers:
+                self.layers[l].transform.mem_array.total_energy_calculation()
+                self.sim_power = self.layers[l].transform.mem_array.power.sim_power
+                self.total_energy += self.sim_power['total_energy']
+                self.average_power += self.sim_power['average_power']
+            print("total_energy=", self.total_energy)
+            print("average_power=", self.average_power)
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
 
         # Simulate network activity for `time` timesteps.
         for t in range(timesteps):
-            if self.learning:
-                if t == 0:
-                    self.mem_current_step = torch.max(self.mem_current_step[:]) + timesteps * self.mem_step_matrix + 1
-                else:
-                    self.mem_current_step += 1
-            else:
-                if t == 0:
-                    self.mem_current_step.fill_(torch.max(self.mem_current_step[:]))
-
             # Get input to all layers (synchronous mode).
             current_inputs = {}
             if not one_step:
                 current_inputs.update(self._get_inputs())
 
             for l in self.layers:
-                self.layers[l].mem_step = self.mem_current_step
-
                 # Update each layer of nodes.
                 if l in inputs:
                     if l in current_inputs:
@@ -407,11 +402,6 @@ class Network(torch.nn.Module):
                     self.layers[l].forward(x=current_inputs[l])
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
-                
-                # if (self.layers[l].traces and self.sim_params['device_name'] != 'trace' and self.learning):
-                    # self.total_energy += self.layers[l].transform.mem_array.power.total_Energy
-                    # self.average_power += self.layers[l].transform.mem_array.power.average_Powernergy
-                    # self.average_power += self.layers[l].transform.mem_array.power.average_Power
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
@@ -450,13 +440,10 @@ class Network(torch.nn.Module):
             for m in self.monitors:
                 self.monitors[m].record()
 
-        # # Print power results
-        # print("total_energy:", self.total_energy)
-        # print("average_power:", self.average_power)
-
         # Re-normalize connections.
         for c in self.connections:
             self.connections[c].normalize()
+
 
     def reset_state_variables(self) -> None:
         # language=rst
@@ -472,13 +459,13 @@ class Network(torch.nn.Module):
 
         for monitor in self.monitors:
             self.monitors[monitor].reset_state_variables()
-            
-        
+
         
     def mem_t_update(self) -> None:
         for l in self.layers:
-            if (self.layers[l].traces  and self.learning and self.sim_params['device_name'] != 'trace') :
+            if self.layers[l].traces and self.learning and self.sim_params['device_name'] != 'trace':
                 self.layers[l].transform.mem_t_update()
+
 
     def train(self, mode: bool = True) -> "torch.nn.Module":
         # language=rst

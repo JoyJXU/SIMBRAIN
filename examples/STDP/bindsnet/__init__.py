@@ -6,6 +6,7 @@ from bindsnet import (
     evaluation,
     learning,
     models,
+    network,
     utils,
 )
 
@@ -18,7 +19,7 @@ __all__ = [
     "models",
     "datasets",
     "encoding",
-    "evaluation",
     "learning",
+    "evaluation",
     "ROOT_DIR",
 ]
