@@ -19,7 +19,6 @@ class Conductance(object):
                 'Read Voltage(V)'
             ]
         ))
-        print(data)
 
         # Initialize parameters
         self.P_off = 1
@@ -39,6 +38,9 @@ class Conductance(object):
         self.delta_t = dictionary['delta_t']
         self.V_write = np.array(data['Pulse Voltage(V)'])
         self.read_voltage = data['Read Voltage(V)'][0]
+        self.sample_interval = dictionary['sample_interval']
+        if self.sample_interval is None:
+            self.sample_interval = 1
 
         self.start_point_r = 0
         self.points_r = np.where(self.V_write < 0)[0][0]
@@ -125,25 +127,22 @@ class Conductance(object):
         return internal_state, conductance_fit
 
     def fitting(self):
-        P_off_num = 50
-        P_on_num = 50
+        P_off_num = 20
+        P_on_num = 20
         P_off_list = np.logspace(-1, 1, P_off_num, base=10)
         P_on_list = np.logspace(-1, 1, P_on_num, base=10)
 
-        k_off_num = 1000
-        k_on_num = 1000
+        k_off_num = 500
+        k_on_num = 500
         k_off_list = np.logspace(-2, 10, k_off_num, base=10)
         k_on_list = -np.logspace(-2, 10, k_on_num, base=10)
 
         # rise
         V_write_r_temp = self.V_write[self.start_point_r: self.start_point_r + self.points_r]
-        # V_write_r = V_write_r_temp
-        V_write_r = V_write_r_temp[0:500:5]
+        V_write_r = V_write_r_temp[0:self.points_r:self.sample_interval]
         x_init_r = self.x_r[0]
-        # mem_x_r = np.zeros(self.points_r)
-        # mem_c_r = np.zeros(self.points_r)
-        mem_x_r = np.zeros(self.points_r // 5)
-        mem_c_r = np.zeros(self.points_r // 5)
+        mem_x_r = np.zeros(self.points_r // self.sample_interval)
+        mem_c_r = np.zeros(self.points_r // self.sample_interval)
         INDICATOR_r = np.ones([k_off_num, P_off_num])
         indicator_temp_r = 90
         min_x_r = 0
@@ -159,10 +158,8 @@ class Conductance(object):
                     x_init_r,
                     V_write_r
                 )
-                # mem_x_r_repeat = mem_x_r
-                # mem_c_r_repeat = mem_c_r
-                mem_x_r_repeat = [val for val in mem_x_r for i in range(5)]
-                mem_c_r_repeat = [val for val in mem_c_r for i in range(5)]
+                mem_x_r_repeat = [val for val in mem_x_r for i in range(self.sample_interval)]
+                mem_c_r_repeat = [val for val in mem_c_r for i in range(self.sample_interval)]
 
                 INDICATOR_r[i][j] = self.RRMSE_PERCENT(mem_c_r_repeat, self.conductance_r)
                 if INDICATOR_r[i][j] <= indicator_temp_r:
@@ -175,13 +172,10 @@ class Conductance(object):
 
         # decline
         V_write_d_temp = self.V_write[self.start_point_d: self.start_point_d + self.points_d]
-        # V_write_d = V_write_d_temp
-        V_write_d = V_write_d_temp[0:500:5]
+        V_write_d = V_write_d_temp[0:self.points_d:self.sample_interval]
         x_init_d = self.x_d[0]
-        # mem_x_d = np.zeros(self.points_d)
-        # mem_c_d = np.zeros(self.points_d)
-        mem_x_d = np.zeros(self.points_d // 5)
-        mem_c_d = np.zeros(self.points_d // 5)
+        mem_x_d = np.zeros(self.points_d // self.sample_interval)
+        mem_c_d = np.zeros(self.points_d // self.sample_interval)
         INDICATOR_d = np.ones([k_on_num, P_on_num])
         indicator_temp_d = 90
         min_x_d = 0
@@ -197,42 +191,16 @@ class Conductance(object):
                     x_init_d,
                     V_write_d
                 )
-                # mem_x_d_repeat = mem_x_d
-                # mem_c_d_repeat = mem_c_d
-                mem_x_d_repeat = [val for val in mem_x_d for i in range(5)]
-                mem_c_d_repeat = [val for val in mem_c_d for i in range(5)]
+                mem_x_d_repeat = [val for val in mem_x_d for i in range(self.sample_interval)]
+                mem_c_d_repeat = [val for val in mem_c_d for i in range(self.sample_interval)]
 
                 INDICATOR_d[i][j] = self.RRMSE_PERCENT(mem_c_d_repeat, self.conductance_d)
                 if INDICATOR_d[i][j] <= indicator_temp_d:
                     min_x_d = i
                     min_y_d = j
                     indicator_temp_d = INDICATOR_d[i][j]
-                # print(INDICATOR_d[i][j])
-                # print(indicator_temp_d)
 
         self.k_on = k_on_list[min_x_d]
         self.P_on = P_on_list[min_y_d]
 
         return self.P_off, self.P_on, self.k_off, self.k_on
-
-
-def main():
-    exp = Conductance(
-        "../../memristordata/conductance_ferro.xlsx",
-        {
-            'G_on': 7e-8, 'G_off': 9e-6,
-            'v_on': -2, 'v_off': 1.4,
-            'k_off': None, 'k_on': None,
-            'P_off': None, 'P_on': None,
-            'alpha_off': 3, 'alpha_on': 4,
-            'delta_t': 1e-7, 'read_voltage': 0.1
-        }
-    )
-    P_off, P_on, k_off, k_on = exp.fitting()
-    print('P_off:{}\nP_on:{}\nk_off:{}\nk_on:{}'.format(P_off, P_on, k_off, k_on))
-
-    return 0
-
-
-if __name__ == '__main__':
-    main()
