@@ -1,5 +1,6 @@
 from typing import Iterable, Optional, Union
 from simbrain.memarray import MemristorArray
+from simbrain.periphcircuit import PeriphCircuit
 import json
 import pickle
 import torch
@@ -101,6 +102,8 @@ class STDPMapping(Mapping):
         )
 
         self.mem_array = MemristorArray(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit = PeriphCircuit(sim_params=sim_params, shape=self.shape,
                                         memristor_info_dict=self.memristor_info_dict)
         self.batch_interval = sim_params['batch_interval']
 
@@ -235,6 +238,15 @@ class MimoMapping(Mapping):
         self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
 
+        self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_neg_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_pos_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        
         self.batch_interval = sim_params['batch_interval']
 
 
@@ -319,7 +331,7 @@ class MimoMapping(Mapping):
             read_sequence[i] = bit
         v_read_neg = read_sequence.clone()
 
-        # memrstor sequential read
+        # memristor sequential read
         mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
         mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
         mem_i_sequence -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
@@ -428,6 +440,15 @@ class MLPMapping(Mapping):
         self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
 
+        self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_neg_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_pos_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        
         self.batch_interval = sim_params['batch_interval']
 
 
@@ -629,6 +650,15 @@ class CNNMapping(Mapping):
         # Corssbar for negative input and negative weight
         self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
+
+        self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_neg_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_pos_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        memristor_info_dict=self.memristor_info_dict)
 
         self.batch_interval = sim_params['batch_interval']
 
