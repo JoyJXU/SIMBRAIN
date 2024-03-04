@@ -19,7 +19,6 @@ class IVCurve(object):
                 'Current Response(A)'
             ]
         ))
-        # print(data)
 
         # Initialize parameters
         self.alpha_off = 1
@@ -36,47 +35,14 @@ class IVCurve(object):
         self.P_on = dictionary['P_on']
 
         # Default parameters
-        if None in [self.k_off, self.k_on]:
-            self.k_off = 1  # 1000
-            self.k_on = -1  # -10
         if None in [self.P_off, self.P_on]:
             self.P_off = 1
             self.P_on = 1
 
         # Read data
-        self.read_voltage = dictionary['read_voltage']
-        self.delta_t = data['Time(s)'][1] - data['Time(s)'][0]
         self.voltage = np.array(data['Excitation Voltage(V)'])
         self.current = np.array(data['Current Response(A)'])
-
-    def RRMSE_MEAN(
-            self,
-            internal_state,
-            x
-    ):
-        points = len(internal_state)
-        x_diff = list(map(lambda x: x[0] - x[1], zip(internal_state, x)))
-        square_sum = np.dot(x_diff, x_diff)
-        mean_square_sum = square_sum / points
-        RMSE = np.sqrt(mean_square_sum)
-        RRMSE_mean = RMSE / np.mean(x)
-        return RRMSE_mean
-
-    def RRMSE_PERCENT(
-            self,
-            conductance_fit,
-            conductance
-    ):
-        points = len(conductance_fit)
-        c_diff = list(map(lambda x: x[0] - x[1], zip(conductance_fit, conductance)))
-        c_diff_percent = []
-        for i in range(len(c_diff)):
-            c_diff_percent.append(c_diff[i] / conductance[i])
-
-        square_sum = np.dot(c_diff_percent, c_diff_percent)
-        mean_square_sum = square_sum / len(c_diff_percent)
-        RRMSE_percent = np.sqrt(mean_square_sum)
-        return RRMSE_percent
+        self.delta_t = data['Time(s)'][1] - data['Time(s)'][0]
 
     def Memristor_conductance_model(
             self,
@@ -121,71 +87,92 @@ class IVCurve(object):
         return internal_state, conductance_fit
 
     def fitting(self):
-        alpha_off_list = [i+1 for i in range(10)]
-        alpha_on_list = [i+1 for i in range(10)]
         alpha_off_num = 10
         alpha_on_num = 10
+        alpha_off_list = [i+1 for i in range(10)]
+        alpha_on_list = [i+1 for i in range(10)]
+
+        if None in [self.k_off, self.k_on]:
+            k_off_num = 1000
+            k_on_num = 1000
+            k_off_list = np.logspace(-4, 9, k_off_num, base=10)
+            k_on_list = -np.logspace(-4, 9, k_on_num, base=10)
+        else:
+            k_off_num = 1
+            k_on_num = 1
+            k_off_list = np.array(self.k_off)
+            k_on_list = np.array(self.k_on)
 
         V_write = self.voltage
         points = len(V_write)
-        x_init = (self.current[0] / self.read_voltage - self.G_on) / (self.G_off - self.G_on)
-        if x_init < 0:
-            x_init = 0
-        elif x_init > 1:
-            x_init = 1
+        V_write_p = V_write[:int(points / 2)]
+        V_write_n = V_write[int(points / 2):]
+        current_p = self.current[:int(points / 2)]
+        current_n = self.current[int(points / 2):]
 
-        INDICATOR = [[1 for col in range(alpha_on_num)] for row in range(alpha_off_num)]
-        indicator_temp = 90
+        x_init_p = (current_p[0] / self.voltage[0] - self.G_on) / (self.G_off - self.G_on)
+        if x_init_p < 0:
+            x_init_p = 0
+        elif x_init_p > 1:
+            x_init_p = 1
+        x_init_n = (current_n[0] / self.voltage[int(points / 2)] - self.G_on) / (self.G_off - self.G_on)
+        if x_init_n < 0:
+            x_init_n = 0
+        elif x_init_n > 1:
+            x_init_n = 1
+
+        INDICATOR_p = np.ones([k_off_num, alpha_off_num])
+        INDICATOR_n = np.ones([k_on_num, alpha_on_num])
+        indicator_temp_p = 90
+        indicator_temp_n = 90
         min_x = 0
         min_y = 0
 
-        for i in range(alpha_off_num):
-            for j in range(alpha_on_num):
-                mem_x, mem_c = self.Memristor_conductance_model(
-                    alpha_off_list[i],
-                    alpha_on_list[j],
-                    x_init,
-                    self.voltage
+        # positive
+        self.k_on = k_on_list[0]
+        for i in range(k_off_num):
+            for j in range(alpha_off_num):
+                self.k_off = k_off_list[i]
+                mem_x_p, mem_c_p = self.Memristor_conductance_model(
+                    alpha_off_list[j],
+                    alpha_on_list[0],
+                    x_init_p,
+                    V_write_p
                 )
-                current_fit = np.array(mem_c) * np.array(self.voltage)
+                current_fit_p = np.array(mem_c_p) * np.array(V_write_p)
                 # RRMSE calculation
-                i_diff = list(map(lambda x: x[0] - x[1], zip(current_fit, self.current)))
-                INDICATOR[i][j] = np.sqrt(np.dot(i_diff, i_diff) / np.dot(self.current, self.current) / points)
+                i_diff = np.array(list(map(lambda x: x[0] - x[1], zip(current_fit_p, current_p))))
+                INDICATOR_p[i][j] = np.sqrt(np.dot(i_diff, i_diff) / np.dot(current_p, current_p) / int(points / 2))
 
-                if INDICATOR[i][j] <= indicator_temp:
-                    min_x = i
+                if INDICATOR_p[i][j] <= indicator_temp_p:
+                    min_x = j
+                    # k_off_best = self.k_off
+                    indicator_temp_p = INDICATOR_p[i][j]
+                    print(indicator_temp_p)
+
+        # negative
+        self.k_off = k_off_list[0]
+        for i in range(k_on_num):
+            for j in range(alpha_on_num):
+                self.k_on = k_on_list[i]
+                mem_x_n, mem_c_n = self.Memristor_conductance_model(
+                    alpha_off_list[0],
+                    alpha_on_list[j],
+                    x_init_n,
+                    V_write_n
+                )
+                current_fit_n = np.array(mem_c_n) * np.array(V_write_n)
+                # RRMSE calculation
+                i_diff = np.array(list(map(lambda x: x[0] - x[1], zip(current_fit_n, current_n))))
+                INDICATOR_n[i][j] = np.sqrt(np.dot(i_diff, i_diff) / np.dot(current_n, current_n) / int(points / 2))
+
+                if INDICATOR_n[i][j] <= indicator_temp_n:
                     min_y = j
-                    indicator_temp = INDICATOR[i][j]
+                    # k_on_best = self.k_on
+                    indicator_temp_n = INDICATOR_n[i][j]
+                    print(indicator_temp_n)
 
         self.alpha_off = alpha_off_list[min_x]
         self.alpha_on = alpha_on_list[min_y]
 
         return self.alpha_off, self.alpha_on
-
-
-def main():
-    dict_f = {
-        'G_on': 7.0e-8, 'G_off': 9.0e-6,
-        'v_on': -2, 'v_off': 1.4,
-        'k_off': 0.8, 'k_on': -42,
-        'P_off': None, 'P_on': None,
-        'read_voltage': 0.1
-    }
-    dict_h = {
-        'G_on': 2.5e-10, 'G_off': 1.9e-9,
-        'v_on': -2, 'v_off': 2,
-        'k_off': None, 'k_on': None,
-        'P_off': None, 'P_on': None,
-        'read_voltage': 0.5
-    }
-    exp = IVCurve(
-        "../../memristordata/IV_curve_ferro.xlsx",
-        dict_f
-    )
-    alpha_off, alpha_on = exp.fitting()
-    print('alpha_off:{}\nalpha_on:{}'.format(alpha_off, alpha_on))
-    return 0
-
-
-if __name__ == '__main__':
-    main()
