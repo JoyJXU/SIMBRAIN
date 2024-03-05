@@ -631,11 +631,11 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
         _crossbar.set_batch_size_mimo(_batch_size)
 
         # matrix and vector random generation
-        matrix = torch.rand(_rep, _rows, _cols, device=device)
-        # matrix = -1 + 2 * torch.rand(_rep, _rows, _cols, device=device)
+        # matrix = torch.rand(_rep, _rows, _cols, device=device)
+        matrix = -1 + 2 * torch.rand(_rep, _rows, _cols, device=device)
         # matrix = torch.ones(_rep, _rows, _cols, device=device)
-        vector = torch.rand(_rep, 1, _rows, device=device)
-        # vector = -1 + 2 * torch.rand(_rep, 1, _rows, device=device)
+        # vector = torch.rand(_rep, 100000, _rows, device=device)
+        vector = -1 + 2 * torch.rand(_rep, 1, _rows, device=device)
         # vector = torch.ones(_rep, 1, _rows, device=device)
         # print("Randomized input")
 

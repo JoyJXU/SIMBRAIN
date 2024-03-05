@@ -46,16 +46,16 @@ parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--rows", type=int, default=8)
 parser.add_argument("--cols", type=int, default=1)
-parser.add_argument("--rep", type=int, default=10000)
-parser.add_argument("--batch_size", type=int, default=10000)
+parser.add_argument("--rep", type=int, default=1)
+parser.add_argument("--batch_size", type=int, default=1)
 parser.add_argument("--memristor_structure", type=str, default='mimo') # trace, mimo or crossbar 
 parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
-parser.add_argument("--c2c_variation", type=bool, default=False)
-parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
+parser.add_argument("--c2c_variation", type=bool, default=True)
+parser.add_argument("--d2d_variation", type=int, default=1) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
-parser.add_argument("--process_node", type=int, default=200) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:;
+parser.add_argument("--process_node", type=int, default=200) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
 parser.add_argument("--input_bit", type=int, default=8)
 args = parser.parse_args()
 
