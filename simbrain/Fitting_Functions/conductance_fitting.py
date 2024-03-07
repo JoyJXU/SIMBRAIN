@@ -3,11 +3,22 @@ import pandas as pd
 
 
 class Conductance(object):
+    """
+    Abstract base class for fitting parameters k & P with Conductance data.
+    """
+
     def __init__(
             self,
             file,
             dictionary: dict = {}
     ):
+        """
+        Abstract base class constructor.
+        :param file: Conductance data file.
+        :param dictionary: The parameters of the memristor device.
+        """
+        super().__init__()
+
         # Read excel
         data = pd.DataFrame(pd.read_excel(
             file,
@@ -36,11 +47,12 @@ class Conductance(object):
 
         # Read data
         self.delta_t = dictionary['delta_t']
-        self.V_write = np.array(data['Pulse Voltage(V)'])
-        self.read_voltage = data['Read Voltage(V)'][0]
         self.sample_interval = dictionary['sample_interval']
         if self.sample_interval is None:
             self.sample_interval = 1
+
+        self.V_write = np.array(data['Pulse Voltage(V)'])
+        self.read_voltage = data['Read Voltage(V)'][0]
 
         self.start_point_r = 0
         self.points_r = np.where(self.V_write < 0)[0][0]
