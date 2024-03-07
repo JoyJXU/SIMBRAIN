@@ -3,11 +3,22 @@ import pandas as pd
 
 
 class IVCurve(object):
+    """
+    Abstract base class for fitting parameter alpha with IV curve data.
+    """
+
     def __init__(
             self,
             file,
             dictionary: dict = {}
     ):
+        """
+        Abstract base class constructor.
+        :param file: IV curve data file.
+        :param dictionary: The parameters of the memristor device.
+        """
+        super().__init__()
+
         # Read excel
         data = pd.DataFrame(pd.read_excel(
             file,
@@ -27,8 +38,11 @@ class IVCurve(object):
         # Read parameters
         self.v_off = dictionary['v_off']
         self.v_on = dictionary['v_on']
-        self.G_off = dictionary['G_off']
-        self.G_on = dictionary['G_on']
+        self.G_off = dictionary['Goff_sigma']
+        self.G_on = dictionary['Gon_sigma']
+        if None in [self.G_off, self.G_on]:
+            self.G_off = dictionary['G_off']
+            self.G_on = dictionary['G_on']
         self.k_off = dictionary['k_off']
         self.k_on = dictionary['k_on']
         self.P_off = dictionary['P_off']
