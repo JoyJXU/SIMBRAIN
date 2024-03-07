@@ -1,16 +1,27 @@
 import os
-import json
 import copy
-import simbrain.Fitting_Functions.IV_curve_fitting as IV_curve_fitting
-import simbrain.Fitting_Functions.conductance_fitting as conductance_fitting
+from simbrain.Fitting_Functions.IV_curve_fitting import IVCurve
+from simbrain.Fitting_Functions.conductance_fitting import Conductance
 
 
 class MemristorFitting(object):
+    """
+    Abstract base class for fitting the parameters of the memristor device.
+    """
+
     def __init__(
             self,
             sim_params: dict = {},
-            my_memristor: dict = {}
+            my_memristor: dict = {},
+            **kwargs,
     ):
+        """
+        Abstract base class constructor.
+        :param sim_params: Memristor device to be used in learning
+        :param my_memristor: The parameters of the memristor device.
+        """
+        super().__init__()
+
         self.device_name = sim_params['device_name']
         self.c2c_variation = sim_params['c2c_variation']
         self.d2d_variation = sim_params['d2d_variation']
@@ -106,7 +117,7 @@ class MemristorFitting(object):
         elif not os.path.isfile(os.path.dirname(os.path.dirname(__file__)) + "/memristordata/IV_curve.xlsx"):
             print("Error! Missing data files.\nFailed to update alpha_off, alpha_on.")
         else:
-            alpha_off, alpha_on = IV_curve_fitting.IVCurve(
+            alpha_off, alpha_on = IVCurve(
                 os.path.dirname(os.path.dirname(__file__)) + "/memristordata/IV_curve.xlsx",
                 mem_info
             ).fitting()
@@ -125,7 +136,7 @@ class MemristorFitting(object):
         elif not os.path.isfile(os.path.dirname(os.path.dirname(__file__)) + "/memristordata/conductance.xlsx"):
             print("Error! Missing data files.\nFailed to update P_off, P_on, k_off, k_on.")
         else:
-            P_off, P_on, k_off, k_on = conductance_fitting.Conductance(
+            P_off, P_on, k_off, k_on = Conductance(
                 os.path.dirname(os.path.dirname(__file__)) + "/memristordata/conductance.xlsx",
                 mem_info
             ).fitting()
@@ -183,7 +194,7 @@ class MemristorFitting(object):
                 )
 
         # %% Retention loss
-        if self.retention_loss:
+        if self.retention_loss in [1, 2]:
             if None not in [retention_loss_tau, retention_loss_beta]:
                 pass
             # elif None in []:
@@ -198,7 +209,7 @@ class MemristorFitting(object):
                 )
 
         # %% Aging effect
-        if self.aging_effect:
+        if self.aging_effect in [1, 2]:
             if None not in [Aging_k_off, Aging_k_on]:
                 pass
             # elif None in []:
