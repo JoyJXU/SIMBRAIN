@@ -58,7 +58,7 @@ parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect,
 parser.add_argument("--input_bit", type=int, default=8)
 parser.add_argument("--ADC_accuracy", type=int, default=8)
 parser.add_argument("--wire_width", type=int, default=10000)
-parser.add_argument("--CMOS_technode", type=int, default=32)
+parser.add_argument("--CMOS_technode", type=str, default='32')
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP or LP
 args = parser.parse_args()
 

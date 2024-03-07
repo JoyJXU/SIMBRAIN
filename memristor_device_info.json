@@ -29,7 +29,7 @@
         "vinput_pos": 100,
         "vinput_neg": -1.4877,
         "v_read": 0.1,
-        "mem_size":1e-4
+        "mem_size":0.8e-4
     },
     "ferro":
     {
@@ -61,7 +61,7 @@
         "vinput_pos": 6.0,
         "vinput_neg": -2.55,
         "v_read": 0.1,
-        "mem_size":1e-4
+        "mem_size":0.8e-4
     },
     "hu":
     {
@@ -93,7 +93,7 @@
         "vinput_pos": 12,
         "vinput_neg": -3.63,
         "v_read": 0.5,
-        "mem_size":1e-4
+        "mem_size":0.8e-4
     },
     "new_ferro":
     {
@@ -125,7 +125,7 @@
         "vinput_pos": 6.0,
         "vinput_neg": -2.55,
         "v_read": 0.1,
-        "mem_size":1e-4
+        "mem_size":0.8e-4
     },
     "ferro_resistance_abandon":
     {
