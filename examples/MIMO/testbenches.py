@@ -597,11 +597,12 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
     _var_abs = 0
     _var_rel = 0
     no_trial = 5
+    read_batch = 1
 
     for trial in range(no_trial):
         device_name = sim_params['device_name']
         input_bit = sim_params['input_bit']
-        batch_interval = 1 + _crossbar.memristor_luts[device_name]['total_no'] * _rows + 1 * input_bit  # reset + write + read
+        batch_interval = 1 + _crossbar.memristor_luts[device_name]['total_no'] * _rows + read_batch * input_bit  # reset + write + read
         _crossbar.batch_interval = batch_interval
 
         _var_g = 0.055210197891837
@@ -634,8 +635,8 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
         # matrix = torch.rand(_rep, _rows, _cols, device=device)
         matrix = -1 + 2 * torch.rand(_rep, _rows, _cols, device=device)
         # matrix = torch.ones(_rep, _rows, _cols, device=device)
-        # vector = torch.rand(_rep, 100000, _rows, device=device)
-        vector = -1 + 2 * torch.rand(_rep, 1, _rows, device=device)
+        # vector = torch.rand(_rep, 1, _rows, device=device)
+        vector = -1 + 2 * torch.rand(_rep, read_batch, _rows, device=device)
         # vector = torch.ones(_rep, 1, _rows, device=device)
         # print("Randomized input")
 
@@ -657,9 +658,6 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
             cross[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
                 target_v=vector_batch)
 
-            # mem_t update
-            _crossbar.mem_t_update()
-
             # print power results
             _crossbar.total_energy_calculation()
             sim_power = _crossbar.sim_power
@@ -667,6 +665,10 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
             average_power = sim_power['average_power']
             print("total_energy=", total_energy)
             print("average_power=", average_power)
+
+            # mem_t update # Avoid mem_t at the last batch
+            if not step == n_step - 1:
+                _crossbar.mem_t_update()
 
         # Error calculation
         error = utility.cal_error(golden_model, cross)

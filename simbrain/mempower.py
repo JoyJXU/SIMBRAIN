@@ -224,4 +224,5 @@ class Power(torch.nn.Module):
                           'write_energy': self.write_energy,
                           'reset_energy': self.reset_energy,
                           'total_energy': self.total_energy,
+                          'time': torch.max(mem_t) * self.dt,
                           'average_power': self.average_power}

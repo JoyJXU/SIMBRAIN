@@ -372,7 +372,8 @@ class MimoMapping(Mapping):
         self.mem_neg_neg.total_energy_calculation()
 
         self.sim_power = {key: self.mem_pos_pos.power.sim_power[key] + self.mem_neg_pos.power.sim_power[key] +
-                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key]
+                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key] if key != 'time'
+                          else self.mem_pos_pos.power.sim_power[key]
                           for key in self.mem_pos_pos.power.sim_power.keys()}
 
 
