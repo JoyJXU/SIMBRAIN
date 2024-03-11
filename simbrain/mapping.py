@@ -160,18 +160,17 @@ class STDPMapping(Mapping):
                 s = torch.unsqueeze(s, 1)
 
         # Read Voltage generation
-        v_read = 0.01 # TODO: make v_read a parameter in memristor_device_info.json like vneg/vpos
-        # For every batch, read is not necesary when there is no spike s
+        # For every batch, read is not necessary when there is no spike s
         s_sum = torch.sum(s, dim=2).squeeze()
         s_sum = torch.unsqueeze(s_sum, 1)
 
         self.mem_v_read.zero_()
-        self.mem_v_read[s_sum.bool()] = v_read
+        self.mem_v_read[s_sum.bool()] = 1
 
         mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read)
 
         # current to trace
-        self.mem_x_read = (mem_i/v_read - self.Gon) * self.trans_ratio
+        self.mem_x_read = (mem_i/self.v_read - self.Gon) * self.trans_ratio
 
         self.mem_x_read[~s_sum.bool()] = 0
 

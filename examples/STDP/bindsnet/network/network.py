@@ -365,7 +365,7 @@ class Network(torch.nn.Module):
             self.layers[l].update_SAF_mask()
 
         # Print power results
-        if (self.sim_params['device_name'] != 'trace' and self.learning):
+        if (self.sim_params['device_name'] != 'trace' and self.learning and self.sim_params['power_estimation']):
             self.total_energy = 0
             self.average_power = 0
             for l in self.layers:

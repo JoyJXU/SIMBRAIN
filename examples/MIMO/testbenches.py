@@ -658,13 +658,14 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
             cross[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
                 target_v=vector_batch)
 
-            # print power results
-            _crossbar.total_energy_calculation()
-            sim_power = _crossbar.sim_power
-            total_energy = sim_power['total_energy']
-            average_power = sim_power['average_power']
-            print("total_energy=", total_energy)
-            print("average_power=", average_power)
+            if sim_params['power_estimation']:
+                # print power results
+                _crossbar.total_energy_calculation()
+                sim_power = _crossbar.sim_power
+                total_energy = sim_power['total_energy']
+                average_power = sim_power['average_power']
+                print("total_energy=", total_energy)
+                print("average_power=", average_power)
 
             # mem_t update # Avoid mem_t at the last batch
             if not step == n_step - 1:

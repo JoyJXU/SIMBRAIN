@@ -32,6 +32,7 @@ parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--input_bit", type=int, default=8)
 parser.add_argument("--process_node", type=int, default=10000)
+parser.add_argument("--power_estimation", type=int, default=True)
 args = parser.parse_args()
 
 # Sets up Gpu use
@@ -49,11 +50,11 @@ else:
 print("Running on Device = ", device)
 
 # Mem device setup
-mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
+sim_params = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
               'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
               'aging_effect': args.aging_effect, 'process_node': args.process_node, 'input_bit': args.input_bit,
-              'batch_interval': 1}
+              'batch_interval': 1, 'power_estimation': args.power_estimation}
 
 # Dataset prepare
 print('==> Preparing data..')
@@ -70,10 +71,10 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 
 # Network Model
 print('==> Building memristor-based model..')
-net = mem_VGG('VGG16', mem_device=mem_device)
+net = mem_VGG('VGG16', mem_device=sim_params)
 net = net.to(device)
 
-# print power results
+# print area results
 total_area = 0
 for layer in net.features.children():
     if isinstance(layer, Mem_Conv2d):
@@ -146,14 +147,24 @@ for test_cnt in range(args.rep):
     acc = 100.*correct/total
     print('Accuracy Results:' + str(acc))
 
-    # print power results
-    total_energy = 0
-    average_power = 0
-    total_read_energy = 0
-    total_write_energy = 0
-    total_reset_energy = 0
-    for layer in net.features.children():
-        if isinstance(layer, Mem_Conv2d):
+    if sim_params['power_estimation']:
+        # print power results
+        total_energy = 0
+        average_power = 0
+        total_read_energy = 0
+        total_write_energy = 0
+        total_reset_energy = 0
+        for layer in net.features.children():
+            if isinstance(layer, Mem_Conv2d):
+                layer.crossbar.total_energy_calculation()
+                sim_power = layer.crossbar.sim_power
+                total_read_energy += sim_power['read_energy']
+                total_write_energy += sim_power['write_energy']
+                total_reset_energy += sim_power['reset_energy']
+                total_energy += sim_power['total_energy']
+                average_power += sim_power['average_power']
+        if isinstance(net.classifier, Mem_Linear):
+            layer = net.classifier
             layer.crossbar.total_energy_calculation()
             sim_power = layer.crossbar.sim_power
             total_read_energy += sim_power['read_energy']
@@ -161,21 +172,12 @@ for test_cnt in range(args.rep):
             total_reset_energy += sim_power['reset_energy']
             total_energy += sim_power['total_energy']
             average_power += sim_power['average_power']
-    if isinstance(net.classifier, Mem_Linear):
-        layer = net.classifier
-        layer.crossbar.total_energy_calculation()
-        sim_power = layer.crossbar.sim_power
-        total_read_energy += sim_power['read_energy']
-        total_write_energy += sim_power['write_energy']
-        total_reset_energy += sim_power['reset_energy']
-        total_energy += sim_power['total_energy']
-        average_power += sim_power['average_power']
 
-    print("total_energy=" + str(total_energy))
-    print("total_read_energy=" + str(total_read_energy))
-    print("total_write_energy=" + str(total_write_energy))
-    print("total_reset_energy=" + str(total_reset_energy))
-    print("average_power=" + str(average_power))
+        print("total_energy=" + str(total_energy))
+        print("total_read_energy=" + str(total_read_energy))
+        print("total_write_energy=" + str(total_write_energy))
+        print("total_reset_energy=" + str(total_reset_energy))
+        print("average_power=" + str(average_power))
     
     out_txt = 'Accuracy:' + str(acc) + '\n'
     out.write(out_txt)
