@@ -101,6 +101,8 @@ ENV/
 # Datasets.
 data/
 !data/get_MNIST.sh
+**/data/*
+**/dataset/*
 
 # LSM data.
 lsm/
@@ -111,9 +113,12 @@ Accuracy_Results.txt
 Test_accuracy_Results.txt
 Test_Accuracy_Results.txt
 **/test_data/
+**.png
+**.txt
 
 # Results from network monitoring test.
 examples/saved_checkpoints
+**/checkpoint/*
 
 # pytest cache
 .pytest_cache/
@@ -135,6 +140,7 @@ plots/
 
 # Analyzer log default directory.
 logs/
+**/log/
 
 # PyTorch tensorboard log default directory.
 runs/

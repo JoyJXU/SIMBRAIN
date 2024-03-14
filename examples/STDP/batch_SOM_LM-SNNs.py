@@ -47,12 +47,18 @@ parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
-parser.add_argument("--memristor_device", type=str, default='ideal') #trace: original trace
+parser.add_argument("--memristor_device", type=str, default='ferro') # trace: original trace
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
-parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
+parser.add_argument("--retention_loss", type=int, default=0) # 0: No retention, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
+parser.add_argument("--input_bit", type=int, default=1)
+parser.add_argument("--ADC_accuracy", type=int, default=8)
+parser.add_argument("--wire_width", type=int, default=10000)
+parser.add_argument("--CMOS_technode", type=str, default='32')
+parser.add_argument("--device_roadmap", type=str, default='HP') # HP or LP
+parser.add_argument("--temperature", type=int, default=300)
 
 parser.set_defaults(plot=False, gpu=True)
 
@@ -79,10 +85,13 @@ update_inhibation_weights = args.update_inhibation_weights
 sim_params = {'device_structure':args.memristor_structure, 'device_name': args.memristor_device,
                  'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                  'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-                 'aging_effect': args.aging_effect, 'batch_interval': args.time*2+1}
+                 'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 
+                 'input_bit': args.input_bit,'batch_interval': args.time*2+1, 
+                 'CMOS_technode':args.CMOS_technode, 'ADC_accuracy':args.ADC_accuracy, 'device_roadmap':args.device_roadmap,
+                 'temperature':args.temperature}
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
@@ -125,6 +134,13 @@ for test_cnt in range(multiple_test_no):
     )
     
     network.to(device)
+
+    # Area print
+    if sim_params['device_name'] != 'trace':
+        total_area = 0
+        for l in network.layers:
+            total_area += network.layers[l].transform.mem_array.area.array_area
+        print("total crossbar area=", total_area, " m2")
     
     # %% Load MNIST data.
     dataset = MNIST(

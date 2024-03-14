@@ -1,17 +1,12 @@
 from pathlib import Path
 
 from bindsnet import (
-    analysis,
-    conversion,
     datasets,
     encoding,
-    environment,
     evaluation,
     learning,
     models,
     network,
-    pipeline,
-    preprocessing,
     utils,
 )
 
@@ -22,14 +17,9 @@ __all__ = [
     "utils",
     "network",
     "models",
-    "analysis",
-    "preprocessing",
     "datasets",
     "encoding",
-    "pipeline",
     "learning",
     "evaluation",
-    "environment",
-    "conversion",
     "ROOT_DIR",
 ]
