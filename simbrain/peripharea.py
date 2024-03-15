@@ -48,17 +48,15 @@ class PeriphArea(torch.nn.Module):
         assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
 
-        self.widthTgN = self.MIN_NMOS_SIZE * self.CMOS_technode
-        self.widthTgP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode
-        self.widthInvN = self.MIN_NMOS_SIZE * self.CMOS_technode
-        self.widthInvP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode
-        self.widthNandN = 2 * self.MIN_NMOS_SIZE * self.CMOS_technode
-        self.widthNandP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode
+        # self.widthInvN = self.MIN_NMOS_SIZE * self.CMOS_technode
+        # self.widthInvP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode
 
         self.formula_ = Formula(sim_params=sim_params, shape=self.shape)
 
     def Adder_area_calculation(self, newHeight, newWidth):
-        gate_area_result_adder = self.formula_.calculate_gate_area("NAND", 2, self.widthNandN, self.widthNandP, self.CMOS_technode * self.MAX_TRANSISTOR_HEIGHT)
+        widthNandN = 2 * self.MIN_NMOS_SIZE * self.CMOS_technode
+        widthNandP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode
+        gate_area_result_adder = self.formula_.calculate_gate_area("NAND", 2, widthNandN, widthNandP, self.CMOS_technode * self.MAX_TRANSISTOR_HEIGHT)
         hNand = gate_area_result_adder[0]
         wNand = gate_area_result_adder[1]
         numAdder = self.shape[1]
@@ -118,6 +116,8 @@ class PeriphArea(torch.nn.Module):
         
     def DFF_area_calculation(self, newHeight, newWidth, numDff):
         # Assume DFF size is 12 minimum-size standard cells put together
+        # widthTgN = self.MIN_NMOS_SIZE * self.CMOS_technode
+        # widthTgP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode
         gate_area_result_Dff = self.formula_.calculate_gate_area("INV", 1, self.MIN_NMOS_SIZE * self.CMOS_technode, self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode, self.CMOS_technode * self.MAX_TRANSISTOR_HEIGHT)
         hDffInv = gate_area_result_Dff[0]
         wDffInv = gate_area_result_Dff[1]
@@ -183,19 +183,18 @@ class PeriphArea(torch.nn.Module):
     def Switchmatrix_area_calculation(self, newHeight, newWidth, mode):
         resMemCellOnAtVw = 1 / self.Goff
         resTg = resMemCellOnAtVw / self.shape[1] * self.IR_DROP_TOLERANCE
-        self.widthTgN = self.formula_.calculate_on_resistance(self.CMOS_technode, "NMOS") * self.CMOS_technode / (resTg * 2) 
-        self.widthTgP = self.formula_.calculate_on_resistance(self.CMOS_technode, "PMOS") * self.CMOS_technode / (resTg * 2)
+        widthTgN = self.formula_.calculate_on_resistance(self.CMOS_technode, "NMOS") * self.CMOS_technode / (resTg * 2) 
+        widthTgP = self.formula_.calculate_on_resistance(self.CMOS_technode, "PMOS") * self.CMOS_technode / (resTg * 2)
         if mode == "ROW_MODE":  # Connect to rows
             minCellHeight = self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode
-
             if newHeight:
                 if newHeight < minCellHeight:
                     print("[SwitchMatrix] Error: pass gate height is even larger than the array height")
                 numTgPairPerCol = int(newHeight / minCellHeight)  # Get max # Tg pair per column (this is not the final # Tg pair per column because the last column may have less # Tg)
-                self.numColTgPair = int(math.ceil(self.shape[0] / numTgPairPerCol))  # Get min # columns based on this max # Tg pair per column
-                numTgPairPerCol = int(math.ceil(self.shape[0] / self.numColTgPair))  # Get # Tg pair per column based on this min # columns
-                self.TgHeight = newHeight / numTgPairPerCol
-                gate_area_result_Switchmatrix = self.formula_.calculate_gate_area("INV", 1, self.widthTgN, self.widthTgP, self.TgHeight)
+                numColTgPair = int(math.ceil(self.shape[0] / numTgPairPerCol))  # Get min # columns based on this max # Tg pair per column
+                numTgPairPerCol = int(math.ceil(self.shape[0] / numColTgPair))  # Get # Tg pair per column based on this min # columns
+                TgHeight = newHeight / numTgPairPerCol
+                gate_area_result_Switchmatrix = self.formula_.calculate_gate_area("INV", 1, widthTgN, widthTgP, TgHeight)
                 hTg = gate_area_result_Switchmatrix[0]
                 wTg = gate_area_result_Switchmatrix[1]
 
@@ -204,10 +203,10 @@ class PeriphArea(torch.nn.Module):
                 self.DFF_area_calculation(newHeight, None, numDff)
 
                 self.Switchmatrix_height = newHeight
-                self.Switchmatrix_width = (wTg * 2) * self.numColTgPair + self.Dff_width
+                self.Switchmatrix_width = (wTg * 2) * numColTgPair + self.Dff_width
 
             else:
-                gate_area_result_Switchmatrix = self.formula_.calculate_gate_area("INV", 1, self.widthTgN, self.widthTgP, minCellHeight)  # Pass gate with folding
+                gate_area_result_Switchmatrix = self.formula_.calculate_gate_area("INV", 1, widthTgN, widthTgP, minCellHeight)  # Pass gate with folding
                 hTg = gate_area_result_Switchmatrix[0]
                 wTg = gate_area_result_Switchmatrix[1]
                 self.Switchmatrix_height = hTg * self.shape[0]
@@ -221,13 +220,13 @@ class PeriphArea(torch.nn.Module):
                 if minCellWidth > newWidth:
                     print("[SwitchMatrix] Error: pass gate width is even larger than the array width")
                 numTgPairPerRow = int(newWidth / (minCellWidth * 2))  # Get max # Tg pair per row (this is not the final # Tg pair per row because the last row may have less # Tg)
-                self.numRowTgPair = int(math.ceil(self.shape[0] / numTgPairPerRow))  # Get min # rows based on this max # Tg pair per row
-                numTgPairPerRow = int(math.ceil(self.shape[0] / self.numRowTgPair))  # Get # Tg pair per row based on this min # rows
-                self.TgWidth = newWidth / numTgPairPerRow / 2  # division of 2 because there are 2 Tg in one pair
-                numFold = int(self.TgWidth / (0.5 * minCellWidth)) - 1  # get the max number of folding
+                numRowTgPair = int(math.ceil(self.shape[0] / numTgPairPerRow))  # Get min # rows based on this max # Tg pair per row
+                numTgPairPerRow = int(math.ceil(self.shape[0] / numRowTgPair))  # Get # Tg pair per row based on this min # rows
+                TgWidth = newWidth / numTgPairPerRow / 2  # division of 2 because there are 2 Tg in one pair
+                numFold = int(TgWidth / (0.5 * minCellWidth)) - 1  # get the max number of folding
 
                 # widthTgN, widthTgP and numFold can determine the height and width of each pass gate
-                gate_area_result_Switchmatrix = self.formula_.calculate_pass_gate_area(self.widthTgN, self.widthTgP, numFold)
+                gate_area_result_Switchmatrix = self.formula_.calculate_pass_gate_area(widthTgN, widthTgP, numFold)
                 hTg = gate_area_result_Switchmatrix[0]
                 wtg = gate_area_result_Switchmatrix[1]
 
@@ -235,12 +234,12 @@ class PeriphArea(torch.nn.Module):
                 numDff = self.shape[0]
                 self.DFF_area_calculation(None, newWidth, numDff)
 
-                self.width = newWidth
-                self.height = hTg * self.numRowTgPair + self.Dff_height
+                self.Switchmatrix_width = newWidth
+                self.Switchmatrix_height = hTg * numRowTgPair + self.Dff_height
 
             else:
                 # Default (pass gate with folding=1)
-                gate_area_result_Switchmatrix = self.formula_.calculate_pass_gate_area(self.widthTgN, self.widthTgP, 1)
+                gate_area_result_Switchmatrix = self.formula_.calculate_pass_gate_area(widthTgN, widthTgP, 1)
                 hTg = gate_area_result_Switchmatrix[0]
                 wTg = gate_area_result_Switchmatrix[1]
                 self.Switchmatrix_width = wTg * 2 * self.shape[0]
@@ -249,10 +248,6 @@ class PeriphArea(torch.nn.Module):
                 self.Switchmatrix_height = hTg + self.Dff_height
         self.Switchmatrix_area = self.Switchmatrix_height * self.Switchmatrix_width
 
-        capTgGateN = self.formula_.calculate_gate_cap(self.widthTgN)
-        capTgGateP = self.formula_.calculate_gate_cap(self.widthTgP)
-
         return self.Switchmatrix_area
-
 
 

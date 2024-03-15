@@ -38,13 +38,16 @@ class PeriphCircuit(torch.nn.Module):
         self.periph_power = PeriphPower(sim_params=sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict)
         self.periph_area = PeriphArea(sim_params=sim_params, shape=self.shape)
 
-        ShiftAdder_Area = self.periph_area.ShiftAdder_area_calculation(0,length_row)
-        SarADC_Area = self.periph_area.SarADC_area_calculation(0,length_row)
-        Switchmatrix_Area = self.periph_area.Switchmatrix_area_calculation(length_col,0,"ROW_MODE")
-        Periph_Area = ShiftAdder_Area + SarADC_Area + Switchmatrix_Area
+        ShiftAdder_Area = self.periph_area.ShiftAdder_area_calculation(0, length_row)
+        SarADC_Area = self.periph_area.SarADC_area_calculation(0, length_row)
+        Switchmatrix_Area_Row = self.periph_area.Switchmatrix_area_calculation(length_col, 0, "ROW_MODE")
+        Switchmatrix_Area_Col = self.periph_area.Switchmatrix_area_calculation(0, length_row, "COL_MODE")
+        Periph_Area = ShiftAdder_Area + SarADC_Area + Switchmatrix_Area_Row + Switchmatrix_Area_Col
+
         print("ShiftAdder_Area = ", ShiftAdder_Area)
         print("SarADC_Area = ", SarADC_Area)
-        print("Switchmatrix_Area = ", Switchmatrix_Area)
+        print("Switchmatrix_Area_Row = ", Switchmatrix_Area_Row)
+        print("Switchmatrix_Area_Col = ", Switchmatrix_Area_Col)
         print("Periph_Area = ", Periph_Area)
 
     def set_batch_size(self, batch_size) -> None:
