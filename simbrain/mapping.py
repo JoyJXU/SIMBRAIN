@@ -113,7 +113,7 @@ class STDPMapping(Mapping):
         self.set_batch_size(batch_size)
         self.mem_array.set_batch_size(batch_size=self.batch_size)
 
-        self.mem_v_read = torch.zeros(batch_size, 1, self.shape[0], device=self.mem_v_read.device)
+        self.mem_v_read = torch.zeros(1, batch_size, 1, self.shape[0], device=self.mem_v_read.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
         self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
 
@@ -165,14 +165,14 @@ class STDPMapping(Mapping):
         s_sum = torch.unsqueeze(s_sum, 1)
 
         self.mem_v_read.zero_()
-        self.mem_v_read[s_sum.bool()] = 1
+        self.mem_v_read[0, s_sum.bool()] = 1
 
         mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read)
 
         # current to trace
         self.mem_x_read = (mem_i/self.v_read - self.Gon) * self.trans_ratio
 
-        self.mem_x_read[~s_sum.bool()] = 0
+        self.mem_x_read[0, ~s_sum.bool()] = 0
 
         return self.mem_x_read
 
