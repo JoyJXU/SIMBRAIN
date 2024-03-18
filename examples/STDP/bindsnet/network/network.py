@@ -368,13 +368,21 @@ class Network(torch.nn.Module):
         if (self.sim_params['device_name'] != 'trace' and self.learning):
             self.total_energy = 0
             self.average_power = 0
+            self.periph_total_energy = 0 
+            self.periph_average_power = 0
             for l in self.layers:
                 self.layers[l].transform.mem_array.total_energy_calculation()
+                self.layers[l].transform.periph_circuit.total_energy_calculation(mem_t=self.layers[l].transform.mem_array.mem_t)
                 self.sim_power = self.layers[l].transform.mem_array.power.sim_power
+                self.sim_periph_power = self.layers[l].transform.periph_circuit.periph_power.sim_power
                 self.total_energy += self.sim_power['total_energy']
                 self.average_power += self.sim_power['average_power']
+                self.periph_total_energy += self.sim_periph_power['periph_total_energy']
+                self.periph_average_power += self.sim_periph_power['periph_average_power']
             print("total_energy=", self.total_energy)
             print("average_power=", self.average_power)
+            print("periph_total_energy=", self.periph_total_energy)
+            print("periph_average_power=", self.periph_average_power)
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)

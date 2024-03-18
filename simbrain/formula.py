@@ -8,6 +8,7 @@ class Formula(torch.nn.Module):
         self,
         sim_params: dict = {},
         shape: Optional[Iterable[int]] = None,
+        CMOS_tech_info_dict: dict = {},
         **kwargs,
     ) -> None:
         # language=rst
@@ -28,8 +29,10 @@ class Formula(torch.nn.Module):
         self.device_roadmap = sim_params['device_roadmap']
         self.CMOS_technode = sim_params['CMOS_technode']
         self.CMOS_technode_str = str(sim_params['CMOS_technode'])
-        with open('../../CMOS_tech_info.json', 'r') as f:
-            self.CMOS_tech_info_dict = json.load(f)
+        self.CMOS_tech_info_dict = CMOS_tech_info_dict
+        self.temperature = sim_params['temperature']
+        self.tempIndex = self.temperature - 300
+        self.tempIndex_str = str(self.tempIndex)
 
         if self.CMOS_technode < 22:
             self.heightFin = self.CMOS_tech_info_dict[self.device_roadmap][self.CMOS_technode_str]['heightFin']
@@ -48,13 +51,19 @@ class Formula(torch.nn.Module):
         self.cap_junction = self.CMOS_tech_info_dict[self.device_roadmap][self.CMOS_technode_str]['cap_junction']
         self.cap_sidewall = self.CMOS_tech_info_dict[self.device_roadmap][self.CMOS_technode_str]['cap_sidewall']
         self.cap_drain_to_channel = self.CMOS_tech_info_dict[self.device_roadmap][self.CMOS_technode_str]['cap_drain_to_channel']
+        self.effective_resistance_multiplier = self.CMOS_tech_info_dict[self.device_roadmap][self.CMOS_technode_str]['effective_resistance_multiplier']
+        self.vdd = self.CMOS_tech_info_dict[self.device_roadmap][self.CMOS_technode_str]['vdd']
+        self.currentOnNmos = self.CMOS_tech_info_dict[self.device_roadmap][self.CMOS_technode_str]['current_on_Nmos'][self.tempIndex_str]
+        self.currentOnPmos = self.CMOS_tech_info_dict[self.device_roadmap][self.CMOS_technode_str]['current_on_Pmos'][self.tempIndex_str]        
+
 
     def calculate_gate_cap(self, width):
         return (self.cap_ideal_gate + self.cap_overlap + self.cap_fringe) * width + self.phy_gate_length * self.cap_polywire
 
     def calculate_gate_area(self, gateType, numInput, widthNMOS, widthPMOS, heightTransistorRegion):
         ratio = widthPMOS / (widthPMOS + widthNMOS)
-
+        numFoldedPMOS = 1
+        numFoldedNMOS = 1
         if self.CMOS_technode >= 22:  # Bulk
             if ratio == 0:  # no PMOS
                 maxWidthPMOS = 0
@@ -131,16 +140,17 @@ class Formula(torch.nn.Module):
             widthRegionP = unitWidthRegionP
             widthRegionN = unitWidthRegionN
         elif gateType in ['NOR', 'NAND']:
-            if numFoldedPMOS == 1 and numFoldedNMOS == 1:  # Need to subtract the source/drain sharing region
+            if numFoldedPMOS  == 1 and numFoldedNMOS == 1:  # Need to subtract the source/drain sharing region
                 widthRegionP = unitWidthRegionP * numInput - (numInput - 1) * self.CMOS_technode * 1e-9 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY)
 
         width = max(widthRegionN, widthRegionP)
         height = heightTransistorRegion
-        return width * height
+        return width, height, width * height
             
-    def calculate_gate_capacitance(self, gateType, numInput, widthNMOS, widthPMOS, heightTransistorRegion, tech, cap_input, cap_output):
+    def calculate_gate_capacitance(self, gateType, numInput, widthNMOS, widthPMOS, heightTransistorRegion):
         ratio = widthPMOS / (widthPMOS + widthNMOS)
-
+        numFoldedPMOS = 1
+        numFoldedNMOS = 1
         if self.CMOS_technode >= 22:  # Bulk
             if ratio == 0:  # no PMOS
                 maxWidthPMOS = 0
@@ -284,7 +294,7 @@ class Formula(torch.nn.Module):
             widthDrainN = widthDrainP = widthDrainSidewallP  = widthDrainSidewallN  = 0
 
         # Junction capacitance
-        cap_drain_bottom_n = widthDrainN * heightDrainN * self.cap_junction
+        cap_drain_bottom_n = 4 * heightDrainN * self.cap_junction
         cap_drain_bottom_p = widthDrainP * heightDrainP * self.cap_junction
 
         # Sidewall capacitance
@@ -292,11 +302,40 @@ class Formula(torch.nn.Module):
         cap_drain_sidewall_p = widthDrainSidewallP  * self.cap_sidewall
 
         # Drain to channel capacitance
-        self.cap_drain_to_channel_n = numFoldedNMOS * heightDrainN * self.cap_drain_to_channel
-        self.cap_drain_to_channel_p = numFoldedPMOS * heightDrainP * self.cap_drain_to_channel
+        cap_drain_to_channel_n = numFoldedNMOS * heightDrainN * self.cap_drain_to_channel
+        cap_drain_to_channel_p = numFoldedPMOS * heightDrainP * self.cap_drain_to_channel
 
-        if cap_output:
-            cap_output[0] = cap_drain_bottom_n + cap_drain_bottom_p + cap_drain_sidewall_n + cap_drain_sidewall_p + self.cap_drain_to_channel_n + self.cap_drain_to_channel_p
+        cap_output = cap_drain_bottom_n + cap_drain_bottom_p + cap_drain_sidewall_n + cap_drain_sidewall_p + cap_drain_to_channel_n + cap_drain_to_channel_p
+        cap_input = self.calculate_gate_cap(widthNMOS) + self.calculate_gate_cap(widthPMOS)
+        
+        return cap_input,cap_output
+    
+    def calculate_on_resistance(self, width, CMOS_type):
+        if self.tempIndex > 100 or self.tempIndex < 0:
+            print("Error: Temperature is out of range")
+            exit(-1)
 
-        if cap_input:
-            cap_input[0] = self.calculate_gate_cap(widthNMOS, tech) + self.calculate_gate_cap(widthPMOS, tech)
+        if CMOS_type == "NMOS":
+            r = self.effective_resistance_multiplier * self.vdd / (self.currentOnNmos * width)
+        elif CMOS_type == "PMOS":
+            r = self.effective_resistance_multiplier * self.vdd / (self.currentOnPmos * width)
+        else:
+            raise Exception("Only NMOS & PMOS are supported!")
+        return r
+    
+    def calculate_pass_gate_area(self, widthNMOS, widthPMOS, numFold):
+        if self.CMOS_technode >= 22:  # Bulk
+            width = (numFold + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode
+            height = widthPMOS / numFold + widthNMOS / numFold + self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode + (
+                    self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode
+        else:  # FinFET
+            totalNumPFin = int(math.ceil(widthPMOS / (2 * self.heightFin + self.widthFin)))
+            totalNumNFin = int(math.ceil(widthNMOS / (2 * self.heightFin + self.widthFin)))
+            NumPFin = int(math.ceil(totalNumPFin / numFold))
+            NumNFin = int(math.ceil(totalNumNFin / numFold))
+            heightRegionP = (NumPFin - 1) * self.PitchFin + 2 * self.widthFin / 2
+            heightRegionN = (NumNFin - 1) * self.PitchFin + 2 * self.widthFin / 2
+            width = (numFold + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode
+            height = heightRegionP + heightRegionN + self.MIN_GAP_BET_P_AND_N_DIFFS *self.CMOS_technode + (
+                    self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode
+        return width, height
