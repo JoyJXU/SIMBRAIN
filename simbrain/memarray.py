@@ -222,8 +222,8 @@ class MemristorArray(torch.nn.Module):
         sigma_absolute = mem_info['sigma_absolute']
         retention_loss_tau = mem_info['retention_loss_tau']
         retention_loss_beta = mem_info['retention_loss_beta']
-        Aging_k_on = mem_info['Aging_k_on']
-        Aging_k_off = mem_info['Aging_k_off']
+        Aging_on = mem_info['Aging_on']
+        Aging_off = mem_info['Aging_off']
 
         self.mem_t += self.shape[0]
         self.mem_c_pre = self.mem_c.clone()
@@ -284,7 +284,7 @@ class MemristorArray(torch.nn.Module):
             self.x2.masked_fill_(self.SAF1_mask, 1)
 
         if self.aging_effect:
-            self.cal_Gon_Goff(Aging_k_on, Aging_k_off)
+            self.cal_Gon_Goff(Aging_on, Aging_off)
             self.mem_c = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
 
         elif self.d2d_variation in [1, 2]:
@@ -339,8 +339,8 @@ class MemristorArray(torch.nn.Module):
         G_on = mem_info['G_on']
         retention_loss_tau = mem_info['retention_loss_tau']
         retention_loss_beta = mem_info['retention_loss_beta']
-        Aging_k_on = mem_info['Aging_k_on']
-        Aging_k_off = mem_info['Aging_k_off']
+        Aging_on = mem_info['Aging_on']
+        Aging_off = mem_info['Aging_off']
 
         if self.retention_loss == 1:
             # G(t) = G(0) * e^(- t*tau)^beta
@@ -370,7 +370,7 @@ class MemristorArray(torch.nn.Module):
             self.x2.masked_fill_(self.SAF1_mask, 1)
 
         if self.aging_effect:
-            self.cal_Gon_Goff(Aging_k_on, Aging_k_off)
+            self.cal_Gon_Goff(Aging_on, Aging_off)
             self.mem_c = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
 
         elif self.d2d_variation in [1, 2]:
@@ -411,8 +411,8 @@ class MemristorArray(torch.nn.Module):
         sigma_absolute = mem_info['sigma_absolute']
         retention_loss_tau = mem_info['retention_loss_tau']
         retention_loss_beta = mem_info['retention_loss_beta']
-        Aging_k_on = mem_info['Aging_k_on']
-        Aging_k_off = mem_info['Aging_k_off']
+        Aging_on = mem_info['Aging_on']
+        Aging_off = mem_info['Aging_off']
 
         self.mem_t += 1
         self.mem_c_pre = self.mem_c.clone()
@@ -475,7 +475,7 @@ class MemristorArray(torch.nn.Module):
             self.x2.masked_fill_(self.SAF1_mask, 1)
 
         if self.aging_effect:
-            self.cal_Gon_Goff(Aging_k_on, Aging_k_off)
+            self.cal_Gon_Goff(Aging_on, Aging_off)
             self.mem_c = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
 
         elif self.d2d_variation in [1, 2]:
@@ -491,13 +491,13 @@ class MemristorArray(torch.nn.Module):
         return self.mem_c
 
 
-    def cal_Gon_Goff(self, k_on, k_off) -> None:
-        if self.aging_effect == 1: #equation 1: G=G_0*(1-r)**t
-            self.Gon_aging = self.Gon_0 * ((1 - k_on) ** (self.mem_t * self.dt))
-            self.Goff_aging = self.Goff_0 * ((1 - k_off) ** (self.mem_t * self.dt))
-        elif self.aging_effect == 2: #equation 2: G=k*t+G_0
-            self.Gon_aging = k_on * self.mem_t * self.dt + self.Gon_0
-            self.Goff_aging = k_off * self.mem_t * self.dt + self.Goff_0
+    def cal_Gon_Goff(self, age_on, age_off) -> None:
+        if self.aging_effect == 1: #equation 1: G=G_0*(1-age)**t
+            self.Gon_aging = self.Gon_0 * ((1 - age_on) ** (self.mem_t * self.dt))
+            self.Goff_aging = self.Goff_0 * ((1 - age_off) ** (self.mem_t * self.dt))
+        elif self.aging_effect == 2: #equation 2: G=age*t+G_0
+            self.Gon_aging = age_on * self.mem_t * self.dt + self.Gon_0
+            self.Goff_aging = age_off * self.mem_t * self.dt + self.Goff_0
 
 
     def update_SAF_mask(self) -> None:
