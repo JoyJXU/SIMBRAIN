@@ -41,6 +41,7 @@ class PeriphPower(torch.nn.Module):
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.dt = memristor_info_dict[self.device_name]['delta_t']
         self.vdd = self.CMOS_tech_info_dict[self.device_roadmap][str(self.CMOS_technode)]['vdd']
+        self.read_v_amp = self.memristor_info_dict[self.device_name]['v_read']
         self.formula_function = Formula(sim_params=self.sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict)
         
         self.pn_size_ratio = self.CMOS_tech_info_dict[self.device_roadmap][str(self.CMOS_technode)]['pn_size_ratio']
@@ -142,11 +143,11 @@ class PeriphPower(torch.nn.Module):
         self.adder_energy = 0  
         
 
-    def switch_matrix_read_energy_calculation(self, activity_read, mem_v, mem_v_amp) -> None:
-        read_times = mem_v.shape[0] * mem_v.shape[1]
-        self.switch_matrix_read_energy += (self.switch_matrix_read_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.input_bit * activity_read * self.shape[0] * read_times
-        self.switch_matrix_read_energy += (self.switch_matrix_read_cap_gateN + self.switch_matrix_read_cap_gateN) * self.vdd * self.vdd * self.input_bit * activity_read * self.shape[0] * read_times
-        self.switch_matrix_read_energy += self.DFF_energy_calculation(DFF_num=self.shape[0], DFF_read=self.input_bit*read_times)
+    def switch_matrix_read_energy_calculation(self, activity_read, mem_v) -> None:
+        read_times = mem_v.shape[0] * mem_v.shape[1] * self.input_bit
+        self.switch_matrix_read_energy += (self.switch_matrix_read_cap_tg_drain * 3) * self.read_v_amp * self.read_v_amp * activity_read * self.shape[0] * read_times
+        self.switch_matrix_read_energy += (self.switch_matrix_read_cap_gateN + self.switch_matrix_read_cap_gateN) * self.vdd * self.vdd * activity_read * self.shape[0] * read_times
+        self.switch_matrix_read_energy += self.DFF_energy_calculation(DFF_num=self.shape[0], DFF_read=read_times)
         
     def switch_matrix_col_write_energy_calculation(self, mem_v) -> None:
         mem_v_amp_pos = torch.max(mem_v)
