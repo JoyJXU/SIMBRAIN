@@ -1,8 +1,8 @@
 {
   "P_on": null,
   "P_off": null,
-  "G_on": 2.5e-10,
-  "G_off": 1.9e-9,
+  "G_on": null,
+  "G_off": null,
   "alpha_on": null,
   "alpha_off": null,
   "v_on": -2,
@@ -18,6 +18,8 @@
   "retention_loss_beta": null,
   "sigma_relative": null,
   "sigma_absolute": null,
+  "Gon_mu": null,
+  "Goff_mu": null,
   "Gon_sigma": null,
   "Goff_sigma": null,
   "Pon_sigma": null,
@@ -25,7 +27,7 @@
   "SAF_lambda": null,
   "SAF_ratio": null,
   "SAF_delta": null,
-  "Aging_k_on": null,
-  "Aging_k_off": null,
+  "Aging_on": null,
+  "Aging_off": null,
   "mem_size": 1e-4
 }
