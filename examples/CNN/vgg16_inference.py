@@ -39,7 +39,7 @@ parser.add_argument("--temperature", type=int, default=300)
 args = parser.parse_args()
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

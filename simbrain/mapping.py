@@ -752,8 +752,8 @@ class CNNMapping(Mapping):
         # Get normalization ratio
         read_norm = torch.max(torch.abs(target_v), dim=1)[0]
         target_v = target_v.unsqueeze(0)
-        v_read_pos = self.periph_circuit_pos_pos.DAC_read(mem_v=target_v.unsqueeze(0), sgn='pos')
-        v_read_neg = self.periph_circuit_neg_neg.DAC_read(mem_v=target_v.unsqueeze(0), sgn='neg')
+        v_read_pos = self.periph_circuit_pos_pos.DAC_read(mem_v=target_v, sgn='pos')
+        v_read_neg = self.periph_circuit_neg_neg.DAC_read(mem_v=target_v, sgn='neg')
        
         # memristor sequential read
         mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)

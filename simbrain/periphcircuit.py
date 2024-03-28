@@ -1,6 +1,6 @@
 from typing import Iterable, Optional, Union
 from simbrain.periphpower import PeriphPower
-#from simbrain.peripharea import PeriphArea
+from simbrain.peripharea import PeriphArea
 import torch
 import json
 
@@ -37,8 +37,25 @@ class PeriphCircuit(torch.nn.Module):
         self.device_name = sim_params['device_name']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.read_v_amp = self.memristor_info_dict[self.device_name]['v_read']
+        relax_ratio = self.memristor_info_dict[self.device_name]['relax_ratio'] # Leave space for adjacent memristors
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
+        length_row = self.shape[1] * relax_ratio * mem_size
+        length_col = self.shape[0] * relax_ratio * mem_size
+        
         self.periph_power = PeriphPower(sim_params=self.sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        self.periph_area = PeriphArea(sim_params=sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
 
+        ShiftAdder_Area = self.periph_area.ShiftAdder_area_calculation(0, length_row)
+        SarADC_Area = self.periph_area.SarADC_area_calculation(0, length_row)
+        Switchmatrix_Area_Row = self.periph_area.Switchmatrix_area_calculation(length_col, 0, "ROW_MODE")
+        Switchmatrix_Area_Col = self.periph_area.Switchmatrix_area_calculation(0, length_row, "COL_MODE")
+        Periph_Area = ShiftAdder_Area + SarADC_Area + Switchmatrix_Area_Row + Switchmatrix_Area_Col
+
+        print("ShiftAdder_Area = ", ShiftAdder_Area)
+        print("SarADC_Area = ", SarADC_Area)
+        print("Switchmatrix_Area_Row = ", Switchmatrix_Area_Row)
+        print("Switchmatrix_Area_Col = ", Switchmatrix_Area_Col)
+        print("Periph_Area = ", Periph_Area)
 
     def set_batch_size(self, batch_size) -> None:
         # language=rst

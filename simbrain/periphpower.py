@@ -31,6 +31,7 @@ class PeriphPower(torch.nn.Module):
         self.shape = shape
         self.sim_params = sim_params
         self.CMOS_technode = sim_params['CMOS_technode']
+        self.CMOS_technode_meter = self.CMOS_technode * 1e-9
         self.device_roadmap = sim_params['device_roadmap']
         self.device_name = sim_params['device_name']
         self.temperature = sim_params['temperature']
@@ -72,7 +73,7 @@ class PeriphPower(torch.nn.Module):
     def switch_matrix_read_initialize(self) -> None:
         res_mem_cell_on_at_vw = 1 / self.Goff
         resTg = res_mem_cell_on_at_vw / self.shape[1] * self.IR_DROP_TOLERANCE
-        min_cell_height = self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode * 1e-9
+        min_cell_height = self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
         relax_ratio = self.memristor_info_dict[self.device_name]['relax_ratio'] # Leave space for adjacent memristors
         mem_size = self.memristor_info_dict[self.device_name]['mem_size']
         length_col = self.shape[0] * relax_ratio * mem_size
@@ -82,8 +83,8 @@ class PeriphPower(torch.nn.Module):
         num_col_tg_pair =  (int)(math.ceil((float)(self.shape[0]) / num_tg_pair_per_col))
         num_tg_pair_per_col = (int)(math.ceil((float)(self.shape[0]) / num_col_tg_pair))
         switch_matrix_read_height = length_col / num_tg_pair_per_col
-        switch_matrix_read_width_tg_N = self.formula_function.calculate_on_resistance(width=self.CMOS_technode*1e-9, CMOS_type="NMOS") * self.CMOS_technode * 1e-9 / (resTg * 2) 
-        switch_matrix_read_width_tg_P = self.formula_function.calculate_on_resistance(width=self.CMOS_technode*1e-9, CMOS_type="PMOS") * self.CMOS_technode * 1e-9 / (resTg * 2)
+        switch_matrix_read_width_tg_N = self.formula_function.calculate_on_resistance(width=self.CMOS_technode_meter, CMOS_type="NMOS") * self.CMOS_technode_meter / (resTg * 2) 
+        switch_matrix_read_width_tg_P = self.formula_function.calculate_on_resistance(width=self.CMOS_technode_meter, CMOS_type="PMOS") * self.CMOS_technode_meter / (resTg * 2)
         self.switch_matrix_read_cap_gateN = self.formula_function.calculate_gate_cap(width=switch_matrix_read_width_tg_N)
         self.switch_matrix_read_cap_gateP = self.formula_function.calculate_gate_cap(width=switch_matrix_read_width_tg_P)
         _, self.switch_matrix_read_cap_tg_drain = self.formula_function.calculate_gate_capacitance(gateType='INV', \
@@ -98,7 +99,7 @@ class PeriphPower(torch.nn.Module):
     
     def switch_matrix_col_write_initialize(self) -> None:
         num_row_tg_pair = 1
-        min_cell_width = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode * 1e-9
+        min_cell_width = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
         relax_ratio = self.memristor_info_dict[self.device_name]['relax_ratio'] # Leave space for adjacent memristors
         mem_size = self.memristor_info_dict[self.device_name]['mem_size']
         length_row = self.shape[1] * relax_ratio * mem_size
@@ -111,8 +112,8 @@ class PeriphPower(torch.nn.Module):
         num_fold = (int)(tg_width / (0.5*min_cell_width)) - 1
         res_mem_cell_on_at_vw = 1 / self.Goff
         resTg = res_mem_cell_on_at_vw / self.shape[0] / 2
-        switch_matrix_col_write_width_tg_N = self.formula_function.calculate_on_resistance(width=self.CMOS_technode*1e-9, CMOS_type="NMOS") * self.CMOS_technode * 1e-9 / (resTg * 2) 
-        switch_matrix_col_write_width_tg_P = self.formula_function.calculate_on_resistance(width=self.CMOS_technode*1e-9, CMOS_type="PMOS") * self.CMOS_technode * 1e-9 / (resTg * 2)        
+        switch_matrix_col_write_width_tg_N = self.formula_function.calculate_on_resistance(width=self.CMOS_technode_meter, CMOS_type="NMOS") * self.CMOS_technode_meter / (resTg * 2) 
+        switch_matrix_col_write_width_tg_P = self.formula_function.calculate_on_resistance(width=self.CMOS_technode_meter, CMOS_type="PMOS") * self.CMOS_technode_meter / (resTg * 2)        
         _, switch_matrix_col_write_height = self.formula_function.calculate_pass_gate_area(widthNMOS=switch_matrix_col_write_width_tg_N, widthPMOS=switch_matrix_col_write_width_tg_P, numFold=num_fold)
         self.switch_matrix_col_write_cap_gateN = self.formula_function.calculate_gate_cap(width=switch_matrix_col_write_width_tg_N)
         self.switch_matrix_col_write_cap_gateP = self.formula_function.calculate_gate_cap(width=switch_matrix_col_write_width_tg_P)
@@ -121,11 +122,11 @@ class PeriphPower(torch.nn.Module):
         self.switch_matrix_col_write_energy = 0
 
     def DFF_initialize(self) -> None:
-        DFF_width_inv_N = self.MIN_NMOS_SIZE * self.CMOS_technode * 1e-9
-        DFF_width_inv_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode * 1e-9
-        DFF_height_inv =  self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode * 1e-9 
-        DFF_width_tg_N = self.MIN_NMOS_SIZE * self.CMOS_technode * 1e-9
-        DFF_width_tg_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode * 1e-9
+        DFF_width_inv_N = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        DFF_width_inv_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        DFF_height_inv =  self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter 
+        DFF_width_tg_N = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        DFF_width_tg_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         self.DFF_cap_inv_input, self.DFF_cap_inv_output = self.formula_function.calculate_gate_capacitance(gateType='INV', \
                                                         numInput=1, widthNMOS=DFF_width_inv_N, widthPMOS=DFF_width_inv_P, heightTransistorRegion=DFF_height_inv)
         self.DFF_cap_tg_gateN = self.formula_function.calculate_gate_cap(width=DFF_width_tg_N)
@@ -135,9 +136,9 @@ class PeriphPower(torch.nn.Module):
         self.DFF_energy = 0 
 
     def adder_initialize(self) -> None:
-        adder_width_nand_N = 2 * self.MIN_NMOS_SIZE * self.CMOS_technode * 1e-9
-        adder_width_nand_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode * 1e-9
-        adder_height_nand =  self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode * 1e-9
+        adder_width_nand_N = 2 * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        adder_width_nand_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        adder_height_nand =  self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
         self.adder_cap_nand_input, self.adder_cap_nand_output = self.formula_function.calculate_gate_capacitance(gateType='NAND', \
                                                         numInput=2, widthNMOS=adder_width_nand_N, widthPMOS=adder_width_nand_P, heightTransistorRegion=adder_height_nand) 
         self.adder_energy = 0  
@@ -184,74 +185,74 @@ class PeriphPower(torch.nn.Module):
     def sarADC_energy_calculation(self, mem_i_sequence) -> None:
         # in Cadence simulation, we fix Vread to 0.5V, with user-defined Vread (different from 0.5V)
         SarADC_energy_matrix = torch.zeros_like(mem_i_sequence)
-        mem_c = torch.zeros_like(mem_i_sequence)
-        mem_c = torch.where(mem_i_sequence!=0, 0.5/mem_i_sequence, 1e15)
-        mem_c = torch.where(mem_c!=0, mem_c, 1e-15)
+        mem_r = torch.zeros_like(mem_i_sequence)
+        mem_r = torch.where(mem_i_sequence!=0, 0.5/mem_i_sequence, 1e15)
+        mem_r = torch.where(mem_r!=0, mem_r, 1e-15)
         if self.device_roadmap == 'HP' :
             if self.CMOS_technode == 130 :
                 SarADC_energy_matrix = (6.4806 * self.ADC_precision + 49.047)*1e-6
-                SarADC_energy_matrix += 0.207452 * torch.exp(-2.367 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.207452 * torch.exp(-2.367 * torch.log10(mem_r))
             elif self.CMOS_technode == 90:
                 SarADC_energy_matrix = (4.3474 * self.ADC_precision + 31.782)*1e-6
-                SarADC_energy_matrix += 0.164900 * torch.exp(-2.345 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.164900 * torch.exp(-2.345 * torch.log10(mem_r))
             elif self.CMOS_technode == 65 :
                 SarADC_energy_matrix = (2.9503 * self.ADC_precision + 22.047)*1e-6
-                SarADC_energy_matrix += 0.128483 * torch.exp(-2.321 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.128483 * torch.exp(-2.321 * torch.log10(mem_r))
             elif self.CMOS_technode == 45 :
                 SarADC_energy_matrix = (2.1843 * self.ADC_precision + 11.931)*1e-6
-                SarADC_energy_matrix += 0.097754 * torch.exp(-2.296 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.097754 * torch.exp(-2.296 * torch.log10(mem_r))
             elif self.CMOS_technode == 32 :  
                 SarADC_energy_matrix = (1.0157 * self.ADC_precision + 7.6286)*1e-6
-                SarADC_energy_matrix += 0.083709 * torch.exp(-2.313 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.083709 * torch.exp(-2.313 * torch.log10(mem_r))
             elif self.CMOS_technode == 22 :   
                 SarADC_energy_matrix = (0.7213 * self.ADC_precision + 3.3041)*1e-6
-                SarADC_energy_matrix += 0.084273 * torch.exp(-2.311 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.084273 * torch.exp(-2.311 * torch.log10(mem_r))
             elif self.CMOS_technode == 14 :   
                 SarADC_energy_matrix = (0.4710 * self.ADC_precision + 1.9529)*1e-6
-                SarADC_energy_matrix += 0.060584 * torch.exp(-2.311 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.060584 * torch.exp(-2.311 * torch.log10(mem_r))
             elif self.CMOS_technode == 10 :   
                 SarADC_energy_matrix = (0.3076 * self.ADC_precision + 1.1543)*1e-6
-                SarADC_energy_matrix += 0.049418 * torch.exp(-2.311 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.049418 * torch.exp(-2.311 * torch.log10(mem_r))
             elif self.CMOS_technode == 7 : 
                 SarADC_energy_matrix = (0.2008 * self.ADC_precision + 0.6823)*1e-6
-                SarADC_energy_matrix += 0.040310 * torch.exp(-2.311 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.040310 * torch.exp(-2.311 * torch.log10(mem_r))
             else:
                 raise Exception("Only limited CMOS technodes are supported!")
         elif self.device_roadmap == 'LP' :
             if self.CMOS_technode == 130 :
                 SarADC_energy_matrix = (8.4483 * self.ADC_precision + 65.243)*1e-6
-                SarADC_energy_matrix += 0.169380 * torch.exp(-2.303 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.169380 * torch.exp(-2.303 * torch.log10(mem_r))
             elif self.CMOS_technode == 90 :
                 SarADC_energy_matrix = (5.9869 * self.ADC_precision + 37.462)*1e-6
-                SarADC_energy_matrix += 0.144323 * torch.exp(-2.303 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.144323 * torch.exp(-2.303 * torch.log10(mem_r))
             elif self.CMOS_technode == 65 :
                 SarADC_energy_matrix = (3.7506 * self.ADC_precision + 25.844)*1e-6
-                SarADC_energy_matrix += 0.121272 * torch.exp(-2.303 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.121272 * torch.exp(-2.303 * torch.log10(mem_r))
             elif self.CMOS_technode == 45 :
                 SarADC_energy_matrix = (2.1691 * self.ADC_precision + 16.693)*1e-6
-                SarADC_energy_matrix += 0.100225 * torch.exp(-2.303 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.100225 * torch.exp(-2.303 * torch.log10(mem_r))
             elif self.CMOS_technode == 32 :  
                 SarADC_energy_matrix = (1.1294 * self.ADC_precision + 8.8998)*1e-6
-                SarADC_energy_matrix += 0.079449 * torch.exp(-2.297 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.079449 * torch.exp(-2.297 * torch.log10(mem_r))
             elif self.CMOS_technode == 22 :   
                 SarADC_energy_matrix = (0.538 * self.ADC_precision + 4.3753)*1e-6
-                SarADC_energy_matrix += 0.072341 * torch.exp(-2.303 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.072341 * torch.exp(-2.303 * torch.log10(mem_r))
             elif self.CMOS_technode == 14 :   
                 SarADC_energy_matrix = (0.3132 * self.ADC_precision + 2.5681)*1e-6
-                SarADC_energy_matrix += 0.061085 * torch.exp(-2.303 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.061085 * torch.exp(-2.303 * torch.log10(mem_r))
             elif self.CMOS_technode == 10 :   
                 SarADC_energy_matrix = (0.1823 * self.ADC_precision + 1.5073)*1e-6
-                SarADC_energy_matrix += 0.051580 * torch.exp(-2.303 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.051580 * torch.exp(-2.303 * torch.log10(mem_r))
             elif self.CMOS_technode == 7 : 
                 SarADC_energy_matrix = (0.1061 * self.ADC_precision + 0.8847)*1e-6
-                SarADC_energy_matrix += 0.043555 * torch.exp(-2.303 * torch.log10(mem_c))
+                SarADC_energy_matrix += 0.043555 * torch.exp(-2.303 * torch.log10(mem_r))
             else:
                 raise Exception("Only limited CMOS technodes are supported!")
         else :
             raise Exception("Only HP & LP are supported!")
         
         SarADC_energy_matrix = torch.where(mem_i_sequence!=0, SarADC_energy_matrix, 1e-6)
-        SarADC_energy_matrix = torch.where(mem_c!=0, SarADC_energy_matrix, 0)
+        SarADC_energy_matrix = torch.where(mem_r!=0, SarADC_energy_matrix, 0)
         
         SarADC_energy_matrix *= (1 + 1.3e-3 * (self.temperature - 300))
         SarADC_energy_matrix *= (self.ADC_precision + 1) * 1e-9

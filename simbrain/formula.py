@@ -29,6 +29,7 @@ class Formula(torch.nn.Module):
         self.device_roadmap = sim_params['device_roadmap']
         self.CMOS_technode = sim_params['CMOS_technode']
         self.CMOS_technode_str = str(sim_params['CMOS_technode'])
+        self.CMOS_technode_meter = self.CMOS_technode * 1e-9
         self.CMOS_tech_info_dict = CMOS_tech_info_dict
         self.temperature = sim_params['temperature']
         self.tempIndex = self.temperature - 300
@@ -67,21 +68,21 @@ class Formula(torch.nn.Module):
         if self.CMOS_technode >= 22:  # Bulk
             if ratio == 0:  # no PMOS
                 maxWidthPMOS = 0
-                maxWidthNMOS = heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9
+                maxWidthNMOS = heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter
             elif ratio == 1:  # no NMOS
-                maxWidthPMOS = heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9
+                maxWidthPMOS = heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter
                 maxWidthNMOS = 0
             else:
-                maxWidthPMOS = ratio * (heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode * 1e-9 - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9)
+                maxWidthPMOS = ratio * (heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode_meter - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter)
                 maxWidthNMOS = maxWidthPMOS / ratio * (1 - ratio)
 
             if widthPMOS > 0:
                 if widthPMOS <= maxWidthPMOS:  # No folding
-                    unitWidthRegionP = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode * 1e-9
+                    unitWidthRegionP = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
                     heightRegionP = widthPMOS
                 else:  # Folding
                     numFoldedPMOS = math.ceil(widthPMOS / maxWidthPMOS)
-                    unitWidthRegionP = (numFoldedPMOS + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode * 1e-9
+                    unitWidthRegionP = (numFoldedPMOS + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
                     heightRegionP = maxWidthPMOS
             else:
                 unitWidthRegionP = 0
@@ -89,11 +90,11 @@ class Formula(torch.nn.Module):
 
             if widthNMOS > 0:
                 if widthNMOS <= maxWidthNMOS:  # No folding
-                    unitWidthRegionN = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode * 1e-9
+                    unitWidthRegionN = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
                     heightRegionN = widthNMOS
                 else:  # Folding
                     numFoldedNMOS = math.ceil(widthNMOS / maxWidthNMOS)
-                    unitWidthRegionN = (numFoldedNMOS + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode * 1e-9
+                    unitWidthRegionN = (numFoldedNMOS + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
                     heightRegionN = maxWidthNMOS
             else:
                 unitWidthRegionN = 0
@@ -102,22 +103,22 @@ class Formula(torch.nn.Module):
         else:  # FinFET
             if ratio == 0:  # no PFinFET
                 maxNumPFin = 0
-                maxNumNFin = math.floor((heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9) / self.PitchFin) + 1
+                maxNumNFin = math.floor((heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter) / self.PitchFin) + 1
             elif ratio == 1:  # no NFinFET
-                maxNumPFin = math.floor((heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9) / self.PitchFin) + 1
+                maxNumPFin = math.floor((heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter) / self.PitchFin) + 1
                 maxNumNFin = 0
             else:
-                maxNumPFin = math.floor(ratio * (heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode * 1e-9 - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9) / self.PitchFin) + 1
-                maxNumNFin = math.floor((1 - ratio) * (heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode * 1e-9 - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9) / self.PitchFin) + 1
+                maxNumPFin = math.floor(ratio * (heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode_meter - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter) / self.PitchFin) + 1
+                maxNumNFin = math.floor((1 - ratio) * (heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode_meter - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter) / self.PitchFin) + 1
 
             NumPFin = math.ceil(widthPMOS / (2 * self.heightFin + self.widthFin))
             if NumPFin > 0:
                 if NumPFin <= maxNumPFin:  # No folding
-                    unitWidthRegionP = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode * 1e-9
+                    unitWidthRegionP = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
                     heightRegionP = (NumPFin - 1) * self.PitchFin + 2 * self.widthFin / 2
                 else:  # Folding
                     numFoldedPMOS = math.ceil(NumPFin / maxNumPFin)
-                    unitWidthRegionP = (numFoldedPMOS + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode * 1e-9
+                    unitWidthRegionP = (numFoldedPMOS + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
                     heightRegionP = (maxNumPFin - 1) * self.PitchFin + 2 * self.widthFin / 2
             else:
                 unitWidthRegionP = 0
@@ -126,11 +127,11 @@ class Formula(torch.nn.Module):
             NumNFin = math.ceil(widthNMOS / (2 * self.heightFin + self.widthFin))
             if NumNFin > 0:
                 if NumNFin <= maxNumNFin:  # No folding
-                    unitWidthRegionN = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode * 1e-9
+                    unitWidthRegionN = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
                     heightRegionN = (NumNFin - 1) * self.PitchFin + 2 * self.widthFin / 2
                 else:  # Folding
                     numFoldedNMOS = math.ceil(NumNFin / maxNumNFin)
-                    unitWidthRegionN = (numFoldedNMOS + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode * 1e-9
+                    unitWidthRegionN = (numFoldedNMOS + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
                     heightRegionN = (maxNumNFin - 1) * self.PitchFin + 2 * self.widthFin / 2
             else:
                 unitWidthRegionN = 0
@@ -140,12 +141,16 @@ class Formula(torch.nn.Module):
             widthRegionP = unitWidthRegionP
             widthRegionN = unitWidthRegionN
         elif gateType in ['NOR', 'NAND']:
-            if numFoldedPMOS  == 1 and numFoldedNMOS == 1:  # Need to subtract the source/drain sharing region
-                widthRegionP = unitWidthRegionP * numInput - (numInput - 1) * self.CMOS_technode * 1e-9 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY)
+            if numFoldedPMOS == 1 and numFoldedNMOS == 1:  # Need to subtract the source/drain sharing region
+                widthRegionP = unitWidthRegionP * numInput - (numInput - 1) * self.CMOS_technode_meter * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY)
+                widthRegionN = unitWidthRegionN * numInput - (numInput - 1) * self.CMOS_technode_meter * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY)
+        else:
+            widthRegionN = 0
+            widthRegionP = 0  
 
         width = max(widthRegionN, widthRegionP)
         height = heightTransistorRegion
-        return width, height, width * height
+        return width, height
             
     def calculate_gate_capacitance(self, gateType, numInput, widthNMOS, widthPMOS, heightTransistorRegion):
         ratio = widthPMOS / (widthPMOS + widthNMOS)
@@ -154,25 +159,25 @@ class Formula(torch.nn.Module):
         if self.CMOS_technode >= 22:  # Bulk
             if ratio == 0:  # no PMOS
                 maxWidthPMOS = 0
-                maxWidthNMOS = heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9
+                maxWidthNMOS = heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter
             elif ratio == 1:  # no NMOS
-                maxWidthPMOS = heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9
+                maxWidthPMOS = heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter
                 maxWidthNMOS = 0
             else:
                 maxWidthPMOS = ratio * (
-                        heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode * 1e-9 - (
-                        self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9)
+                        heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode_meter - (
+                        self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter)
                 maxWidthNMOS = maxWidthPMOS / ratio * (1 - ratio)
 
             if widthPMOS > 0:
                 if widthPMOS <= maxWidthPMOS:  # No folding
-                    UnitWidthDrainP = self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthDrainP = self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
                     UnitWidthSourceP = UnitWidthDrainP
                     heightDrainP = widthPMOS
                 else:  # Folding
                     numFoldedPMOS = int(math.ceil(widthPMOS / maxWidthPMOS))
-                    UnitWidthDrainP = int(math.ceil((numFoldedPMOS + 1) / 2)) * self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
-                    UnitWidthSourceP = int(math.floor((numFoldedPMOS + 1) / 2)) * self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthDrainP = int(math.ceil((numFoldedPMOS + 1) / 2)) * self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthSourceP = int(math.floor((numFoldedPMOS + 1) / 2)) * self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
                     heightDrainP = maxWidthPMOS
             else:
                 UnitWidthDrainP = 0
@@ -181,13 +186,13 @@ class Formula(torch.nn.Module):
 
             if widthNMOS > 0:
                 if widthNMOS <= maxWidthNMOS:  # No folding
-                    UnitWidthDrainN = self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthDrainN = self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
                     UnitWidthSourceN = UnitWidthDrainN
                     heightDrainN = widthNMOS
                 else:  # Folding
                     numFoldedNMOS = int(math.ceil(widthNMOS / maxWidthNMOS))
-                    UnitWidthDrainN = int(math.ceil((numFoldedNMOS + 1) / 2)) * self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
-                    UnitWidthSourceN = int(math.floor((numFoldedNMOS + 1) / 2)) * self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthDrainN = int(math.ceil((numFoldedNMOS + 1) / 2)) * self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthSourceN = int(math.floor((numFoldedNMOS + 1) / 2)) * self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
                     heightDrainN = maxWidthNMOS
             else:
                 UnitWidthDrainN = 0
@@ -198,32 +203,32 @@ class Formula(torch.nn.Module):
             if ratio == 0:  # no PFinFET
                 maxNumPFin = 0
                 maxNumNFin = int(math.floor(
-                    (heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9) /
+                    (heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter) /
                     self.PitchFin)) + 1
             elif ratio == 1:  # no NFinFET
                 maxNumPFin = int(math.floor(
-                    (heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9) /
+                    (heightTransistorRegion - (self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter) /
                     self.PitchFin)) + 1
                 maxNumNFin = 0
             else:
                 maxNumPFin = int(math.floor(
-                    ratio * (heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode * 1e-9 - (
-                            self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9) / self.PitchFin)) + 1
+                    ratio * (heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode_meter - (
+                            self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter) / self.PitchFin)) + 1
                 maxNumNFin = int(math.floor((1 - ratio) * (
-                            heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode * 1e-9 - (
-                            self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode * 1e-9) / self.PitchFin)) + 1
+                            heightTransistorRegion - self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode_meter - (
+                            self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter) / self.PitchFin)) + 1
 
             NumPFin = int(math.ceil(widthPMOS / (2 * self.heightFin + self.widthFin)))
 
             if NumPFin > 0:
                 if NumPFin <= maxNumPFin:  # No folding
-                    UnitWidthDrainP = self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthDrainP = self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
                     UnitWidthSourceP = UnitWidthDrainP
                     heightDrainP = (NumPFin - 1) * self.PitchFin + 2 * self.widthFin / 2
                 else:  # Folding
                     numFoldedPMOS = int(math.ceil(NumPFin / maxNumPFin))
-                    UnitWidthDrainP = int(math.ceil((numFoldedPMOS + 1) / 2)) * self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
-                    UnitWidthSourceP = int(math.floor((numFoldedPMOS + 1) / 2)) * self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthDrainP = int(math.ceil((numFoldedPMOS + 1) / 2)) * self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthSourceP = int(math.floor((numFoldedPMOS + 1) / 2)) * self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
                     heightDrainP = (maxNumPFin - 1) * self.PitchFin + 2 * self.widthFin / 2
             else:
                 UnitWidthDrainP = 0
@@ -234,13 +239,13 @@ class Formula(torch.nn.Module):
 
             if NumNFin > 0:
                 if NumNFin <= maxNumNFin:  # No folding
-                    UnitWidthDrainN = self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthDrainN = self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
                     UnitWidthSourceN = UnitWidthDrainN
                     heightDrainN = (NumNFin - 1) * self.PitchFin + 2 * self.widthFin / 2
                 else:  # Folding
                     numFoldedNMOS = int(math.ceil(NumNFin / maxNumNFin))
-                    UnitWidthDrainN = int(math.ceil((numFoldedNMOS + 1) / 2)) * self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
-                    UnitWidthSourceN = int(math.floor((numFoldedNMOS + 1) / 2)) * self.CMOS_technode * 1e-9 * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthDrainN = int(math.ceil((numFoldedNMOS + 1) / 2)) * self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
+                    UnitWidthSourceN = int(math.floor((numFoldedNMOS + 1) / 2)) * self.CMOS_technode_meter * self.MIN_GAP_BET_GATE_POLY
                     heightDrainN = (maxNumNFin - 1) * self.PitchFin + 2 * self.widthFin / 2
             else:
                 UnitWidthDrainN = 0
@@ -325,9 +330,9 @@ class Formula(torch.nn.Module):
     
     def calculate_pass_gate_area(self, widthNMOS, widthPMOS, numFold):
         if self.CMOS_technode >= 22:  # Bulk
-            width = (numFold + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode
-            height = widthPMOS / numFold + widthNMOS / numFold + self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode + (
-                    self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode
+            width = (numFold + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
+            height = widthPMOS / numFold + widthNMOS / numFold + self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode_meter + (
+                    self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter
         else:  # FinFET
             totalNumPFin = int(math.ceil(widthPMOS / (2 * self.heightFin + self.widthFin)))
             totalNumNFin = int(math.ceil(widthNMOS / (2 * self.heightFin + self.widthFin)))
@@ -335,7 +340,7 @@ class Formula(torch.nn.Module):
             NumNFin = int(math.ceil(totalNumNFin / numFold))
             heightRegionP = (NumPFin - 1) * self.PitchFin + 2 * self.widthFin / 2
             heightRegionN = (NumNFin - 1) * self.PitchFin + 2 * self.widthFin / 2
-            width = (numFold + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode
-            height = heightRegionP + heightRegionN + self.MIN_GAP_BET_P_AND_N_DIFFS *self.CMOS_technode + (
-                    self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode
+            width = (numFold + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
+            height = heightRegionP + heightRegionN + self.MIN_GAP_BET_P_AND_N_DIFFS *self.CMOS_technode_meter + (
+                    self.MIN_POLY_EXT_DIFF + self.MIN_GAP_BET_FIELD_POLY / 2) * 2 * self.CMOS_technode_meter
         return width, height
