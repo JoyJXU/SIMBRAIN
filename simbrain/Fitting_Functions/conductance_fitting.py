@@ -2,23 +2,26 @@ import numpy as np
 import pandas as pd
 
 
-class Conductance(object):
-    """
-    Abstract base class for fitting parameters k & P with Conductance data.
-    """
+def timer(func):
+    def func_wrapper(*args, **kwargs):
+        from time import time
+        time_start = time()
+        result = func(*args, **kwargs)
+        time_end = time()
+        time_spend = time_end - time_start
+        print('%s cost time: %.3f s' % (func.__name__, time_spend))
+        return result
 
+    return func_wrapper
+
+
+class Conductance(object):
     def __init__(
             self,
             file,
-            dictionary: dict = {}
+            dictionary: dict = {},
+            **kwargs,
     ):
-        """
-        Abstract base class constructor.
-        :param file: Conductance data file.
-        :param dictionary: The parameters of the memristor device.
-        """
-        super().__init__()
-
         # Read excel
         data = pd.DataFrame(pd.read_excel(
             file,
@@ -47,17 +50,17 @@ class Conductance(object):
 
         # Read data
         self.delta_t = dictionary['delta_t']
+        self.V_write = np.array(data['Pulse Voltage(V)'])
+        self.read_voltage = np.array(data['Read Voltage(V)'][0])
+        # TODO: del temp variable "sample_interval"
         self.sample_interval = dictionary['sample_interval']
         if self.sample_interval is None:
             self.sample_interval = 1
 
-        self.V_write = np.array(data['Pulse Voltage(V)'])
-        self.read_voltage = data['Read Voltage(V)'][0]
-
         self.start_point_r = 0
-        self.points_r = np.where(self.V_write < 0)[0][0]
-        self.start_point_d = self.points_r
-        self.points_d = np.size(self.V_write) - self.points_r
+        self.points_r = int(self.V_write.shape[0] / 2)
+        self.start_point_d = int(self.V_write.shape[0] / 2)
+        self.points_d = int(self.V_write.shape[0] / 2)
 
         self.current_r = np.array(data['Current(A)'])[self.start_point_r: self.start_point_r + self.points_r]
         self.conductance_r = self.current_r / self.read_voltage
@@ -138,16 +141,17 @@ class Conductance(object):
 
         return internal_state, conductance_fit
 
+    @timer
     def fitting(self):
         P_off_num = 20
         P_on_num = 20
         P_off_list = np.logspace(-1, 1, P_off_num, base=10)
         P_on_list = np.logspace(-1, 1, P_on_num, base=10)
 
-        k_off_num = 500
-        k_on_num = 500
-        k_off_list = np.logspace(-2, 10, k_off_num, base=10)
-        k_on_list = -np.logspace(-2, 10, k_on_num, base=10)
+        k_off_num = 200
+        k_on_num = 200
+        k_off_list = np.logspace(-4, 9, k_off_num, base=10)
+        k_on_list = -np.logspace(-4, 9, k_on_num, base=10)
 
         # rise
         V_write_r_temp = self.V_write[self.start_point_r: self.start_point_r + self.points_r]
