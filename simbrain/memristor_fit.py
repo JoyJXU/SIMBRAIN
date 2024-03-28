@@ -358,3 +358,4 @@ class MemristorFitting(object):
         self.fitting_record = mem_info
 
         return self.fitting_record
+        
