@@ -428,24 +428,44 @@ class MLPMapping(Mapping):
         # Corssbar for positive input and positive weight
         self.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
                                         memristor_info_dict=self.memristor_info_dict)
+        length_row_pos_pos = self.mem_pos_pos.length_row
+        length_col_pos_pos = self.mem_pos_pos.length_col
+
         # Corssbar for negative input and positive weight
         self.mem_neg_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
                                         memristor_info_dict=self.memristor_info_dict)
+        length_row_neg_pos = self.mem_neg_pos.length_row
+        length_col_neg_pos = self.mem_neg_pos.length_col
+
         # Corssbar for positive input and negative weight
         self.mem_pos_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
+        length_row_pos_neg = self.mem_pos_neg.length_row
+        length_col_pos_neg = self.mem_pos_neg.length_col
+
         # Corssbar for negative input and negative weight
         self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
-
+        length_row_neg_neg = self.mem_neg_neg.length_row
+        length_col_neg_neg = self.mem_neg_neg.length_col
+        
         self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
-                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict)
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, 
+                                        length_row=length_row_pos_pos, length_col=length_col_pos_pos)
+
+        
         self.periph_circuit_neg_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
-                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict)
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, 
+                                        length_row=length_row_neg_pos, length_col=length_col_neg_pos)
+        
         self.periph_circuit_pos_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
-                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict)
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, 
+                                        length_row=length_row_pos_neg, length_col=length_col_pos_neg)
+        
         self.periph_circuit_neg_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
-                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict)
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, 
+                                        length_row=length_row_neg_neg, length_col=length_col_neg_neg)
+
         
         self.batch_interval = sim_params['batch_interval']
 
@@ -622,24 +642,43 @@ class CNNMapping(Mapping):
         # Corssbar for positive input and positive weight
         self.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
+        length_row_pos_pos = self.mem_pos_pos.length_row
+        length_col_pos_pos = self.mem_pos_pos.length_col
+
         # Corssbar for negative input and positive weight
         self.mem_neg_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
+        length_row_neg_pos = self.mem_neg_pos.length_row
+        length_col_neg_pos = self.mem_neg_pos.length_col
+
         # Corssbar for positive input and negative weight
         self.mem_pos_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
+        length_row_pos_neg = self.mem_pos_neg.length_row
+        length_col_pos_neg = self.mem_pos_neg.length_col
+
         # Corssbar for negative input and negative weight
         self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
+        length_row_neg_neg = self.mem_neg_neg.length_row
+        length_col_neg_neg = self.mem_neg_neg.length_col
+
 
         self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
-                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict)
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict,
+                                    length_row=length_row_pos_pos, length_col=length_col_pos_pos)
+        
         self.periph_circuit_neg_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
-                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict)
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict,
+                                    length_row=length_row_neg_pos, length_col=length_col_neg_pos)
+        
         self.periph_circuit_pos_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
-                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict)
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict,
+                                    length_row=length_row_pos_neg, length_col=length_col_pos_neg)
+        
         self.periph_circuit_neg_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
-                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict)
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict,
+                                    length_row=length_row_neg_neg, length_col=length_col_neg_neg)
 
         self.batch_interval = sim_params['batch_interval']
 

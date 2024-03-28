@@ -142,6 +142,13 @@ for test_cnt in range(multiple_test_no):
             total_area += network.layers[l].transform.mem_array.area.array_area
         print("total crossbar area=", total_area, " m2")
     
+    #Total_Periph_Area print
+    if sim_params['device_name'] != 'trace':
+        total_periph_area = 0
+        for l in network.layers:
+            total_periph_area += network.layers[l].transform.periph_circuit.Periph_Area
+        print("total periph area=", total_periph_area, " m2")
+
     # %% Load MNIST data.
     dataset = MNIST(
         PoissonEncoder(time=time, dt=dt),
