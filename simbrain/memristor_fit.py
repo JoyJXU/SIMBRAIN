@@ -200,11 +200,12 @@ class MemristorFitting(object):
         ):
             print("Error! Missing data files.\nFailed to update P_off, P_on, k_off, k_on.")
         else:
-            P_off, P_on, k_off, k_on = Conductance(
+            conductance_temp = (Conductance(
                 os.path.dirname(os.path.dirname(__file__))
                 + "/memristordata/conductance.xlsx",
                 mem_info
-            ).fitting()
+            ))
+            P_off, P_on, k_off, k_on = conductance_temp.fitting()
             mem_info.update(
                 {
                     "P_off": P_off,
@@ -263,21 +264,10 @@ class MemristorFitting(object):
                 print("Error! Missing data files.\nFailed to update sigma_relative, sigma_absolute.")
             else:
                 print("Cycle to Cycle Variation calculating...")
-                # TODO: use practical device params instead of mem_info_temp
-                mem_info_temp = {
-                    'v_off': 2,
-                    'v_on': -2,
-                    'G_off': 1.11e-9,
-                    'G_on': 4.36e-10,
-                    'alpha_off': 5,
-                    'alpha_on': 5,
-                    'k_off': 20.8,
-                    'k_on': -5.2,
-                    'P_off': 1.36,
-                    'P_on': 0.39,
-                    'delta_t': 30 * 1e-3,
-                }
-                sigma_relative, sigma_absolute = variation_temp.c2c_fitting()
+                if self.d2d_variation not in [1, 3]:
+                    sigma_relative, sigma_absolute = conductance_temp.c2c_fitting()
+                else:
+                    sigma_relative, sigma_absolute = variation_temp.c2c_fitting()
                 mem_info.update(
                     {
                         "sigma_relative": sigma_relative,
@@ -358,4 +348,3 @@ class MemristorFitting(object):
         self.fitting_record = mem_info
 
         return self.fitting_record
-        
