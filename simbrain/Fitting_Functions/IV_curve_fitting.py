@@ -2,23 +2,31 @@ import numpy as np
 import pandas as pd
 
 
-class IVCurve(object):
-    """
-    Abstract base class for fitting parameter alpha with IV curve data.
-    """
+def timer(func):
+    def func_wrapper(*args, **kwargs):
+        from time import time
+        time_start = time()
+        result = func(*args, **kwargs)
+        time_end = time()
+        time_spend = time_end - time_start
+        print('%s cost time: %.3f s' % (func.__name__, time_spend))
+        return result
 
+    return func_wrapper
+
+
+class IVCurve(object):
     def __init__(
             self,
             file,
-            dictionary: dict = {}
+            dictionary: dict = {},
+            **kwargs,
     ):
         """
-        Abstract base class constructor.
-        :param file: IV curve data file.
-        :param dictionary: The parameters of the memristor device.
+            Fitting alpha with IV curve.
+            :param file: IV curve data file
+            :param dictionary: Memristor device parameters
         """
-        super().__init__()
-
         # Read excel
         data = pd.DataFrame(pd.read_excel(
             file,
@@ -38,11 +46,16 @@ class IVCurve(object):
         # Read parameters
         self.v_off = dictionary['v_off']
         self.v_on = dictionary['v_on']
-        self.G_off = dictionary['Goff_sigma']
-        self.G_on = dictionary['Gon_sigma']
-        if None in [self.G_off, self.G_on]:
-            self.G_off = dictionary['G_off']
-            self.G_on = dictionary['G_on']
+
+        # TODO: use D2D G_mu as G
+        # self.G_off = dictionary['Goff_mu']
+        # self.G_on = dictionary['Gon_mu']
+        # if None in [self.G_off, self.G_on]:
+        #     self.G_off = dictionary['G_off']
+        #     self.G_on = dictionary['G_on']
+        self.G_off = dictionary['G_off']
+        self.G_on = dictionary['G_on']
+
         self.k_off = dictionary['k_off']
         self.k_on = dictionary['k_on']
         self.P_off = dictionary['P_off']
@@ -100,11 +113,12 @@ class IVCurve(object):
 
         return internal_state, conductance_fit
 
+    @timer
     def fitting(self):
         alpha_off_num = 10
         alpha_on_num = 10
-        alpha_off_list = [i+1 for i in range(10)]
-        alpha_on_list = [i+1 for i in range(10)]
+        alpha_off_list = [i+1 for i in range(alpha_off_num)]
+        alpha_on_list = [i*1 for i in range(alpha_on_num)]
 
         if None in [self.k_off, self.k_on]:
             k_off_num = 1000
@@ -160,7 +174,6 @@ class IVCurve(object):
 
                 if INDICATOR_p[i][j] <= indicator_temp_p:
                     min_x = j
-                    # k_off_best = self.k_off
                     indicator_temp_p = INDICATOR_p[i][j]
 
         # negative
@@ -181,10 +194,10 @@ class IVCurve(object):
 
                 if INDICATOR_n[i][j] <= indicator_temp_n:
                     min_y = j
-                    # k_on_best = self.k_on
                     indicator_temp_n = INDICATOR_n[i][j]
 
         self.alpha_off = alpha_off_list[min_x]
         self.alpha_on = alpha_on_list[min_y]
 
         return self.alpha_off, self.alpha_on
+        
