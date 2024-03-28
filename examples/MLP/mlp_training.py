@@ -25,7 +25,7 @@ parser.add_argument('--logdir', default='log/default', help='folder to save to t
 parser.add_argument('--data_root', default='data/', help='folder to save the model')
 parser.add_argument('--decreasing_lr', default='80,120', help='decreasing strategy')
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
-parser.add_argument("--memristor_device", type=str, default='new_ferro') # ideal, ferro, or hu
+parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
@@ -34,8 +34,10 @@ parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect,
 parser.add_argument("--input_bit", type=int, default=8)
 parser.add_argument("--ADC_accuracy", type=int, default=8)
 parser.add_argument("--wire_width", type=int, default=10000)
-parser.add_argument("--CMOS_technode", type=int, default=32)
+parser.add_argument("--CMOS_technode", type=str, default='32')
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP or LP
+parser.add_argument("--temperature", type=int, default=300)
+
 args = parser.parse_args()
 args.logdir = os.path.join(os.path.dirname(__file__), args.logdir)
 misc.logger.init(args.logdir, 'train_log')
@@ -48,7 +50,8 @@ mem_device = {'device_structure':args.memristor_structure, 'device_name': args.m
                  'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
                  'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 
                  'input_bit': args.input_bit,'batch_interval': 1, 
-                 'CMOS_technode':args.CMOS_technode, 'ADC_accuracy':args.ADC_accuracy, 'device_roadmap':args.device_roadmap}
+                 'CMOS_technode':args.CMOS_technode, 'ADC_accuracy':args.ADC_accuracy, 'device_roadmap':args.device_roadmap,
+                 'temperature':args.temperature}
 
 # logger
 misc.ensure_dir(args.logdir)
@@ -58,7 +61,7 @@ for k, v in args.__dict__.items():
 print("========================================")
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -88,6 +91,16 @@ for layer_name, layer in model.layers.items():
         total_area += layer.crossbar.mem_pos_neg.area.array_area
         total_area += layer.crossbar.mem_neg_neg.area.array_area
 print("total crossbar area=" + str(total_area) + " m2")
+
+# Periph_Area  print
+total_periph_area = 0
+for layer_name, layer in model.layers.items():
+    if isinstance(layer, Mem_Linear):
+        total_periph_area += layer.crossbar.periph_circuit_pos_pos.Periph_Area
+        total_periph_area += layer.crossbar.periph_circuit_neg_pos.Periph_Area
+        total_periph_area += layer.crossbar.periph_circuit_pos_neg.Periph_Area
+        total_periph_area += layer.crossbar.periph_circuit_neg_neg.Periph_Area
+print("total periph area=" + str(total_periph_area) + " m2")  
 
 # Memristor write
 for layer_name, layer in model.layers.items():
