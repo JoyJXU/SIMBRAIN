@@ -57,6 +57,8 @@ class PeriphCircuit(torch.nn.Module):
         print("Switchmatrix_Area_Col = ", Switchmatrix_Area_Col)
         print("Periph_Area = ", Periph_Area)
 
+        self.mem_i_max_tmp = 1e-9
+
     def set_batch_size(self, batch_size) -> None:
         # language=rst
         """
@@ -122,6 +124,9 @@ class PeriphCircuit(torch.nn.Module):
         # mem_i_sequence_min, _ = mem_i_sequence.min(dim=-1)   
         #mem_i_sequence_min = mem_i_sequence_min.unsqueeze(-1).expand_as(mem_i_sequence)    
         
+        self.mem_i_max_tmp = max(self.mem_i_max_tmp, float(torch.max(mem_i_sequence)))
+        #print(self.mem_i_max_tmp)
+        
         # Plan B: calculate the real max and min
         mem_i_sequence_min = torch.zeros_like(mem_i_sequence)
         mem_i_max = torch.sum(self.read_v_amp/(1/self.Goff + total_wire_resistance), dim=0)
@@ -139,14 +144,17 @@ class PeriphCircuit(torch.nn.Module):
         
         return mem_i
     
-    def DAC_col_write(self, mem_v) -> None:
-        self.periph_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v)
-        return mem_v
-        
-    
-    def DAC_row_write(self, mem_v_amp) -> None:    
-        self.periph_power.switch_matrix_row_write_energy_calculation(mem_v_amp=mem_v_amp)
+    def DAC_write(self, mem_v, mem_v_amp) -> None:
+        if self.device_structure == 'trace':
+            self.periph_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v)
+        elif self.device_structure in {'crossbar', 'mimo'}:
+            self.periph_power.switch_matrix_row_write_energy_calculation(mem_v_amp=mem_v_amp)
+            self.periph_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v)
+        else:
+            raise Exception("Only trace, mimo and crossbar architecture are supported!")
 
+    def DAC_reset(self, mem_v) -> None:
+        self.periph_power.switch_matrix_reset_energy_calculation(mem_v=mem_v)
     
     def total_energy_calculation(self, mem_t) -> None:
         self.periph_power.total_energy_calculation(mem_t=mem_t)

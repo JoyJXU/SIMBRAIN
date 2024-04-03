@@ -149,7 +149,7 @@ class STDPMapping(Mapping):
         self.mem_v[self.mem_v == 0] = self.vneg
         self.mem_v[self.mem_v == 1] = self.vpos      
 
-        self.mem_v = self.periph_circuit.DAC_col_write(mem_v=self.mem_v)
+        self.periph_circuit.DAC_write(mem_v=self.mem_v, mem_v_amp=None)
         mem_c = self.mem_array.memristor_write(mem_v=self.mem_v)
         
         # mem to nn
@@ -293,6 +293,10 @@ class MimoMapping(Mapping):
         # self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
         # self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
         # self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
+        # self.periph_circuit_pos_pos.DAC_reset(mem_v=self.mem_v)
+        # self.periph_circuit_neg_pos.DAC_reset(mem_v=self.mem_v)
+        # self.periph_circuit_pos_neg.DAC_reset(mem_v=self.mem_v)
+        # self.periph_circuit_neg_neg.DAC_reset(mem_v=self.mem_v)
 
         total_wr_cycle = self.memristor_luts[self.device_name]['total_no']
         write_voltage = self.memristor_luts[self.device_name]['voltage']
@@ -304,16 +308,13 @@ class MimoMapping(Mapping):
         self.write_pulse_no = self.m2v(matrix_pos)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
-        self.periph_circuit_pos_pos.DAC_row_write(mem_v_amp=write_voltage)
-        self.periph_circuit_pos_neg.DAC_row_write(mem_v_amp=write_voltage)
-        self.periph_circuit_neg_pos.DAC_row_write(mem_v_amp=write_voltage)
-        self.periph_circuit_neg_neg.DAC_row_write(mem_v_amp=write_voltage)
+        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
-            mem_v_pos_pos = self.periph_circuit_pos_pos.DAC_col_write(mem_v=self.mem_v)
-            self.mem_pos_pos.memristor_write(mem_v=mem_v_pos_pos)
-            mem_v_neg_pos = self.periph_circuit_neg_pos.DAC_col_write(mem_v=self.mem_v)            
-            self.mem_neg_pos.memristor_write(mem_v=mem_v_neg_pos)
+            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)           
+            self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
 
         # Negative weight write
         matrix_neg = torch.relu(target_x * -1)
@@ -321,12 +322,13 @@ class MimoMapping(Mapping):
         self.write_pulse_no = self.m2v(matrix_neg)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
+        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
-            mem_v_pos_neg = self.periph_circuit_pos_neg.DAC_col_write(mem_v=self.mem_v)
-            self.mem_pos_neg.memristor_write(mem_v=mem_v_pos_neg)
-            mem_v_neg_neg = self.periph_circuit_neg_neg.DAC_col_write(mem_v=self.mem_v)
-            self.mem_neg_neg.memristor_write(mem_v=mem_v_neg_neg)
+            self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
+            self.mem_neg_neg.memristor_write(mem_v=self.mem_v)
 
 
     def mapping_read_mimo(self, target_v):
@@ -500,6 +502,10 @@ class MLPMapping(Mapping):
         self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
         self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
         self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
+        self.periph_circuit_pos_pos.DAC_reset(mem_v=self.mem_v)
+        self.periph_circuit_neg_pos.DAC_reset(mem_v=self.mem_v)
+        self.periph_circuit_pos_neg.DAC_reset(mem_v=self.mem_v)
+        self.periph_circuit_neg_neg.DAC_reset(mem_v=self.mem_v)
 
         # Transform target_x to [0, 1]
         self.norm_ratio = torch.max(torch.abs(target_x.reshape(target_x.shape[0], -1)), dim=1)[0]
@@ -513,16 +519,13 @@ class MLPMapping(Mapping):
         self.write_pulse_no = self.m2v(matrix_pos / self.norm_ratio)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
-        self.periph_circuit_pos_pos.DAC_row_write(mem_v_amp=write_voltage)
-        self.periph_circuit_pos_neg.DAC_row_write(mem_v_amp=write_voltage)
-        self.periph_circuit_neg_pos.DAC_row_write(mem_v_amp=write_voltage)
-        self.periph_circuit_neg_neg.DAC_row_write(mem_v_amp=write_voltage)
+        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
-            mem_v_pos_pos = self.periph_circuit_pos_pos.DAC_col_write(mem_v=self.mem_v)
-            self.mem_pos_pos.memristor_write(mem_v=mem_v_pos_pos)
-            mem_v_neg_pos = self.periph_circuit_neg_pos.DAC_col_write(mem_v=self.mem_v)            
-            self.mem_neg_pos.memristor_write(mem_v=mem_v_neg_pos)
+            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)           
+            self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
 
         # Negative weight write
         matrix_neg = torch.relu(target_x * -1)
@@ -530,12 +533,13 @@ class MLPMapping(Mapping):
         self.write_pulse_no = self.m2v(matrix_neg / self.norm_ratio)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
+        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
-            mem_v_pos_neg = self.periph_circuit_pos_neg.DAC_col_write(mem_v=self.mem_v)
-            self.mem_pos_neg.memristor_write(mem_v=mem_v_pos_neg)
-            mem_v_neg_neg = self.periph_circuit_neg_neg.DAC_col_write(mem_v=self.mem_v)
-            self.mem_neg_neg.memristor_write(mem_v=mem_v_neg_neg)
+            self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
+            self.mem_neg_neg.memristor_write(mem_v=self.mem_v)
 
 
     def mapping_read_mlp(self, target_v):
@@ -544,20 +548,20 @@ class MLPMapping(Mapping):
 
         v_read_pos = self.periph_circuit_pos_pos.DAC_read(mem_v=target_v.unsqueeze(0), sgn='pos')
         v_read_neg = self.periph_circuit_neg_neg.DAC_read(mem_v=target_v.unsqueeze(0), sgn='neg')
-       
-     
+
         # memristor sequential read
         mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
         mem_i_pos_pos = self.periph_circuit_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance)
-        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
+        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)        
         mem_i_neg_pos = self.periph_circuit_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance)
-        mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
+        mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)            
         mem_i_pos_neg = self.periph_circuit_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance)
-        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
+        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)   
         mem_i_neg_neg = self.periph_circuit_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance)
-        
+  
+
         mem_i = mem_i_pos_pos - mem_i_neg_pos - mem_i_pos_neg + mem_i_neg_neg  
-   
+
         # Current to results
         self.mem_x_read = read_norm.unsqueeze(1) / (
                     2 ** self.input_bit - 1) * self.norm_ratio * self.trans_ratio * mem_i / self.v_read
@@ -709,6 +713,10 @@ class CNNMapping(Mapping):
         # self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
         # self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
         # self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
+        # self.periph_circuit_pos_pos.DAC_reset(mem_v=self.mem_v)
+        # self.periph_circuit_neg_pos.DAC_reset(mem_v=self.mem_v)
+        # self.periph_circuit_pos_neg.DAC_reset(mem_v=self.mem_v)
+        # self.periph_circuit_neg_neg.DAC_reset(mem_v=self.mem_v)
 
         # Transform target_x to [0, 1]
         self.norm_ratio_pos = torch.max(torch.relu(target_x).reshape(target_x.shape[0], -1), dim=1)[0]
@@ -723,16 +731,13 @@ class CNNMapping(Mapping):
         write_pulse_no = self.m2v(matrix_pos / self.norm_ratio_pos)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
-        self.periph_circuit_pos_pos.DAC_row_write(mem_v_amp=write_voltage)
-        self.periph_circuit_pos_neg.DAC_row_write(mem_v_amp=write_voltage)
-        self.periph_circuit_neg_pos.DAC_row_write(mem_v_amp=write_voltage)
-        self.periph_circuit_neg_neg.DAC_row_write(mem_v_amp=write_voltage)
+        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
-            mem_v_pos_pos = self.periph_circuit_pos_pos.DAC_col_write(mem_v=self.mem_v)
-            self.mem_pos_pos.memristor_write(mem_v=mem_v_pos_pos)
-            mem_v_neg_pos = self.periph_circuit_neg_pos.DAC_col_write(mem_v=self.mem_v)            
-            self.mem_neg_pos.memristor_write(mem_v=mem_v_neg_pos)
+            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)          
+            self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
 
         # Negative weight write
         matrix_neg = torch.relu(target_x * -1)
@@ -740,12 +745,13 @@ class CNNMapping(Mapping):
         write_pulse_no = self.m2v(matrix_neg / self.norm_ratio_neg)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
+        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
-            mem_v_pos_neg = self.periph_circuit_pos_neg.DAC_col_write(mem_v=self.mem_v)
-            self.mem_pos_neg.memristor_write(mem_v=mem_v_pos_neg)
-            mem_v_neg_neg = self.periph_circuit_neg_neg.DAC_col_write(mem_v=self.mem_v)
-            self.mem_neg_neg.memristor_write(mem_v=mem_v_neg_neg)
+            self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
+            self.mem_neg_neg.memristor_write(mem_v=self.mem_v)
 
 
     def mapping_read_cnn(self, target_v):
@@ -767,8 +773,8 @@ class CNNMapping(Mapping):
         
         mem_i_pos = mem_i_pos_pos - mem_i_neg_pos 
         mem_i_neg = mem_i_pos_neg - mem_i_neg_neg  
-   
 
+        
         # Current to results
         self.mem_x_read = self.norm_ratio_pos * self.trans_ratio * (
                     read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i_pos - (

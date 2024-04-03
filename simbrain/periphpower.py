@@ -34,6 +34,7 @@ class PeriphPower(torch.nn.Module):
         self.CMOS_technode_meter = self.CMOS_technode * 1e-9
         self.device_roadmap = sim_params['device_roadmap']
         self.device_name = sim_params['device_name']
+        self.device_structure = sim_params['device_structure']
         self.temperature = sim_params['temperature']
         self.input_bit = sim_params['input_bit']
         self.ADC_precision = sim_params['ADC_precision']
@@ -58,7 +59,8 @@ class PeriphPower(torch.nn.Module):
         self.DFF_initialize()
         self.adder_initialize()
         self.shift_add_energy = 0
-        self.SarADC_energy = 0          
+        self.SarADC_energy = 0       
+        self.switch_matrix_reset_energy = 0
         self.sim_power = {}
 
     def set_batch_size(self, batch_size) -> None:
@@ -147,7 +149,7 @@ class PeriphPower(torch.nn.Module):
     def switch_matrix_read_energy_calculation(self, activity_read, mem_v) -> None:
         read_times = mem_v.shape[0] * mem_v.shape[1] * self.input_bit
         self.switch_matrix_read_energy += (self.switch_matrix_read_cap_tg_drain * 3) * self.read_v_amp * self.read_v_amp * activity_read * self.shape[0] * read_times
-        self.switch_matrix_read_energy += (self.switch_matrix_read_cap_gateN + self.switch_matrix_read_cap_gateN) * self.vdd * self.vdd * activity_read * self.shape[0] * read_times
+        self.switch_matrix_read_energy += (self.switch_matrix_read_cap_gateN + self.switch_matrix_read_cap_gateP) * self.vdd * self.vdd * activity_read * self.shape[0] * read_times
         self.switch_matrix_read_energy += self.DFF_energy_calculation(DFF_num=self.shape[0], DFF_read=read_times)
         
     def switch_matrix_col_write_energy_calculation(self, mem_v) -> None:
@@ -157,14 +159,20 @@ class PeriphPower(torch.nn.Module):
         mem_neg_num = (mem_v < 0).sum().item()
         self.switch_matrix_col_write_energy += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp_pos * mem_v_amp_pos * mem_pos_num
         self.switch_matrix_col_write_energy += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp_neg * mem_v_amp_neg * mem_neg_num
-        self.switch_matrix_col_write_energy += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateN) * self.vdd * self.vdd * self.batch_size * self.shape[0] * self.shape[1]
+        self.switch_matrix_col_write_energy += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * (mem_neg_num + mem_pos_num)
         self.switch_matrix_col_write_energy += self.DFF_energy_calculation(self.shape[1], self.shape[0]*self.batch_size)
         
-    def switch_matrix_row_write_energy_calculation(self, mem_v_amp) -> None:
+    def switch_matrix_row_write_energy_calculation(self, mem_v_amp) -> None:     
         self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_tg_drain * 3) * 1/2 * mem_v_amp * 1/2 * mem_v_amp * self.batch_size * (self.shape[0]-1) * self.shape[0] 
         self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[0]
-        self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_gateN + self.switch_matrix_row_write_cap_gateN) * self.vdd * self.vdd * self.batch_size * self.shape[0] * self.shape[0]
-        self.switch_matrix_row_write_energy += self.DFF_energy_calculation(self.shape[0], self.batch_size)
+        self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_gateN + self.switch_matrix_row_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[0] * self.shape[0]
+        self.switch_matrix_row_write_energy += self.DFF_energy_calculation(self.shape[0], self.shape[0]*self.batch_size)
+        
+    def switch_matrix_reset_energy_calculation(self, mem_v) -> None:
+        mem_v_amp = torch.min(mem_v)
+        self.switch_matrix_reset_energy += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[1]
+        self.switch_matrix_reset_energy += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[1]
+        self.switch_matrix_reset_energy += self.DFF_energy_calculation(self.shape[1], self.batch_size)
     
     def DFF_energy_calculation(self, DFF_num, DFF_read) -> None:
         self.DFF_energy = 0
@@ -296,9 +304,10 @@ class PeriphPower(torch.nn.Module):
 
         :param mem_t: Time of the memristor crossbar.
         """
-        self.periph_total_energy = self.switch_matrix_col_write_energy + self.switch_matrix_row_write_energy + self.switch_matrix_read_energy + self.shift_add_energy + self.SarADC_energy
+        self.periph_total_energy = self.switch_matrix_col_write_energy + self.switch_matrix_row_write_energy + self.switch_matrix_read_energy + self.shift_add_energy + self.SarADC_energy + self.switch_matrix_reset_energy
         self.periph_average_power = self.periph_total_energy / (torch.max(mem_t) * self.dt)
-        self.sim_power = {'switch_matrix_col_write_energy': self.switch_matrix_col_write_energy,
+        self.sim_power = {'switch_matrix_reset_energy': self.switch_matrix_reset_energy,
+                          'switch_matrix_col_write_energy': self.switch_matrix_col_write_energy,
                           'switch_matrix_row_write_energy': self.switch_matrix_row_write_energy,
                           'switch_matrix_read_energy': self.switch_matrix_read_energy,
                           'shift_add_energy': self.shift_add_energy,
