@@ -318,7 +318,7 @@ class MemristorArray(torch.nn.Module):
         # mem_v shape: [input_bit, batchsize, read_no=1, array_row],
         # mem_array shape: [batchsize, array_row, array_column],
         # output_i shape: [input_bit, batchsize, read_no=1, array_column]
-        self.mem_i = torch.matmul(mem_v * v_read, mem_c)
+        self.mem_i = torch.matmul(mem_v, mem_c)
 
         # mem_t update according to the sequential read
         self.mem_t += mem_v.shape[0] * mem_v.shape[2]

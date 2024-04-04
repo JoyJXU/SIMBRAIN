@@ -190,7 +190,7 @@ class PeriphPower(torch.nn.Module):
         self.DFF_energy *= DFF_read
         return self.DFF_energy
     
-    def sarADC_energy_calculation(self, mem_i_sequence) -> None:
+    def SarADC_energy_calculation(self, mem_i_sequence) -> None:
         # in Cadence simulation, we fix Vread to 0.5V, with user-defined Vread (different from 0.5V)
         SarADC_energy_matrix = torch.zeros_like(mem_i_sequence)
         mem_r = torch.zeros_like(mem_i_sequence)

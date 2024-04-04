@@ -57,7 +57,7 @@ class PeriphCircuit(torch.nn.Module):
         print("Switchmatrix_Area_Col = ", Switchmatrix_Area_Col)
         print("Periph_Area = ", Periph_Area)
 
-        self.mem_i_max_tmp = 1e-9
+        # self.mem_i_max_tmp = 0
 
     def set_batch_size(self, batch_size) -> None:
         # language=rst
@@ -77,8 +77,6 @@ class PeriphCircuit(torch.nn.Module):
             self.periph_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v=mem_v)
             return mem_v
         else:
-            activity_read = 1/2
-            
             # Get normalization ratio
             # TODO check the shape
             read_norm = torch.max(torch.abs(mem_v), dim=2)[0]
@@ -109,11 +107,13 @@ class PeriphCircuit(torch.nn.Module):
             read_sequence.zero_()
             bit = None
             
+            activity_read = torch.sum(v_read).item() / v_read.numel()
+            v_read = self.read_v_amp * v_read
             self.periph_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v=mem_v)            
             return v_read
         
 
-    def ADC_read(self, mem_i_sequence, total_wire_resistance) -> None:
+    def ADC_read(self, mem_i_sequence, total_wire_resistance, high_cut_ratio) -> None:
 
       # Shift add to get the output current
         mem_i = torch.zeros(self.batch_size, mem_i_sequence.shape[2], self.shape[1], device=mem_i_sequence.device)
@@ -124,12 +124,11 @@ class PeriphCircuit(torch.nn.Module):
         # mem_i_sequence_min, _ = mem_i_sequence.min(dim=-1)   
         #mem_i_sequence_min = mem_i_sequence_min.unsqueeze(-1).expand_as(mem_i_sequence)    
         
-        self.mem_i_max_tmp = max(self.mem_i_max_tmp, float(torch.max(mem_i_sequence)))
-        #print(self.mem_i_max_tmp)
+        # self.mem_i_max_tmp = max(self.mem_i_max_tmp, float(torch.max(mem_i_sequence)))
         
         # Plan B: calculate the real max and min
         mem_i_sequence_min = torch.zeros_like(mem_i_sequence)
-        mem_i_max = torch.sum(self.read_v_amp/(1/self.Goff + total_wire_resistance), dim=0)
+        mem_i_max = high_cut_ratio * torch.sum(self.read_v_amp/(1/self.Goff + total_wire_resistance), dim=0)
         mem_i_sequence_max = mem_i_max.unsqueeze(0).unsqueeze(1).unsqueeze(2).expand_as(mem_i_sequence)
         mem_i_step = (mem_i_sequence_max - mem_i_sequence_min) / (2**self.ADC_precision)
         mem_i_index = torch.where(mem_i_step!=0, (mem_i_sequence - mem_i_sequence_min) / mem_i_step, 0)                           
@@ -139,7 +138,7 @@ class PeriphCircuit(torch.nn.Module):
         for i in range(self.input_bit):
             mem_i += mem_i_sequence_quantized[i, :, :, :] * 2 ** i
      
-        self.periph_power.sarADC_energy_calculation(mem_i_sequence=mem_i_sequence)
+        self.periph_power.SarADC_energy_calculation(mem_i_sequence=mem_i_sequence)
         self.periph_power.shift_add_energy_calculation(mem_i_sequence=mem_i_sequence)
         
         return mem_i

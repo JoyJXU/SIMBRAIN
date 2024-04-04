@@ -183,7 +183,7 @@ class STDPMapping(Mapping):
  
         mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read)
 
-        mem_i = self.periph_circuit.ADC_read(mem_i_sequence=mem_i.unsqueeze(0), total_wire_resistance=self.mem_array.total_wire_resistance)
+        mem_i = self.periph_circuit.ADC_read(mem_i_sequence=mem_i.unsqueeze(0), total_wire_resistance=self.mem_array.total_wire_resistance, high_cut_ratio=1)
         
         # current to trace
         self.mem_x_read = (mem_i/self.v_read - self.Gon) * self.trans_ratio
@@ -338,13 +338,13 @@ class MimoMapping(Mapping):
 
         # memristor sequential read
         mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
-        mem_i_pos_pos = self.periph_circuit_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance)
+        mem_i_pos_pos = self.periph_circuit_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance, high_cut_ratio=1)
         mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
-        mem_i_neg_pos = self.periph_circuit_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance)
+        mem_i_neg_pos = self.periph_circuit_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance, high_cut_ratio=1)
         mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
-        mem_i_pos_neg = self.periph_circuit_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance)
+        mem_i_pos_neg = self.periph_circuit_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance, high_cut_ratio=1)
         mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
-        mem_i_neg_neg = self.periph_circuit_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance)
+        mem_i_neg_neg = self.periph_circuit_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance, high_cut_ratio=1)
         
         mem_i = mem_i_pos_pos - mem_i_neg_pos - mem_i_pos_neg + mem_i_neg_neg
 
@@ -551,13 +551,13 @@ class MLPMapping(Mapping):
 
         # memristor sequential read
         mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
-        mem_i_pos_pos = self.periph_circuit_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance)
+        mem_i_pos_pos = self.periph_circuit_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance, high_cut_ratio=0.25)
         mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)        
-        mem_i_neg_pos = self.periph_circuit_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance)
+        mem_i_neg_pos = self.periph_circuit_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance, high_cut_ratio=0.25)
         mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)            
-        mem_i_pos_neg = self.periph_circuit_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance)
+        mem_i_pos_neg = self.periph_circuit_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance, high_cut_ratio=0.25)
         mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)   
-        mem_i_neg_neg = self.periph_circuit_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance)
+        mem_i_neg_neg = self.periph_circuit_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance, high_cut_ratio=0.25)
   
 
         mem_i = mem_i_pos_pos - mem_i_neg_pos - mem_i_pos_neg + mem_i_neg_neg  
@@ -731,7 +731,7 @@ class CNNMapping(Mapping):
         write_pulse_no = self.m2v(matrix_pos / self.norm_ratio_pos)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
-        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        periph_circuit_v = (write_pulse_no < (counter * total_wr_cycle)) * write_voltage
         self.periph_circuit_pos_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         self.periph_circuit_neg_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         for t in range(total_wr_cycle):
@@ -745,7 +745,7 @@ class CNNMapping(Mapping):
         write_pulse_no = self.m2v(matrix_neg / self.norm_ratio_neg)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
-        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        periph_circuit_v = (write_pulse_no < (counter * total_wr_cycle)) * write_voltage
         self.periph_circuit_pos_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         self.periph_circuit_neg_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         for t in range(total_wr_cycle):
@@ -763,13 +763,13 @@ class CNNMapping(Mapping):
        
         # memristor sequential read
         mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
-        mem_i_pos_pos = self.periph_circuit_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance)
+        mem_i_pos_pos = self.periph_circuit_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance, high_cut_ratio=0.50)
         mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
-        mem_i_neg_pos = self.periph_circuit_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance)
+        mem_i_neg_pos = self.periph_circuit_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance, high_cut_ratio=0.50)
         mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
-        mem_i_pos_neg = self.periph_circuit_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance)
+        mem_i_pos_neg = self.periph_circuit_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance, high_cut_ratio=0.50)
         mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
-        mem_i_neg_neg = self.periph_circuit_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance)
+        mem_i_neg_neg = self.periph_circuit_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance, high_cut_ratio=0.50)
         
         mem_i_pos = mem_i_pos_pos - mem_i_neg_pos 
         mem_i_neg = mem_i_pos_neg - mem_i_neg_neg  
@@ -778,12 +778,12 @@ class CNNMapping(Mapping):
         # Current to results
         self.mem_x_read = self.norm_ratio_pos * self.trans_ratio * (
                     read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i_pos - (
-                        target_v.sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
+                        target_v.squeeze().sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
 
         # Current to results
         self.mem_x_read -= self.norm_ratio_neg * self.trans_ratio * (
                     read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i_neg - (
-                        target_v.sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
+                        target_v.squeeze().sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
 
         return self.mem_x_read.squeeze(0)
 
