@@ -33,7 +33,13 @@ parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variatio
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
-parser.add_argument("--process_node", type=int, default=10000)
+parser.add_argument("--input_bit", type=int, default=8)
+parser.add_argument("--ADC_precision", type=int, default=8)
+parser.add_argument("--wire_width", type=int, default=200) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
+parser.add_argument("--CMOS_technode", type=int, default=32)
+parser.add_argument("--device_roadmap", type=str, default='HP')  # HP: High Performance or LP: Low Power
+parser.add_argument("--temperature", type=int, default=300)
+parser.add_argument("--power_estimation", type=int, default=True)
 args = parser.parse_args()
 
 
@@ -119,11 +125,13 @@ if __name__ == '__main__':
     print("Running on Device = ", device)
 
     # Mem device setup
-    mem_device = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
+    sim_params = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
                   'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                   'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-                  'aging_effect': args.aging_effect, 'process_node': args.process_node, 'batch_interval': None}
-
+                  'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
+                  'batch_interval': 1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
+                  'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
+                  'power_estimation': args.power_estimation}
 
     best_acc = 0
     start_epoch = 0
@@ -155,7 +163,7 @@ if __name__ == '__main__':
 
     # Model
     print('==> Building model..')
-    net = mem_VGG('VGG16', mem_device=mem_device)
+    net = mem_VGG('VGG16', mem_device=sim_params)
     net = net.to(device)
 
     # Memristor write

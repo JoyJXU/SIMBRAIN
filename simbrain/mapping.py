@@ -1,10 +1,10 @@
 from typing import Iterable, Optional, Union
 from simbrain.memarray import MemristorArray
+from simbrain.periphcircuit import PeriphCircuit
 import json
 import pickle
 import torch
 import math
-from typing import Tuple
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
@@ -31,6 +31,8 @@ class Mapping(torch.nn.Module):
         self.sim_params = sim_params
         self.device_name = sim_params['device_name']
         self.device_structure = sim_params['device_structure']
+        self.CMOS_technode = sim_params['CMOS_technode']
+        self.device_roadmap = sim_params['device_roadmap']
         self.input_bit = sim_params['input_bit']
 
         if self.device_structure == 'trace':
@@ -54,12 +56,18 @@ class Mapping(torch.nn.Module):
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.v_read = self.memristor_info_dict[self.device_name]['v_read']
 
+        with open('../../CMOS_tech_info.json', 'r') as f:
+            self.CMOS_tech_info_dict = json.load(f)
+        assert self.device_roadmap in self.CMOS_tech_info_dict.keys(), "Invalid Memristor Device!"
+        assert str(self.CMOS_technode) in self.CMOS_tech_info_dict[self.device_roadmap].keys(), "Invalid Memristor Device!"
+
         self.trans_ratio = 1 / (self.Goff - self.Gon)
 
         self.batch_size = None
         self.learning = None
 
         self.sim_power = {}
+        self.sim_periph_power = {}
         self.sim_area = {}
 
 
@@ -105,6 +113,8 @@ class STDPMapping(Mapping):
 
         self.mem_array = MemristorArray(sim_params=sim_params, shape=self.shape,
                                         memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                        CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
         self.batch_interval = sim_params['batch_interval']
 
         self.register_buffer("mem_v_read", torch.Tensor())
@@ -119,6 +129,7 @@ class STDPMapping(Mapping):
         self.learning = learning
         self.set_batch_size(batch_size)
         self.mem_array.set_batch_size(batch_size=self.batch_size)
+        self.periph_circuit.set_batch_size(batch_size=batch_size)
 
         self.mem_v_read = torch.zeros(1, batch_size, 1, self.shape[0], device=self.mem_v_read.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
@@ -238,6 +249,7 @@ class STDPMapping(Mapping):
         self.mem_v[self.mem_v == 0] = self.vneg
         self.mem_v[self.mem_v == 1] = self.vpos      
 
+        self.periph_circuit.DAC_write(mem_v=self.mem_v, mem_v_amp=None)
         mem_c = self.mem_array.memristor_write(mem_v=self.mem_v)
         
         # mem to nn
@@ -267,7 +279,13 @@ class STDPMapping(Mapping):
         self.mem_v_read.zero_()
         self.mem_v_read[0, s_sum.bool()] = 1
 
+        self.mem_v_read = self.periph_circuit.DAC_read(mem_v=self.mem_v_read, sgn=None)
+
         mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read)
+
+        mem_i = self.periph_circuit.ADC_read(mem_i_sequence=mem_i.unsqueeze(0),
+                                             total_wire_resistance=self.mem_array.total_wire_resistance,
+                                             high_cut_ratio=1)
 
         # current to trace
         self.mem_x_read = (mem_i/self.v_read - self.Gon) * self.trans_ratio
@@ -334,6 +352,15 @@ class MimoMapping(Mapping):
         self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
 
+        self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_neg_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_pos_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_neg_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+
         self.batch_interval = sim_params['batch_interval']
 
 
@@ -343,6 +370,10 @@ class MimoMapping(Mapping):
         self.mem_neg_pos.set_batch_size(batch_size=batch_size)
         self.mem_pos_neg.set_batch_size(batch_size=batch_size)
         self.mem_neg_neg.set_batch_size(batch_size=batch_size)
+        self.periph_circuit_pos_pos.set_batch_size(batch_size=batch_size)
+        self.periph_circuit_neg_pos.set_batch_size(batch_size=batch_size)
+        self.periph_circuit_pos_neg.set_batch_size(batch_size=batch_size)
+        self.periph_circuit_neg_neg.set_batch_size(batch_size=batch_size)
 
         self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
 
@@ -365,6 +396,11 @@ class MimoMapping(Mapping):
         self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
         self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
 
+        self.periph_circuit_pos_pos.DAC_reset(mem_v=self.mem_v)
+        self.periph_circuit_neg_pos.DAC_reset(mem_v=self.mem_v)
+        self.periph_circuit_pos_neg.DAC_reset(mem_v=self.mem_v)
+        self.periph_circuit_neg_neg.DAC_reset(mem_v=self.mem_v)
+
         total_wr_cycle = self.memristor_luts[self.device_name]['total_no']
         write_voltage = self.memristor_luts[self.device_name]['voltage']
         counter = torch.ones_like(self.mem_v)
@@ -374,6 +410,9 @@ class MimoMapping(Mapping):
         # Vector to Pulse Serial
         self.write_pulse_no = self.m2v(matrix_pos)
         # Matrix to memristor
+        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
@@ -385,6 +424,9 @@ class MimoMapping(Mapping):
         # Vector to Pulse Serial
         self.write_pulse_no = self.m2v(matrix_neg)
         # Matrix to memristor
+        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
@@ -393,41 +435,20 @@ class MimoMapping(Mapping):
 
 
     def mapping_read_mimo(self, target_v):
-        # target_v shape [write_batch_size, read_batch_size, row_no]
-        # increase one dimension of the input by input_bit
-        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device, dtype=bool)
+        v_read_pos = self.periph_circuit_pos_pos.DAC_read(mem_v=target_v, sgn='pos')
+        v_read_neg = self.periph_circuit_neg_neg.DAC_read(mem_v=target_v, sgn='neg')
 
-        # positive read sequence generation
-        v_read_pos = torch.relu(target_v)
-        v_read_pos = torch.round(v_read_pos * (2 ** self.input_bit - 1))
-        v_read_pos = torch.clamp(v_read_pos, 0, 2 ** self.input_bit - 1)
-        v_read_pos = v_read_pos.to(torch.int64)
-        for i in range(self.input_bit):
-            bit = torch.bitwise_and(v_read_pos, 2 ** i).bool()
-            read_sequence[i] = bit
-        v_read_pos = read_sequence.clone()
-        read_sequence.zero_()
+        # memristor sequential read
+        mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
+        mem_i_pos_pos = self.periph_circuit_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance, high_cut_ratio=1)
+        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
+        mem_i_neg_pos = self.periph_circuit_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance, high_cut_ratio=1)
+        mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
+        mem_i_pos_neg = self.periph_circuit_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance, high_cut_ratio=1)
+        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
+        mem_i_neg_neg = self.periph_circuit_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance, high_cut_ratio=1)
 
-        # negative read sequence generation
-        v_read_neg = torch.relu(target_v * -1)
-        v_read_neg = torch.round(v_read_neg * (2 ** self.input_bit - 1))
-        v_read_neg = torch.clamp(v_read_neg, 0, 2 ** self.input_bit - 1)
-        v_read_neg = v_read_neg.to(torch.int64)
-        for i in range(self.input_bit):
-            bit = torch.bitwise_and(v_read_neg, 2 ** i).bool()
-            read_sequence[i] = bit
-        v_read_neg = read_sequence.clone()
-
-        # memrstor sequential read
-        mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
-        mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
-        mem_i_sequence -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
-        mem_i_sequence += self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
-
-        # Shift add to get the output current
-        mem_i = torch.zeros(self.batch_size, target_v.shape[1], self.shape[1], device=target_v.device)
-        for i in range(self.input_bit):
-            mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
+        mem_i = mem_i_pos_pos - mem_i_neg_pos - mem_i_pos_neg + mem_i_neg_neg
 
         # Current to results
         self.mem_x_read = self.trans_ratio * mem_i / (2 ** self.input_bit - 1) / self.v_read
@@ -470,10 +491,21 @@ class MimoMapping(Mapping):
         self.mem_pos_neg.total_energy_calculation()
         self.mem_neg_neg.total_energy_calculation()
 
+        self.periph_circuit_pos_pos.total_energy_calculation(mem_t=self.mem_pos_pos.mem_t)
+        self.periph_circuit_neg_pos.total_energy_calculation(mem_t=self.mem_neg_pos.mem_t)
+        self.periph_circuit_pos_neg.total_energy_calculation(mem_t=self.mem_pos_neg.mem_t)
+        self.periph_circuit_neg_neg.total_energy_calculation(mem_t=self.mem_neg_neg.mem_t)
+
         self.sim_power = {key: self.mem_pos_pos.power.sim_power[key] + self.mem_neg_pos.power.sim_power[key] +
                                self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key] if key != 'time'
                           else self.mem_pos_pos.power.sim_power[key]
                           for key in self.mem_pos_pos.power.sim_power.keys()}
+
+        self.sim_periph_power = {key: self.periph_circuit_pos_pos.periph_power.sim_power[key] +
+                                      self.periph_circuit_neg_pos.periph_power.sim_power[key] +
+                                      self.periph_circuit_pos_neg.periph_power.sim_power[key] +
+                                      self.periph_circuit_neg_neg.periph_power.sim_power[key]
+                                 for key in self.periph_circuit_pos_pos.periph_power.sim_power.keys()}
 
 
     def total_area_calculation(self) -> None:
@@ -528,6 +560,15 @@ class MLPMapping(Mapping):
         self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
 
+        self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_neg_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_pos_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_neg_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+
         self.batch_interval = sim_params['batch_interval']
 
 
@@ -538,10 +579,14 @@ class MLPMapping(Mapping):
         self.mem_pos_neg.set_batch_size(batch_size=batch_size)
         self.mem_neg_neg.set_batch_size(batch_size=batch_size)
 
+        self.periph_circuit_pos_pos.set_batch_size(batch_size=batch_size)
+        self.periph_circuit_neg_pos.set_batch_size(batch_size=batch_size)
+        self.periph_circuit_pos_neg.set_batch_size(batch_size=batch_size)
+        self.periph_circuit_neg_neg.set_batch_size(batch_size=batch_size)
+
         self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.write_pulse_no.device)
 
         self.norm_ratio = torch.zeros(batch_size, device=self.norm_ratio.device)
-        # TODO: For MLP, batch_interval consist of reset + write + read?
         # self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
@@ -560,6 +605,10 @@ class MLPMapping(Mapping):
         self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
         self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
         self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
+        self.periph_circuit_pos_pos.DAC_reset(mem_v=self.mem_v)
+        self.periph_circuit_neg_pos.DAC_reset(mem_v=self.mem_v)
+        self.periph_circuit_pos_neg.DAC_reset(mem_v=self.mem_v)
+        self.periph_circuit_neg_neg.DAC_reset(mem_v=self.mem_v)
 
         # Transform target_x to [0, 1]
         self.norm_ratio = torch.max(torch.abs(target_x.reshape(target_x.shape[0], -1)), dim=1)[0]
@@ -572,6 +621,9 @@ class MLPMapping(Mapping):
         # Vector to Pulse Serial
         self.write_pulse_no = self.m2v(matrix_pos / self.norm_ratio)
         # Matrix to memristor
+        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
@@ -583,6 +635,9 @@ class MLPMapping(Mapping):
         # Vector to Pulse Serial
         self.write_pulse_no = self.m2v(matrix_neg / self.norm_ratio)
         # Matrix to memristor
+        periph_circuit_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
@@ -594,42 +649,20 @@ class MLPMapping(Mapping):
         # Get normalization ratio
         read_norm = torch.max(torch.abs(target_v), dim=1)[0]
 
-        # increase one dimension of the input by input_bit
-        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device)
+        v_read_pos = self.periph_circuit_pos_pos.DAC_read(mem_v=target_v.unsqueeze(0), sgn='pos')
+        v_read_neg = self.periph_circuit_neg_neg.DAC_read(mem_v=target_v.unsqueeze(0), sgn='neg')
 
-        # positive read sequence generation
-        v_read_pos = torch.relu(target_v)
-        v_read_pos = v_read_pos / read_norm.unsqueeze(1)
-        v_read_pos = torch.round(v_read_pos * (2 ** self.input_bit - 1))
-        v_read_pos = torch.clamp(v_read_pos, 0, 2 ** self.input_bit - 1)
-        v_read_pos = v_read_pos.to(torch.uint8)
-        for i in range(self.input_bit):
-            bit = torch.bitwise_and(v_read_pos, 2 ** i).bool()
-            read_sequence[i] = bit
-        v_read_pos = read_sequence.clone()
-        read_sequence.zero_()
+        # memristor sequential read
+        mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
+        mem_i_pos_pos = self.periph_circuit_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance, high_cut_ratio=0.25)
+        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
+        mem_i_neg_pos = self.periph_circuit_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance, high_cut_ratio=0.25)
+        mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
+        mem_i_pos_neg = self.periph_circuit_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance, high_cut_ratio=0.25)
+        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
+        mem_i_neg_neg = self.periph_circuit_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance, high_cut_ratio=0.25)
 
-        # negative read sequence generation
-        v_read_neg = torch.relu(target_v * -1)
-        v_read_neg = v_read_neg / read_norm.unsqueeze(1)
-        v_read_neg = torch.round(v_read_neg * (2 ** self.input_bit - 1))
-        v_read_neg = torch.clamp(v_read_neg, 0, 2 ** self.input_bit - 1)
-        v_read_neg = v_read_neg.to(torch.uint8)
-        for i in range(self.input_bit):
-            bit = torch.bitwise_and(v_read_neg, 2 ** i).bool()
-            read_sequence[i] = bit
-        v_read_neg = read_sequence.clone()
-
-        # memrstor sequential read
-        mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(1))
-        mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(1))
-        mem_i_sequence -= self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(1))
-        mem_i_sequence += self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(1))
-
-        # Shift add to get the output current
-        mem_i = torch.zeros(self.batch_size, target_v.shape[0], self.shape[1], device=target_v.device)
-        for i in range(self.input_bit):
-            mem_i += mem_i_sequence[i, :, :, :] * 2**i
+        mem_i = mem_i_pos_pos - mem_i_neg_pos - mem_i_pos_neg + mem_i_neg_neg
 
         # Current to results
         self.mem_x_read = read_norm.unsqueeze(1) / (
@@ -673,9 +706,21 @@ class MLPMapping(Mapping):
         self.mem_pos_neg.total_energy_calculation()
         self.mem_neg_neg.total_energy_calculation()
 
+        self.periph_circuit_pos_pos.total_energy_calculation(mem_t=self.mem_pos_pos.mem_t)
+        self.periph_circuit_neg_pos.total_energy_calculation(mem_t=self.mem_neg_pos.mem_t)
+        self.periph_circuit_pos_neg.total_energy_calculation(mem_t=self.mem_pos_neg.mem_t)
+        self.periph_circuit_neg_neg.total_energy_calculation(mem_t=self.mem_neg_neg.mem_t)
+
         self.sim_power = {key: self.mem_pos_pos.power.sim_power[key] + self.mem_neg_pos.power.sim_power[key] +
-                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key]
+                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key] if key != 'time'
+                          else self.mem_pos_pos.power.sim_power[key]
                           for key in self.mem_pos_pos.power.sim_power.keys()}
+
+        self.sim_periph_power = {key: self.periph_circuit_pos_pos.periph_power.sim_power[key] +
+                                      self.periph_circuit_neg_pos.periph_power.sim_power[key] +
+                                      self.periph_circuit_pos_neg.periph_power.sim_power[key] +
+                                      self.periph_circuit_neg_neg.periph_power.sim_power[key]
+                                 for key in self.periph_circuit_pos_pos.periph_power.sim_power.keys()}
 
 
     def total_area_calculation(self) -> None:
@@ -730,6 +775,15 @@ class CNNMapping(Mapping):
         self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
 
+        self.periph_circuit_pos_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_neg_pos = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_pos_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        self.periph_circuit_neg_neg = PeriphCircuit(sim_params=sim_params, shape=self.shape,
+                                    CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+
         self.batch_interval = sim_params['batch_interval']
 
     def set_batch_size_cnn(self, batch_size) -> None:
@@ -738,6 +792,11 @@ class CNNMapping(Mapping):
         self.mem_neg_pos.set_batch_size(batch_size=batch_size)
         self.mem_pos_neg.set_batch_size(batch_size=batch_size)
         self.mem_neg_neg.set_batch_size(batch_size=batch_size)
+
+        self.periph_circuit_pos_pos.set_batch_size(batch_size=batch_size)
+        self.periph_circuit_neg_pos.set_batch_size(batch_size=batch_size)
+        self.periph_circuit_pos_neg.set_batch_size(batch_size=batch_size)
+        self.periph_circuit_neg_neg.set_batch_size(batch_size=batch_size)
 
         # self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.norm_ratio_pos = torch.zeros(batch_size, device=self.norm_ratio.device)
@@ -773,6 +832,9 @@ class CNNMapping(Mapping):
         write_pulse_no = self.m2v(matrix_pos / self.norm_ratio_pos)
         # Matrix to memristor
         # Memristor programming using multiple identical pulses (up to 400)
+        periph_circuit_v = (write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_pos.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
             self.mem_pos_pos.memristor_write(mem_v=self.mem_v)
@@ -783,6 +845,9 @@ class CNNMapping(Mapping):
         # Vector to Pulse Serial
         write_pulse_no = self.m2v(matrix_neg / self.norm_ratio_neg)
         # Matrix to memristor
+        periph_circuit_v = (write_pulse_no < (counter * total_wr_cycle)) * write_voltage
+        self.periph_circuit_pos_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
+        self.periph_circuit_neg_neg.DAC_write(mem_v=periph_circuit_v, mem_v_amp=write_voltage)
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
@@ -793,62 +858,32 @@ class CNNMapping(Mapping):
     def mapping_read_cnn(self, target_v):
         # Get normalization ratio
         read_norm = torch.max(torch.abs(target_v), dim=1)[0]
+        target_v = target_v.unsqueeze(0)
+        v_read_pos = self.periph_circuit_pos_pos.DAC_read(mem_v=target_v, sgn='pos')
+        v_read_neg = self.periph_circuit_neg_neg.DAC_read(mem_v=target_v, sgn='neg')
 
-        # positive read sequence generation
-        v_read_pos = torch.relu(target_v)
-        v_read_pos = v_read_pos / read_norm.unsqueeze(1)
-        v_read_pos = torch.round(v_read_pos * (2 ** self.input_bit - 1))
-        v_read_pos = torch.clamp(v_read_pos, 0, 2 ** self.input_bit - 1)
-        v_read_pos = v_read_pos.to(torch.uint8)
-        # increase one dimension of the input by input_bit
-        read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device, dtype=bool)
-        for i in range(self.input_bit):
-            bit = torch.bitwise_and(v_read_pos, 2 ** i).bool()
-            read_sequence[i] = bit
-        v_read_pos = read_sequence.clone()
-        read_sequence.zero_()
-        bit = None
+        # memristor sequential read
+        mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
+        mem_i_pos_pos = self.periph_circuit_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance, high_cut_ratio=0.50)
+        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
+        mem_i_neg_pos = self.periph_circuit_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance, high_cut_ratio=0.50)
+        mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
+        mem_i_pos_neg = self.periph_circuit_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance, high_cut_ratio=0.50)
+        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
+        mem_i_neg_neg = self.periph_circuit_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance, high_cut_ratio=0.50)
 
-        # negative read sequence generation
-        v_read_neg = torch.relu(target_v * -1)
-        v_read_neg = v_read_neg / read_norm.unsqueeze(1)
-        v_read_neg = torch.round(v_read_neg * (2 ** self.input_bit - 1))
-        v_read_neg = torch.clamp(v_read_neg, 0, 2 ** self.input_bit - 1)
-        v_read_neg = v_read_neg.to(torch.uint8)
-        # increase one dimension of the input by input_bit
-        # read_sequence = torch.zeros(self.input_bit, *(target_v.shape), device=target_v.device, dtype=bool)
-        for i in range(self.input_bit):
-            bit = torch.bitwise_and(v_read_neg, 2 ** i).bool()
-            read_sequence[i] = bit
-        v_read_neg = read_sequence.clone()
-        read_sequence = None
-        bit = None
-
-        mem_i_sequence = self.mem_pos_pos.memristor_read(mem_v=v_read_pos.unsqueeze(1))
-        mem_i_sequence -= self.mem_neg_pos.memristor_read(mem_v=v_read_neg.unsqueeze(1))
-
-        # Shift add to get the output current
-        mem_i = torch.zeros(self.batch_size, target_v.shape[0], self.shape[1], device=target_v.device)
-        for i in range(self.input_bit):
-            mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
+        mem_i_pos = mem_i_pos_pos - mem_i_neg_pos
+        mem_i_neg = mem_i_pos_neg - mem_i_neg_neg
 
         # Current to results
         self.mem_x_read = self.norm_ratio_pos * self.trans_ratio * (
-                    read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i - (
-                        target_v.sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
-
-        mem_i_sequence = self.mem_pos_neg.memristor_read(mem_v=v_read_pos.unsqueeze(1))
-        mem_i_sequence -= self.mem_neg_neg.memristor_read(mem_v=v_read_neg.unsqueeze(1))
-
-        # Shift add to get the output current
-        mem_i.zero_()
-        for i in range(self.input_bit):
-            mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
+                    read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i_pos - (
+                        target_v.squeeze().sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
 
         # Current to results
         self.mem_x_read -= self.norm_ratio_neg * self.trans_ratio * (
-                    read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i - (
-                        target_v.sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
+                    read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i_neg - (
+                        target_v.squeeze().sum(dim=1) * self.Gon).unsqueeze(0).unsqueeze(2))
 
         return self.mem_x_read.squeeze(0)
 
@@ -894,10 +929,21 @@ class CNNMapping(Mapping):
         self.mem_pos_neg.total_energy_calculation()
         self.mem_neg_neg.total_energy_calculation()
 
+        self.periph_circuit_pos_pos.total_energy_calculation(mem_t=self.mem_pos_pos.mem_t)
+        self.periph_circuit_neg_pos.total_energy_calculation(mem_t=self.mem_neg_pos.mem_t)
+        self.periph_circuit_pos_neg.total_energy_calculation(mem_t=self.mem_pos_neg.mem_t)
+        self.periph_circuit_neg_neg.total_energy_calculation(mem_t=self.mem_neg_neg.mem_t)
+
         self.sim_power = {key: self.mem_pos_pos.power.sim_power[key] + self.mem_neg_pos.power.sim_power[key] +
-                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key]
+                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key] if key != 'time'
+                          else self.mem_pos_pos.power.sim_power[key]
                           for key in self.mem_pos_pos.power.sim_power.keys()}
 
+        self.sim_periph_power = {key: self.periph_circuit_pos_pos.periph_power.sim_power[key] +
+                                      self.periph_circuit_neg_pos.periph_power.sim_power[key] +
+                                      self.periph_circuit_pos_neg.periph_power.sim_power[key] +
+                                      self.periph_circuit_neg_neg.periph_power.sim_power[key]
+                                 for key in self.periph_circuit_pos_pos.periph_power.sim_power.keys()}
 
     def total_area_calculation(self) -> None:
         # language=rst
