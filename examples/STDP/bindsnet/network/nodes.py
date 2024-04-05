@@ -150,6 +150,7 @@ class Nodes(torch.nn.Module):
             self.trace_decay = torch.exp(
                 -self.dt / self.tc_trace
             )  # Spike trace decay (per timestep).
+            self.transform.voltage_generation(self.trace_decay, plot=False)
 
 
     def set_batch_size(self, batch_size) -> None:

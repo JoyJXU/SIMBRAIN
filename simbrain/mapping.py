@@ -3,6 +3,10 @@ from simbrain.memarray import MemristorArray
 import json
 import pickle
 import torch
+import math
+from typing import Tuple
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 class Mapping(torch.nn.Module):
     # language=rst
@@ -24,7 +28,8 @@ class Mapping(torch.nn.Module):
         """
         super().__init__()
 
-        self.device_name = sim_params['device_name'] 
+        self.sim_params = sim_params
+        self.device_name = sim_params['device_name']
         self.device_structure = sim_params['device_structure']
         self.input_bit = sim_params['input_bit']
 
@@ -44,9 +49,7 @@ class Mapping(torch.nn.Module):
 
         with open('../../memristor_device_info.json', 'r') as f:
             self.memristor_info_dict = json.load(f)
-        assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"  
-        self.vneg = self.memristor_info_dict[self.device_name]['vinput_neg']
-        self.vpos = self.memristor_info_dict[self.device_name]['vinput_pos']
+        assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
         self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.v_read = self.memristor_info_dict[self.device_name]['v_read']
@@ -107,6 +110,10 @@ class STDPMapping(Mapping):
         self.register_buffer("mem_v_read", torch.Tensor())
         self.register_buffer("x", torch.Tensor())
         self.register_buffer("s", torch.Tensor())
+        self.vneg = 0
+        self.vpos = 0
+        self.trace_decay = 0
+
 
     def set_batch_size_stdp(self, batch_size, learning) -> None:
         self.learning = learning
@@ -124,6 +131,99 @@ class STDPMapping(Mapping):
             self.mem_t.fill_(torch.min(self.mem_t_batch_update[:]))
 
         self.mem_array.mem_t = self.mem_t
+
+
+    def voltage_generation(self, trace_decay, plot) -> None:
+        # Simulation Setup
+        points = 150
+        spike = torch.zeros(points)
+        ori_trace = torch.zeros(points)
+        mem_x = torch.zeros(points)
+
+        # STDP Setup
+        spike[10] = 1
+
+        # Original Trace
+        for i in range(len(spike) - 1):
+            ori_trace[i + 1] = ori_trace[i] * trace_decay + spike[i]
+
+            if ori_trace[i + 1] > 1:
+                ori_trace[i + 1] = 1
+
+        # Memristor-based Trace
+        test_array = MemristorArray(sim_params=self.sim_params, shape=(1, 1), memristor_info_dict=self.memristor_info_dict)
+        test_array.set_batch_size(batch_size=1)
+        mem_info = self.memristor_info_dict[self.device_name]
+
+        dt = mem_info['delta_t'] * mem_info['duty_ratio']
+        k_off = mem_info['k_off']
+        v_off = mem_info['v_off']
+        alpha_off = mem_info['alpha_off']
+        v_pos = v_off * (math.pow(1 / (dt * k_off), 1.0 / alpha_off) + 1)
+
+        if mem_info['P_on'] == 1:
+            k_on = mem_info['k_on']
+            v_on = mem_info['v_on']
+            alpha_on = mem_info['alpha_on']
+            v_neg = v_on * (math.pow((trace_decay - 1) / (dt * k_on), 1.0 / alpha_on) + 1)
+        else:
+            # Enable batch processing for searching the best v_neg
+            v_on = mem_info['v_on']
+            n_test = 500
+            v_tensor = torch.arange(v_on, v_on - 0.01 * n_test, -0.01)
+
+            test_array.set_batch_size(batch_size=n_test)
+            test_x = torch.zeros(points, n_test, 1, 1)
+
+            for t in range(points - 1):
+                mem_s = torch.tensor(spike[t], dtype=torch.float64)
+                mem_v = v_tensor if mem_s == 0 else torch.tensor(v_pos).expand(n_test)
+
+                mem_c = test_array.memristor_write(mem_v=mem_v.unsqueeze(1).unsqueeze(2))
+                test_x[t + 1] = (mem_c - self.Gon) * self.trans_ratio
+
+            # Compare results
+            golden_x = ori_trace.reshape(points, 1, 1, 1).expand(-1, n_test, -1, -1)
+            mse = torch.zeros(n_test)
+            for i in range(n_test):
+                mse[i] = F.mse_loss(test_x[:, i, :, :], golden_x[:, i, :, :])
+            min_mse, min_index = torch.min(mse, 0)
+            v_neg = float(v_tensor[min_index])
+
+        if plot:
+            blue = (47 / 255, 130 / 255, 189 / 255)
+            green = (98 / 255, 149 / 255, 61 / 255)
+
+            plt.figure(figsize=(13, 4.5))
+            grid = plt.GridSpec(14, 17, wspace=0.5, hspace=0.5)
+            ax = plt.subplot(grid[0:14, 0:17])
+
+            test_array.set_batch_size(batch_size=1)
+            for t in range(points - 1):
+                mem_s = torch.tensor(spike[t], dtype=torch.float64)
+                mem_v = mem_s.unsqueeze(0).unsqueeze(0).unsqueeze(1)
+                mem_v[mem_v == 0] = v_neg
+                mem_v[mem_v == 1] = v_pos
+
+                mem_c = test_array.memristor_write(mem_v=mem_v)
+
+                # mem to nn
+                temp_x = (mem_c - self.Gon) * self.trans_ratio
+                mem_x[t+1] = temp_x.squeeze()
+
+            # Plot the original trace and memristor trace
+            plot_x = range(points)
+            # Original
+            ax.plot(ori_trace, color=blue, label='Original Trace')
+            ax.plot(mem_x, color=green, label='Memristor Trace')
+            ax.legend(frameon=False)
+
+            plt.tight_layout()
+            plt.savefig('voltage_generation.png', dpi=300, bbox_inches='tight')
+            plt.show()
+
+        self.vneg = v_neg
+        self.vpos = v_pos
 
 
     def mapping_write_stdp(self, s):
