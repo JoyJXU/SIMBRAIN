@@ -81,14 +81,14 @@ class MemristorArray(torch.nn.Module):
         with open('../../technology_info.json', 'r') as file:
             self.tech_info_dict = json.load(file)
 
-        self.process_node = sim_params['process_node']
+        self.wire_width = sim_params['wire_width']
         relax_ratio = 1.25 # Leave space for adjacent memristors
         mem_size = self.memristor_info_dict[self.device_name]['mem_size']
         length_row = shape[1] * relax_ratio * mem_size
         length_col = shape[0] * relax_ratio * mem_size
-        AR = self.tech_info_dict[str(self.process_node)]['AR']
-        Rho = self.tech_info_dict[str(self.process_node)]['Rho']
-        wire_resistance_unit = relax_ratio * mem_size * Rho / (AR * self.process_node * self.process_node * 1e-18)
+        AR = self.tech_info_dict[str(self.wire_width)]['AR']
+        Rho = self.tech_info_dict[str(self.wire_width)]['Rho']
+        wire_resistance_unit = relax_ratio * mem_size * Rho / (AR * self.wire_width * self.wire_width * 1e-18)
         self.register_buffer("total_wire_resistance", torch.Tensor())
         self.total_wire_resistance = wire_resistance_unit * (
                     torch.arange(1, self.shape[1] + 1, device=self.total_wire_resistance.device) +

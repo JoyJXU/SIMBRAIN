@@ -48,8 +48,6 @@ class Mapping(torch.nn.Module):
         with open('../../memristor_device_info.json', 'r') as f:
             self.memristor_info_dict = json.load(f)
         assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"  
-        self.vneg = self.memristor_info_dict[self.device_name]['vinput_neg']
-        self.vpos = self.memristor_info_dict[self.device_name]['vinput_pos']
         self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
 
@@ -129,8 +127,9 @@ class STDPMapping(Mapping):
         
         # nn to mem
         self.mem_v = self.s.float()
-        self.mem_v[self.mem_v == 0] = self.vneg
-        self.mem_v[self.mem_v == 1] = self.vpos      
+        # TODO merge m2v module
+        self.mem_v[self.mem_v == 0] = -3.63
+        self.mem_v[self.mem_v == 1] = 12      
 
         mem_c = self.mem_array.memristor_write(mem_v=self.mem_v)
         
@@ -177,7 +176,7 @@ class STDPMapping(Mapping):
         """
         Abstract base class method for resetting state variables.
         """
-        self.mem_v.fill_(-self.vpos)
+        self.mem_v.fill_(-12)
         
         # Adopt large negative pulses to reset the memristor array
         self.mem_array.memristor_write(mem_v=self.mem_v)

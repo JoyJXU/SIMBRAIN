@@ -3,6 +3,7 @@ import json
 import copy
 import numpy as np
 import pandas as pd
+import pickle
 from simbrain.Fitting_Functions.IV_curve_fitting import IVCurve
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
 from simbrain.Fitting_Functions.variation_fitting import Variation
@@ -33,7 +34,7 @@ class MemristorFitting(object):
         self.stuck_at_fault = sim_params['stuck_at_fault']
         self.retention_loss = sim_params['retention_loss']
         self.aging_effect = sim_params['aging_effect']
-        self.process_nodes = sim_params['process_nodes']
+        self.wire_width = sim_params['wire_width']
         self.mem_size = my_memristor['mem_size']
         self.fitting_record = my_memristor
 
@@ -67,8 +68,8 @@ class MemristorFitting(object):
         retention_loss_tau = mem_info['retention_loss_tau']
         retention_loss_beta = mem_info['retention_loss_beta']
 
-        Aging_off = mem_info['Aging_off']
-        Aging_on = mem_info['Aging_on']
+        Aging_k_off = mem_info['Aging_k_off']
+        Aging_k_on = mem_info['Aging_k_on']
 
         print("Start Memristor Fitting:\n")
 
@@ -320,7 +321,7 @@ class MemristorFitting(object):
 
         # %% Aging effect
         if self.aging_effect in [1, 2]:
-            if None not in [Aging_off, Aging_on]:
+            if None not in [Aging_k_off, Aging_k_on]:
                 pass
             elif not os.path.isfile(
                     os.path.dirname(os.path.dirname(__file__))
@@ -334,17 +335,94 @@ class MemristorFitting(object):
                     + "/memristordata/aging_effect.xlsx"
                 )
                 if self.aging_effect == 1:
-                    Aging_off, Aging_on = aging_cal.fitting_equation1()
+                    Aging_k_off, Aging_k_on = aging_cal.fitting_equation1()
                 else:
-                    Aging_off, Aging_on = aging_cal.fitting_equation2()
+                    Aging_k_off, Aging_k_on = aging_cal.fitting_equation2()
                 mem_info.update(
                     {
-                        "Aging_off": Aging_off,
-                        "Aging_on": Aging_on
+                        "Aging_k_off": Aging_k_off,
+                        "Aging_k_on": Aging_k_on
                     }
                 )
 
         print("\nEnd Memristor Fitting.")
         self.fitting_record = mem_info
-
+        
+        with open('../../memristor_device_info.json', 'r') as f:
+            memristor_info_dict = json.load(f)      
+        memristor_info_dict['mine'] = self.fitting_record
+        with open('../../memristor_device_info.json', 'w') as f:
+            json.dump(memristor_info_dict, f, indent=2)
+        
+        V_write = np.full(501, 0.975*2*v_off)
+        i = 0
+        while(V_write[0] > v_off):
+            i += 1
+            lut_state, lut_conductance = self.memristor_lut_generate(V_write, mem_info)
+            if lut_state[50] > 0.975:
+                V_write *= 0.975
+            elif i == 1:
+                for m in range(100,501,50): 
+                    if lut_state[m] > 0.975:
+                        cut_num = m
+                        break
+            else:
+                break
+        if i == 1:
+            mine_lut = {        
+        'total_no': cut_num,
+        'voltage': 0.975*2*v_off,
+        'cycle:': 2 * mem_info['delta_t'],
+        'duty ratio': 0.5,
+        'conductance': lut_conductance[0:cut_num+1]
+        }
+        else:
+            V_write = V_write/0.975
+            lut_state, lut_conductance = self.memristor_lut_generate(V_write, mem_info)
+            mine_lut = {        
+        'total_no': 50,
+        'voltage': V_write[0],
+        'cycle:': 2 * mem_info['delta_t'],
+        'duty ratio': 0.5,
+        'conductance': lut_conductance[0:51]
+        }
+        with open('../../memristor_lut.pkl', 'rb') as f:
+            mem_lut = pickle.load(f)                 
+        mem_lut['mine'] = mine_lut
+        with open('../../memristor_lut.pkl', 'wb') as f:
+            pickle.dump(mem_lut, f)
+        
         return self.fitting_record
+
+    def memristor_lut_generate(self, V_write, mem_info):
+        J1 = 1
+        points = len(V_write)
+
+        # initialization
+        internal_state = [0 for i in range(points)]
+        conductance_fit = [0 for i in range(points)]
+
+        # conductance change
+        internal_state[0] = 0
+        for i in range(points - 1):
+            if V_write[i + 1] > mem_info['v_off'] and V_write[i + 1] > 0:
+                delta_x = mem_info['k_off'] * ((V_write[i + 1] / mem_info['v_off'] - 1) ** mem_info['alpha_off']) * J1 * (
+                        (1 - internal_state[i]) ** mem_info['P_off'])
+                internal_state[i + 1] = internal_state[i] + mem_info['delta_t'] * delta_x
+            elif V_write[i + 1] < mem_info['v_on'] and V_write[i + 1] < 0:
+                delta_x = mem_info['k_on'] * ((V_write[i + 1] / mem_info['v_on'] - 1) ** mem_info['alpha_on']) * J1 * (
+                        internal_state[i] ** mem_info['P_on'])
+                internal_state[i + 1] = internal_state[i] + mem_info['delta_t'] * delta_x                     
+            else:
+                delta_x = 0
+                internal_state[i + 1] = internal_state[i]
+            if internal_state[i + 1] < 0: 
+                internal_state[i + 1] = 0
+            elif internal_state[i + 1] > 1:
+                internal_state[i + 1] = 1
+
+        # conductance calculation
+        for i in range(points):
+            conductance_fit[i] = mem_info['G_off'] * internal_state[i] + mem_info['G_on'] * (1 - internal_state[i])
+
+        return internal_state, conductance_fit

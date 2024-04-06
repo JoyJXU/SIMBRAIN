@@ -27,7 +27,7 @@
   "SAF_lambda": null,
   "SAF_ratio": null,
   "SAF_delta": null,
-  "Aging_on": null,
-  "Aging_off": null,
+  "Aging_k_on": null,
+  "Aging_k_off": null,
   "mem_size": 1e-4
 }

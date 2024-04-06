@@ -289,3 +289,4 @@ class Conductance(object):
         sigma_absolute = math.sqrt(z2[1] * math.pi / 2)
 
         return sigma_relative, sigma_absolute
+    

@@ -48,14 +48,6 @@ parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
-parser.add_argument("--memristor_device", type=str, default='ferro') # trace: original trace
-parser.add_argument("--c2c_variation", type=bool, default=False)
-parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
-parser.add_argument("--stuck_at_fault", type=bool, default=False)
-parser.add_argument("--retention_loss", type=int, default=0) # 0: No retention, 1: during pulse, 2: no pluse for a long time
-parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
-parser.add_argument("--process_node", type=int, default=10000)
-
 parser.set_defaults(plot=False, gpu=True)
 
 args = parser.parse_args()
@@ -78,10 +70,6 @@ update_interval = args.update_interval
 plot = args.plot
 gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
-sim_params = {'device_structure':args.memristor_structure, 'device_name': args.memristor_device,
-                 'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
-                 'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-                 'aging_effect': args.aging_effect, 'process_node': args.process_node, 'batch_interval': args.time*2+1}
 
 # %% Sets up Gpu use
 os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
@@ -108,12 +96,14 @@ start_intensity = intensity
 
 # %% Obtain memristor parameters
 with open("../../memristordata/sim_params.json") as f:
-    sim_params_r = json.load(f)
+    sim_params = json.load(f)
+sim_params['device_structure'] = args.memristor_structure
+sim_params['batch_interval'] = args.time * 2 + 1
 with open("../../memristordata/my_memristor.json") as f:
     my_memristor_r = json.load(f)
-print(json.dumps(sim_params_r, indent=4, separators=(',', ':')))
+print(json.dumps(sim_params, indent=4, separators=(',', ':')))
 
-exp = MemristorFitting(sim_params_r, my_memristor_r)
+exp = MemristorFitting(sim_params, my_memristor_r)
 if exp.device_name == "mine":
     if exp.mem_size is None:
         print("Error! Missing mem_size.")
