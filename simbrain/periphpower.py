@@ -84,7 +84,8 @@ class PeriphPower(torch.nn.Module):
         mem_size = self.memristor_info_dict[self.device_name]['mem_size']
         length_col = self.shape[0] * relax_ratio * mem_size
         if length_col < min_cell_height:
-            raise ValueError("[SwitchMatrix] pass gate height is even larger than the array height")
+            # raise ValueError("[SwitchMatrix] pass gate height is even larger than the array height")
+            length_col = min_cell_height
         num_tg_pair_per_col = (int)(length_col / min_cell_height)
         num_col_tg_pair = (int)(math.ceil((float)(self.shape[0]) / num_tg_pair_per_col))
         num_tg_pair_per_col = (int)(math.ceil((float)(self.shape[0]) / num_col_tg_pair))

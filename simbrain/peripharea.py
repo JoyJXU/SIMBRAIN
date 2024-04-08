@@ -195,6 +195,7 @@ class PeriphArea(torch.nn.Module):
             if newHeight:
                 if newHeight < minCellHeight:
                     print("[SwitchMatrix] Error: pass gate height is even larger than the array height")
+                    newHeight = minCellHeight
                 numTgPairPerCol = int(
                     newHeight / minCellHeight)  # Get max # Tg pair per column (this is not the final # Tg pair per column because the last column may have less # Tg)
                 numColTgPair = int(math.ceil(

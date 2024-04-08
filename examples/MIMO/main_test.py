@@ -56,12 +56,12 @@ parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--input_bit", type=int, default=8)
-parser.add_argument("--ADC_precision", type=int, default=8)
+parser.add_argument("--ADC_precision", type=int, default=32)
 parser.add_argument("--wire_width", type=int, default=200) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--power_estimation", type=int, default=True)
+parser.add_argument("--hardware_estimation", type=int, default=False)
 args = parser.parse_args()
 
 def main():
@@ -98,7 +98,7 @@ def main():
                 'batch_interval': 1, 'CMOS_technode': args.CMOS_technode,
                 'ADC_precision': args.ADC_precision,
                 'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
-                'power_estimation': args.power_estimation}
+                'hardware_estimation': args.hardware_estimation}
 
     # Run crossbar size experiments
     # size_list = [8, 16, 32, 64, 128, 256, 512, 1024, 2048]
@@ -109,8 +109,9 @@ def main():
         _crossbar.to(device)
 
         # Area print
-        _crossbar.total_area_calculation()
-        print("total crossbar area=", _crossbar.sim_area['mem_area'], " m2")
+        if mem_device['hardware_estimation']:
+            _crossbar.total_area_calculation()
+            print("total crossbar area=", _crossbar.sim_area['mem_area'], " m2")
 
         # run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)
         run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, mem_device, device, _logs)

@@ -59,7 +59,7 @@ parser.add_argument("--wire_width", type=int, default=200) # In practice, proces
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--power_estimation", type=int, default=False)
+parser.add_argument("--hardware_estimation", type=int, default=False)
 
 parser.set_defaults(plot=False, gpu=True)
 
@@ -89,10 +89,10 @@ sim_params = {'device_structure': args.memristor_structure, 'device_name': args.
               'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
               'batch_interval': args.time*2+1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
               'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
-              'power_estimation': args.power_estimation}
+              'hardware_estimation': args.hardware_estimation}
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
@@ -137,7 +137,7 @@ for test_cnt in range(multiple_test_no):
     network.to(device)
 
     # Area print
-    if sim_params['device_name'] != 'trace':
+    if sim_params['device_name'] != 'trace' and sim_params['hardware_estimation']:
         total_area = 0
         for l in network.layers:
             total_area += network.layers[l].transform.mem_array.area.array_area

@@ -433,7 +433,7 @@ class Network(torch.nn.Module):
             self.connections[c].normalize()
 
         # Print power results
-        if (self.sim_params['device_name'] != 'trace' and self.learning and self.sim_params['power_estimation']):
+        if (self.sim_params['device_name'] != 'trace' and self.learning and self.sim_params['hardware_estimation']):
             self.total_energy = 0
             self.average_power = 0
             self.periph_total_energy = 0

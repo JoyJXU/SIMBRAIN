@@ -658,7 +658,7 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
             cross[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
                 target_v=vector_batch)
 
-            if sim_params['power_estimation']:
+            if sim_params['hardware_estimation']:
                 # print power results
                 _crossbar.total_energy_calculation()
                 sim_power = _crossbar.sim_power

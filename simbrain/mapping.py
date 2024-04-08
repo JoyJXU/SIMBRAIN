@@ -283,14 +283,14 @@ class STDPMapping(Mapping):
 
         mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read)
 
-        mem_i = self.periph_circuit.ADC_read(mem_i_sequence=mem_i.unsqueeze(0),
+        mem_i = self.periph_circuit.ADC_read(mem_i_sequence=mem_i,
                                              total_wire_resistance=self.mem_array.total_wire_resistance,
                                              high_cut_ratio=1)
 
         # current to trace
         self.mem_x_read = (mem_i/self.v_read - self.Gon) * self.trans_ratio
 
-        self.mem_x_read[0, ~s_sum.bool()] = 0
+        self.mem_x_read[~s_sum.bool()] = 0
 
         return self.mem_x_read
 

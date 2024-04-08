@@ -96,10 +96,10 @@ class MemristorArray(torch.nn.Module):
                     torch.arange(1, self.shape[1] + 1, device=self.total_wire_resistance.device) +
                     torch.arange(self.shape[0], 0, -1, device=self.total_wire_resistance.device)[:, None])
 
-        self.power_estimation = sim_params['power_estimation']
-        if self.power_estimation:
+        self.hardware_estimation = sim_params['hardware_estimation']
+        if self.hardware_estimation:
             self.power = Power(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=length_row, length_col=length_col)
-        self.area = Area(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=length_row, length_col=length_col)
+            self.area = Area(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=length_row, length_col=length_col)
 
 
     def set_batch_size(self, batch_size) -> None:
@@ -195,7 +195,7 @@ class MemristorArray(torch.nn.Module):
             self.mem_v_threshold = torch.zeros(batch_size, *self.shape, device=self.mem_v_threshold.device)
             self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
 
-        if self.power_estimation:
+        if self.hardware_estimation:
             self.power.set_batch_size(batch_size=self.batch_size)
 
 
@@ -293,7 +293,7 @@ class MemristorArray(torch.nn.Module):
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
         
-        if self.power_estimation:
+        if self.hardware_estimation:
             self.power.write_energy_calculation(mem_v=mem_v, mem_c=self.mem_c, mem_c_pre=self.mem_c_pre, total_wire_resistance=self.total_wire_resistance)
         
         return self.mem_c
@@ -382,7 +382,7 @@ class MemristorArray(torch.nn.Module):
         # mem_t update according to the sequential read
         self.mem_t += mem_v.shape[0] * mem_v.shape[2]
 
-        if self.power_estimation:
+        if self.hardware_estimation:
             self.power.read_energy_calculation(mem_v_bool=mem_v, mem_c=self.mem_c, total_wire_resistance=self.total_wire_resistance)
 
         return self.mem_i
@@ -484,7 +484,7 @@ class MemristorArray(torch.nn.Module):
         else:
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
 
-        if self.power_estimation:
+        if self.hardware_estimation:
             self.power.reset_energy_calculation(mem_v=mem_v, mem_c=self.mem_c, mem_c_pre=self.mem_c_pre,
                                             total_wire_resistance=self.total_wire_resistance)
 

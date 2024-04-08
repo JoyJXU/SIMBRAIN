@@ -42,22 +42,21 @@ class PeriphCircuit(torch.nn.Module):
         length_row = self.shape[1] * relax_ratio * mem_size
         length_col = self.shape[0] * relax_ratio * mem_size
 
-        self.periph_power = PeriphPower(sim_params=self.sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
-        self.periph_area = PeriphArea(sim_params=sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+        if self.sim_params['hardware_estimation']:
+            self.periph_power = PeriphPower(sim_params=self.sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+            self.periph_area = PeriphArea(sim_params=sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
 
-        ShiftAdder_Area = self.periph_area.ShiftAdder_area_calculation(0, length_row)
-        SarADC_Area = self.periph_area.SarADC_area_calculation(0, length_row)
-        Switchmatrix_Area_Row = self.periph_area.Switchmatrix_area_calculation(length_col, 0, "ROW_MODE")
-        Switchmatrix_Area_Col = self.periph_area.Switchmatrix_area_calculation(0, length_row, "COL_MODE")
-        Periph_Area = ShiftAdder_Area + SarADC_Area + Switchmatrix_Area_Row + Switchmatrix_Area_Col
+            ShiftAdder_Area = self.periph_area.ShiftAdder_area_calculation(0, length_row)
+            SarADC_Area = self.periph_area.SarADC_area_calculation(0, length_row)
+            Switchmatrix_Area_Row = self.periph_area.Switchmatrix_area_calculation(length_col, 0, "ROW_MODE")
+            Switchmatrix_Area_Col = self.periph_area.Switchmatrix_area_calculation(0, length_row, "COL_MODE")
+            Periph_Area = ShiftAdder_Area + SarADC_Area + Switchmatrix_Area_Row + Switchmatrix_Area_Col
 
-        print("ShiftAdder_Area = ", ShiftAdder_Area)
-        print("SarADC_Area = ", SarADC_Area)
-        print("Switchmatrix_Area_Row = ", Switchmatrix_Area_Row)
-        print("Switchmatrix_Area_Col = ", Switchmatrix_Area_Col)
-        print("Periph_Area = ", Periph_Area)
-
-        # self.mem_i_max_tmp = 0
+            print("ShiftAdder_Area = ", ShiftAdder_Area)
+            print("SarADC_Area = ", SarADC_Area)
+            print("Switchmatrix_Area_Row = ", Switchmatrix_Area_Row)
+            print("Switchmatrix_Area_Col = ", Switchmatrix_Area_Col)
+            print("Periph_Area = ", Periph_Area)
 
 
     def set_batch_size(self, batch_size) -> None:
@@ -68,14 +67,16 @@ class PeriphCircuit(torch.nn.Module):
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
-        self.periph_power.set_batch_size(batch_size=self.batch_size)
+        if self.sim_params['hardware_estimation']:
+            self.periph_power.set_batch_size(batch_size=self.batch_size)
 
 
     def DAC_read(self, mem_v, sgn) -> None:
 
         if self.device_structure == 'trace':
             activity_read = torch.nonzero(mem_v).size(0) / mem_v.numel()
-            self.periph_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v=mem_v)
+            if self.sim_params['hardware_estimation']:
+                self.periph_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v=mem_v)
             return mem_v
         else:
             # Get normalization ratio
@@ -110,8 +111,8 @@ class PeriphCircuit(torch.nn.Module):
             bit = None
 
             activity_read = v_read.sum().item() / v_read.numel()
-            # v_read = self.read_v_amp * v_read
-            self.periph_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v=mem_v)
+            if self.sim_params['hardware_estimation']:
+                self.periph_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v=mem_v)
             return v_read
 
 
@@ -140,24 +141,27 @@ class PeriphCircuit(torch.nn.Module):
         for i in range(self.input_bit):
             mem_i += mem_i_sequence_quantized[i, :, :, :] * 2 ** i
 
-        self.periph_power.SarADC_energy_calculation(mem_i_sequence=mem_i_sequence)
-        self.periph_power.shift_add_energy_calculation(mem_i_sequence=mem_i_sequence)
+        if self.sim_params['hardware_estimation']:
+            self.periph_power.SarADC_energy_calculation(mem_i_sequence=mem_i_sequence)
+            self.periph_power.shift_add_energy_calculation(mem_i_sequence=mem_i_sequence)
 
         return mem_i
 
 
     def DAC_write(self, mem_v, mem_v_amp) -> None:
-        if self.device_structure == 'trace':
-            self.periph_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v)
-        elif self.device_structure in {'crossbar', 'mimo'}:
-            self.periph_power.switch_matrix_row_write_energy_calculation(mem_v_amp=mem_v_amp)
-            self.periph_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v)
-        else:
-            raise Exception("Only trace, mimo and crossbar architecture are supported!")
+        if self.sim_params['hardware_estimation']:
+            if self.device_structure == 'trace':
+                self.periph_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v)
+            elif self.device_structure in {'crossbar', 'mimo'}:
+                self.periph_power.switch_matrix_row_write_energy_calculation(mem_v_amp=mem_v_amp)
+                self.periph_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v)
+            else:
+                raise Exception("Only trace, mimo and crossbar architecture are supported!")
 
 
     def DAC_reset(self, mem_v) -> None:
-        self.periph_power.switch_matrix_reset_energy_calculation(mem_v=mem_v)
+        if self.sim_params['hardware_estimation']:
+            self.periph_power.switch_matrix_reset_energy_calculation(mem_v=mem_v)
 
 
     def total_energy_calculation(self, mem_t) -> None:

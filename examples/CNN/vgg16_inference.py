@@ -36,7 +36,7 @@ parser.add_argument("--wire_width", type=int, default=200) # In practice, proces
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--power_estimation", type=int, default=True)
+parser.add_argument("--hardware_estimation", type=int, default=False)
 args = parser.parse_args()
 
 # Sets up Gpu use
@@ -60,7 +60,7 @@ sim_params = {'device_structure': args.memristor_structure, 'device_name': args.
               'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
               'batch_interval': 1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
               'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
-              'power_estimation': args.power_estimation}
+              'hardware_estimation': args.hardware_estimation}
 
 # Dataset prepare
 print('==> Preparing data..')
@@ -81,18 +81,19 @@ net = mem_VGG('VGG16', mem_device=sim_params)
 net = net.to(device)
 
 # print area results
-total_area = 0
-for layer in net.features.children():
-    if isinstance(layer, Mem_Conv2d):
+if sim_params['hardware_estimation']:
+    total_area = 0
+    for layer in net.features.children():
+        if isinstance(layer, Mem_Conv2d):
+            layer.crossbar.total_area_calculation()
+            sim_area = layer.crossbar.sim_area
+            total_area += sim_area['mem_area']
+    if isinstance(net.classifier, Mem_Linear):
+        layer = net.classifier
         layer.crossbar.total_area_calculation()
         sim_area = layer.crossbar.sim_area
         total_area += sim_area['mem_area']
-if isinstance(net.classifier, Mem_Linear):
-    layer = net.classifier
-    layer.crossbar.total_area_calculation()
-    sim_area = layer.crossbar.sim_area
-    total_area += sim_area['mem_area']
-print("total_area=" + str(total_area))
+    print("total_area=" + str(total_area))
 
 # Load Pre-trained Model
 checkpoint = torch.load('./checkpoint/ckpt.pth')
@@ -153,7 +154,7 @@ for test_cnt in range(args.rep):
     acc = 100.*correct/total
     print('Accuracy Results:' + str(acc))
 
-    if sim_params['power_estimation']:
+    if sim_params['hardware_estimation']:
         # print power results
         total_energy = 0
         average_power = 0
