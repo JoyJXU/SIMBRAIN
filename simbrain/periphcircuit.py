@@ -93,6 +93,7 @@ class PeriphCircuit(torch.nn.Module):
                 v_read = torch.relu(mem_v * -1)
 
             v_read = v_read / read_norm.unsqueeze(2)
+            read_norm = None
             v_read = torch.round(v_read * (2 ** self.input_bit - 1))
             v_read = torch.clamp(v_read, 0, 2 ** self.input_bit - 1)
 
@@ -105,11 +106,11 @@ class PeriphCircuit(torch.nn.Module):
                 bit = torch.bitwise_and(v_read, 2 ** i).bool()
                 read_sequence[i] = bit
             v_read = read_sequence.clone()
-            read_sequence.zero_()
+            read_sequence = None
             bit = None
 
-            activity_read = torch.sum(v_read).item() / v_read.numel()
-            v_read = self.read_v_amp * v_read
+            activity_read = v_read.sum().item() / v_read.numel()
+            # v_read = self.read_v_amp * v_read
             self.periph_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v=mem_v)
             return v_read
 
