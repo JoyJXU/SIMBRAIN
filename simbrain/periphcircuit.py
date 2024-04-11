@@ -65,10 +65,6 @@ class DAC_Module(torch.nn.Module):
                 self.DAC_module_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v=mem_v)
             return mem_v
         else:
-            # Get normalization ratio
-            # TODO check the shape
-            read_norm = torch.max(torch.abs(mem_v), dim=2)[0]
-    
             # mem_v shape [write_batch_size, read_batch_size, row_no]
             # increase one dimension of the input by input_bit
             read_sequence = torch.zeros(self.input_bit, *(mem_v.shape), device=mem_v.device, dtype=bool)
@@ -79,7 +75,6 @@ class DAC_Module(torch.nn.Module):
             elif sgn == 'neg':
                 v_read = torch.relu(mem_v * -1)            
     
-            v_read = v_read / read_norm.unsqueeze(2)
             v_read = torch.round(v_read * (2 ** self.input_bit - 1))
             v_read = torch.clamp(v_read, 0, 2 ** self.input_bit - 1)
             
@@ -200,9 +195,6 @@ class ADC_Module(torch.nn.Module):
         else:
             raise Exception("Only round and floor function are supported!")
         mem_i_sequence_quantized = mem_i_index * mem_i_step + mem_i_sequence_min
-       
-        mem_i_error = torch.mean(torch.abs(mem_i_sequence - mem_i_sequence_quantized)/mem_i_sequence)
-        print(mem_i_error)
        
         for i in range(self.input_bit):
             mem_i += mem_i_sequence_quantized[i, :, :, :] * 2 ** i
