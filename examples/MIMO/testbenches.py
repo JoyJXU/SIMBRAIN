@@ -323,12 +323,13 @@ def run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
             for trial in range(no_trial):
                 device_name = sim_params['device_name']
                 input_bit = sim_params['input_bit']
+                hardware_estimation = sim_params['hardware_estimation']
                 batch_interval = 1 + _crossbar.memristor_luts[device_name]['total_no'] * _rows + 1 * input_bit # reset + write + read
                 _crossbar.batch_interval = batch_interval
 
                 # Perform d2d variation only
                 sim_params['c2c_variation'] = False
-                sim_params['d2d_variation'] = 1
+                sim_params['d2d_variation'] = False
                 memristor_info_dict = _crossbar.memristor_info_dict
                 G_off = memristor_info_dict[device_name]['G_off']
                 G_on = memristor_info_dict[device_name]['G_on']
@@ -379,13 +380,14 @@ def run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
                     # mem_t update
                     _crossbar.mem_t_update()
 
-                    # print power results
-                    _crossbar.total_energy_calculation()
-                    sim_power = _crossbar.sim_power
-                    total_energy = sim_power['total_energy']
-                    average_power = sim_power['average_power']
-                    print("total_energy=", total_energy)
-                    print("average_power=", average_power)
+                    if hardware_estimation == True:
+                        # print power results
+                        _crossbar.total_energy_calculation()
+                        sim_power = _crossbar.sim_power
+                        total_energy = sim_power['total_energy']
+                        average_power = sim_power['average_power']
+                        print("total_energy=", total_energy)
+                        print("average_power=", average_power)
 
                 # Error calculation
                 error = utility.cal_error(golden_model, cross)

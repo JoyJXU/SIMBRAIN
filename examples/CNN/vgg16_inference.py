@@ -22,7 +22,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--rep", type=int, default=10)
-parser.add_argument("--batch_size", type=int, default=50)
+parser.add_argument("--batch_size", type=int, default=5)
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
 parser.add_argument("--memristor_device", type=str, default='new_ferro') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=False)
@@ -31,7 +31,10 @@ parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--input_bit", type=int, default=8)
-parser.add_argument("--ADC_precision", type=int, default=8)
+parser.add_argument("--hardware_estimation", type=bool, default=True)
+parser.add_argument("--ADC_precision", type=int, default=16)
+parser.add_argument("--ADC_setting", type=int, default=4) # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
+parser.add_argument("--ADC_rounding_function", type=str, default='floor') # floor or round
 parser.add_argument("--wire_width", type=int, default=10000)
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP or LP
@@ -59,7 +62,8 @@ mem_device = {'device_structure':args.memristor_structure, 'device_name': args.m
                  'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 
                  'input_bit': args.input_bit,'batch_interval': 1, 
                  'CMOS_technode':args.CMOS_technode, 'ADC_precision':args.ADC_precision, 
-                 'device_roadmap':args.device_roadmap, 'temperature':args.temperature}
+                 'ADC_setting':args.ADC_setting,'ADC_rounding_function':args.ADC_rounding_function,
+                 'device_roadmap':args.device_roadmap, 'temperature':args.temperature, 'hardware_estimation':args.hardware_estimation}
 
 
 # Dataset prepare
@@ -80,19 +84,20 @@ print('==> Building memristor-based model..')
 net = mem_VGG('VGG16', mem_device=mem_device)
 net = net.to(device)
 
-# print power results
-total_area = 0
-for layer in net.features.children():
-    if isinstance(layer, Mem_Conv2d):
+if args.hardware_estimation == True:
+    # print power results
+    total_area = 0
+    for layer in net.features.children():
+        if isinstance(layer, Mem_Conv2d):
+            layer.crossbar.total_area_calculation()
+            sim_area = layer.crossbar.sim_area
+            total_area += sim_area['mem_area']
+    if isinstance(net.classifier, Mem_Linear):
+        layer = net.classifier
         layer.crossbar.total_area_calculation()
         sim_area = layer.crossbar.sim_area
         total_area += sim_area['mem_area']
-if isinstance(net.classifier, Mem_Linear):
-    layer = net.classifier
-    layer.crossbar.total_area_calculation()
-    sim_area = layer.crossbar.sim_area
-    total_area += sim_area['mem_area']
-print("total_area=" + str(total_area))
+    print("total_area=" + str(total_area))
 
 # Load Pre-trained Model
 checkpoint = torch.load('./checkpoint/ckpt.pth')
@@ -153,14 +158,24 @@ for test_cnt in range(args.rep):
     acc = 100.*correct/total
     print('Accuracy Results:' + str(acc))
 
-    # print power results
-    total_energy = 0
-    average_power = 0
-    total_read_energy = 0
-    total_write_energy = 0
-    total_reset_energy = 0
-    for layer in net.features.children():
-        if isinstance(layer, Mem_Conv2d):
+    if args.hardware_estimation == True:
+        # print power results
+        total_energy = 0
+        average_power = 0
+        total_read_energy = 0
+        total_write_energy = 0
+        total_reset_energy = 0
+        for layer in net.features.children():
+            if isinstance(layer, Mem_Conv2d):
+                layer.crossbar.total_energy_calculation()
+                sim_power = layer.crossbar.sim_power
+                total_read_energy += sim_power['read_energy']
+                total_write_energy += sim_power['write_energy']
+                total_reset_energy += sim_power['reset_energy']
+                total_energy += sim_power['total_energy']
+                average_power += sim_power['average_power']
+        if isinstance(net.classifier, Mem_Linear):
+            layer = net.classifier
             layer.crossbar.total_energy_calculation()
             sim_power = layer.crossbar.sim_power
             total_read_energy += sim_power['read_energy']
@@ -168,21 +183,12 @@ for test_cnt in range(args.rep):
             total_reset_energy += sim_power['reset_energy']
             total_energy += sim_power['total_energy']
             average_power += sim_power['average_power']
-    if isinstance(net.classifier, Mem_Linear):
-        layer = net.classifier
-        layer.crossbar.total_energy_calculation()
-        sim_power = layer.crossbar.sim_power
-        total_read_energy += sim_power['read_energy']
-        total_write_energy += sim_power['write_energy']
-        total_reset_energy += sim_power['reset_energy']
-        total_energy += sim_power['total_energy']
-        average_power += sim_power['average_power']
-
-    print("total_energy=" + str(total_energy))
-    print("total_read_energy=" + str(total_read_energy))
-    print("total_write_energy=" + str(total_write_energy))
-    print("total_reset_energy=" + str(total_reset_energy))
-    print("average_power=" + str(average_power))
+    
+        print("total_energy=" + str(total_energy))
+        print("total_read_energy=" + str(total_read_energy))
+        print("total_write_energy=" + str(total_write_energy))
+        print("total_reset_energy=" + str(total_reset_energy))
+        print("average_power=" + str(average_power))
     
     out_txt = 'Accuracy:' + str(acc) + '\n'
     out.write(out_txt)

@@ -32,7 +32,10 @@ parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--input_bit", type=int, default=8)
-parser.add_argument("--ADC_precision", type=int, default=8)
+parser.add_argument("--hardware_estimation", type=bool, default=True)
+parser.add_argument("--ADC_precision", type=int, default=7)
+parser.add_argument("--ADC_setting", type=int, default=2) # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
+parser.add_argument("--ADC_rounding_function", type=str, default='floor') # floor or round
 parser.add_argument("--wire_width", type=int, default=10000)
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP or LP
@@ -50,7 +53,8 @@ mem_device = {'device_structure':args.memristor_structure, 'device_name': args.m
                  'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 
                  'input_bit': args.input_bit,'batch_interval': 1, 
                  'CMOS_technode':args.CMOS_technode, 'ADC_precision':args.ADC_precision, 
-                 'device_roadmap':args.device_roadmap, 'temperature':args.temperature}
+                 'ADC_setting':args.ADC_setting,'ADC_rounding_function':args.ADC_rounding_function,
+                 'device_roadmap':args.device_roadmap, 'temperature':args.temperature, 'hardware_estimation':args.hardware_estimation}
 
 # logger
 misc.ensure_dir(args.logdir)
@@ -81,15 +85,16 @@ train_loader, test_loader = dataset.get(batch_size=args.batch_size, data_root=ar
 model = mlp.mem_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=False, mem_device=mem_device)
 model.to(device)
 
-# Area print
-total_area = 0
-for layer_name, layer in model.layers.items():
-    if isinstance(layer, Mem_Linear):
-        total_area += layer.crossbar.mem_pos_pos.area.array_area
-        total_area += layer.crossbar.mem_neg_pos.area.array_area
-        total_area += layer.crossbar.mem_pos_neg.area.array_area
-        total_area += layer.crossbar.mem_neg_neg.area.array_area
-print("total crossbar area=" + str(total_area) + " m2")
+if args.hardware_estimation ==  True:
+    # Area print
+    total_area = 0
+    for layer_name, layer in model.layers.items():
+        if isinstance(layer, Mem_Linear):
+            total_area += layer.crossbar.mem_pos_pos.area.array_area
+            total_area += layer.crossbar.mem_neg_pos.area.array_area
+            total_area += layer.crossbar.mem_pos_neg.area.array_area
+            total_area += layer.crossbar.mem_neg_neg.area.array_area
+    print("total crossbar area=" + str(total_area) + " m2")
 
 # Memristor write
 for layer_name, layer in model.layers.items():
@@ -141,26 +146,27 @@ try:
             elapse_time, speed_epoch, speed_batch, eta))
         misc.model_snapshot(model, os.path.join(args.logdir, 'latest.pth'))
 
-        # print power results
-        total_energy = 0
-        average_power = 0
-        total_read_energy = 0
-        total_write_energy = 0
-        total_reset_energy = 0
-        for layer_name, layer in model.layers.items():
-            if isinstance(layer, Mem_Linear):
-                layer.crossbar.total_energy_calculation()
-                sim_power = layer.crossbar.sim_power
-                total_read_energy += sim_power['read_energy']
-                total_write_energy += sim_power['write_energy']
-                total_reset_energy += sim_power['reset_energy']
-                total_energy += sim_power['total_energy']
-                average_power += sim_power['average_power']
-        print("total_energy=" + str(total_energy))
-        print("total_read_energy=" + str(total_read_energy))
-        print("total_write_energy=" + str(total_write_energy))
-        print("total_reset_energy=" + str(total_reset_energy))
-        print("average_power=" + str(average_power))
+        if args.hardware_estimation == True:
+            # print power results
+            total_energy = 0
+            average_power = 0
+            total_read_energy = 0
+            total_write_energy = 0
+            total_reset_energy = 0
+            for layer_name, layer in model.layers.items():
+                if isinstance(layer, Mem_Linear):
+                    layer.crossbar.total_energy_calculation()
+                    sim_power = layer.crossbar.sim_power
+                    total_read_energy += sim_power['read_energy']
+                    total_write_energy += sim_power['write_energy']
+                    total_reset_energy += sim_power['reset_energy']
+                    total_energy += sim_power['total_energy']
+                    average_power += sim_power['average_power']
+            print("total_energy=" + str(total_energy))
+            print("total_read_energy=" + str(total_read_energy))
+            print("total_write_energy=" + str(total_write_energy))
+            print("total_reset_energy=" + str(total_reset_energy))
+            print("average_power=" + str(average_power))
 
         if epoch % args.test_interval == 0:
             model.eval()

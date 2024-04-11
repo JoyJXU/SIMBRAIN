@@ -3,7 +3,7 @@ import math
 from typing import Iterable, Optional, Union
 from simbrain.formula import Formula
 
-class PeriphPower(torch.nn.Module):
+class DAC_Module_Power(torch.nn.Module):
     # language=rst
     """
     Abstract base class for power estimation of memristor crossbar.
@@ -34,10 +34,7 @@ class PeriphPower(torch.nn.Module):
         self.CMOS_technode_meter = self.CMOS_technode * 1e-9
         self.device_roadmap = sim_params['device_roadmap']
         self.device_name = sim_params['device_name']
-        self.device_structure = sim_params['device_structure']
-        self.temperature = sim_params['temperature']
         self.input_bit = sim_params['input_bit']
-        self.ADC_precision = sim_params['ADC_precision']
         self.CMOS_tech_info_dict = CMOS_tech_info_dict
         self.memristor_info_dict = memristor_info_dict
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
@@ -56,11 +53,10 @@ class PeriphPower(torch.nn.Module):
         self.switch_matrix_read_initialize()
         self.switch_matrix_col_write_initialize()
         self.switch_matrix_row_write_initialize()
-        self.DFF_initialize()
-        self.adder_initialize()
-        self.shift_add_energy = 0
-        self.SarADC_energy = 0       
+        self.DFF_initialize()      
         self.switch_matrix_reset_energy = 0
+        self.DAC_total_energy = 0
+        self.DAC_average_power = 0
         self.sim_power = {}
 
     def set_batch_size(self, batch_size) -> None:
@@ -137,15 +133,6 @@ class PeriphPower(torch.nn.Module):
                                                         numInput=1, widthNMOS=DFF_width_tg_N, widthPMOS=DFF_width_tg_P, heightTransistorRegion=DFF_height_inv)
         self.DFF_energy = 0 
 
-    def adder_initialize(self) -> None:
-        adder_width_nand_N = 2 * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
-        adder_width_nand_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
-        adder_height_nand =  self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
-        self.adder_cap_nand_input, self.adder_cap_nand_output = self.formula_function.calculate_gate_capacitance(gateType='NAND', \
-                                                        numInput=2, widthNMOS=adder_width_nand_N, widthPMOS=adder_width_nand_P, heightTransistorRegion=adder_height_nand) 
-        self.adder_energy = 0  
-        
-
     def switch_matrix_read_energy_calculation(self, activity_read, mem_v) -> None:
         read_times = mem_v.shape[0] * mem_v.shape[1] * self.input_bit
         self.switch_matrix_read_energy += (self.switch_matrix_read_cap_tg_drain * 3) * self.read_v_amp * self.read_v_amp * activity_read * self.shape[0] * read_times
@@ -174,6 +161,123 @@ class PeriphPower(torch.nn.Module):
         self.switch_matrix_reset_energy += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[1]
         self.switch_matrix_reset_energy += self.DFF_energy_calculation(self.shape[1], self.batch_size)
     
+    def DFF_energy_calculation(self, DFF_num, DFF_read) -> None:
+        self.DFF_energy = 0
+        # Assume input D=1 and the energy of CLK INV and CLK TG are for 1 clock cycles
+        # CLK INV (all DFFs have energy consumption)
+        self.DFF_energy += (self.DFF_cap_inv_input + self.DFF_cap_inv_output) * self.vdd * self.vdd * 4 * DFF_num
+		# CLK TG (all DFFs have energy consumption)
+        self.DFF_energy += self.DFF_cap_tg_gateN * self.vdd * self.vdd * 2 * DFF_num
+        self.DFF_energy += self.DFF_cap_tg_gateP * self.vdd * self.vdd * 2 * DFF_num
+		# D to Q path (only selected DFFs have energy consumption)
+        self.DFF_energy += (self.DFF_cap_tg_drain * 3 + self.DFF_cap_inv_input) * self.vdd * self.vdd * DFF_num
+        self.DFF_energy += (self.DFF_cap_tg_drain  + self.DFF_cap_inv_output) * self.vdd * self.vdd * DFF_num
+        self.DFF_energy += (self.DFF_cap_inv_input + self.DFF_cap_inv_output) * self.vdd * self.vdd * DFF_num
+
+        self.DFF_energy *= DFF_read
+        return self.DFF_energy
+
+    def DAC_energy_calculation(self, mem_t) -> None:
+        # language=rst
+        """
+        Calculate total energy for memrisotr crossbar. Called when power is reported.
+
+        :param mem_t: Time of the memristor crossbar.
+        """
+        self.DAC_total_energy = self.switch_matrix_col_write_energy + self.switch_matrix_row_write_energy + self.switch_matrix_read_energy + self.switch_matrix_reset_energy
+        self.DAC_average_power = self.DAC_total_energy / (torch.max(mem_t) * self.dt)
+        self.sim_power = {'switch_matrix_reset_energy': self.switch_matrix_reset_energy,
+                          'switch_matrix_col_write_energy': self.switch_matrix_col_write_energy,
+                          'switch_matrix_row_write_energy': self.switch_matrix_row_write_energy,
+                          'switch_matrix_read_energy': self.switch_matrix_read_energy,
+                          'DAC_total_energy': self.DAC_total_energy,
+                          'DAC_average_power': self.DAC_average_power}
+        
+        
+class ADC_Module_Power(torch.nn.Module):
+    # language=rst
+    """
+    Abstract base class for power estimation of memristor crossbar.
+    """
+
+    def __init__(
+        self,
+        sim_params: dict = {},
+        shape: Optional[Iterable[int]] = None,
+        CMOS_tech_info_dict: dict = {},
+        memristor_info_dict: dict = {},
+        **kwargs,
+    ) -> None:
+        # language=rst
+        """
+        Abstract base class constructor.
+
+        :param sim_params: Memristor device to be used in learning.
+        :param shape: The dimensionality of the crossbar.
+        :param memristor_info_dict: The parameters of the memristor device.
+        :param length_row: The physical length of the horizontal wire in the crossbar.
+        :param length_col: The physical length of the vertical wire in the crossbar.
+        """
+        super().__init__()
+        self.shape = shape
+        self.sim_params = sim_params
+        self.CMOS_technode = sim_params['CMOS_technode']
+        self.CMOS_technode_meter = self.CMOS_technode * 1e-9
+        self.device_roadmap = sim_params['device_roadmap']
+        self.device_name = sim_params['device_name']
+        self.temperature = sim_params['temperature']
+        self.input_bit = sim_params['input_bit']
+        self.ADC_precision = sim_params['ADC_precision']
+        self.CMOS_tech_info_dict = CMOS_tech_info_dict
+        self.memristor_info_dict = memristor_info_dict
+        self.dt = memristor_info_dict[self.device_name]['delta_t']
+        self.vdd = self.CMOS_tech_info_dict[self.device_roadmap][str(self.CMOS_technode)]['vdd']
+        self.formula_function = Formula(sim_params=self.sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict)
+        
+        self.pn_size_ratio = self.CMOS_tech_info_dict[self.device_roadmap][str(self.CMOS_technode)]['pn_size_ratio']
+        self.MIN_NMOS_SIZE = self.CMOS_tech_info_dict['Constant']['MIN_NMOS_SIZE']
+        self.MAX_TRANSISTOR_HEIGHT = self.CMOS_tech_info_dict['Constant']['MAX_TRANSISTOR_HEIGHT']
+        
+        self.DFF_initialize()
+        self.adder_initialize()
+        self.shift_add_energy = 0
+        self.SarADC_energy = 0
+        self.ADC_total_energy = 0
+        self.ADC_average_power = 0
+        self.sim_power = {}
+
+    def set_batch_size(self, batch_size) -> None:
+        # language=rst
+        """
+        Sets mini-batch size. Called when layer is added to a network.
+    
+        :param batch_size: Mini-batch size.
+        """
+        self.batch_size = batch_size
+
+    def DFF_initialize(self) -> None:
+        DFF_width_inv_N = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        DFF_width_inv_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        DFF_height_inv =  self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter 
+        DFF_width_tg_N = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        DFF_width_tg_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        self.DFF_cap_inv_input, self.DFF_cap_inv_output = self.formula_function.calculate_gate_capacitance(gateType='INV', \
+                                                        numInput=1, widthNMOS=DFF_width_inv_N, widthPMOS=DFF_width_inv_P, heightTransistorRegion=DFF_height_inv)
+        self.DFF_cap_tg_gateN = self.formula_function.calculate_gate_cap(width=DFF_width_tg_N)
+        self.DFF_cap_tg_gateP = self.formula_function.calculate_gate_cap(width=DFF_width_tg_P)
+        _, self.DFF_cap_tg_drain = self.formula_function.calculate_gate_capacitance(gateType='INV', \
+                                                        numInput=1, widthNMOS=DFF_width_tg_N, widthPMOS=DFF_width_tg_P, heightTransistorRegion=DFF_height_inv)
+        self.DFF_energy = 0 
+
+    def adder_initialize(self) -> None:
+        adder_width_nand_N = 2 * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        adder_width_nand_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
+        adder_height_nand =  self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
+        self.adder_cap_nand_input, self.adder_cap_nand_output = self.formula_function.calculate_gate_capacitance(gateType='NAND', \
+                                                        numInput=2, widthNMOS=adder_width_nand_N, widthPMOS=adder_width_nand_P, heightTransistorRegion=adder_height_nand) 
+        self.adder_energy = 0  
+        
+
     def DFF_energy_calculation(self, DFF_num, DFF_read) -> None:
         self.DFF_energy = 0
         # Assume input D=1 and the energy of CLK INV and CLK TG are for 1 clock cycles
@@ -297,20 +401,16 @@ class PeriphPower(torch.nn.Module):
         self.shift_add_energy += self.adder_energy_calculation(mem_i_sequence.shape[3]) * read_times
         
 
-    def total_energy_calculation(self, mem_t) -> None:
+    def ADC_energy_calculation(self, mem_t) -> None:
         # language=rst
         """
         Calculate total energy for memrisotr crossbar. Called when power is reported.
 
         :param mem_t: Time of the memristor crossbar.
         """
-        self.periph_total_energy = self.switch_matrix_col_write_energy + self.switch_matrix_row_write_energy + self.switch_matrix_read_energy + self.shift_add_energy + self.SarADC_energy + self.switch_matrix_reset_energy
-        self.periph_average_power = self.periph_total_energy / (torch.max(mem_t) * self.dt)
-        self.sim_power = {'switch_matrix_reset_energy': self.switch_matrix_reset_energy,
-                          'switch_matrix_col_write_energy': self.switch_matrix_col_write_energy,
-                          'switch_matrix_row_write_energy': self.switch_matrix_row_write_energy,
-                          'switch_matrix_read_energy': self.switch_matrix_read_energy,
-                          'shift_add_energy': self.shift_add_energy,
+        self.ADC_total_energy = self.shift_add_energy + self.SarADC_energy
+        self.ADC_average_power = self.ADC_total_energy / (torch.max(mem_t) * self.dt)
+        self.sim_power = {'shift_add_energy': self.shift_add_energy,
                           'SarADC_energy': self.SarADC_energy,
-                          'periph_total_energy': self.periph_total_energy,
-                          'periph_average_power': self.periph_average_power}
+                          'ADC_total_energy': self.ADC_total_energy,
+                          'ADC_average_power': self.ADC_average_power}

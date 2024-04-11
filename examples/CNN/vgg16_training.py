@@ -33,7 +33,10 @@ parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variatio
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
-parser.add_argument("--ADC_precision", type=int, default=8)
+parser.add_argument("--hardware_estimation", type=bool, default=True)
+parser.add_argument("--ADC_precision", type=int, default=16)
+parser.add_argument("--ADC_setting", type=int, default=4) # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
+parser.add_argument("--ADC_rounding_function", type=str, default='floor') # floor or round
 parser.add_argument("--wire_width", type=int, default=10000)
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP or LP
@@ -131,7 +134,9 @@ if __name__ == '__main__':
                      'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 
                      'input_bit': args.input_bit,'batch_interval': 1, 
                      'CMOS_technode':args.CMOS_technode, 'ADC_precision':args.ADC_precision, 
-                     'device_roadmap':args.device_roadmap, 'temperature':args.temperature}
+                     'device_roadmap':args.device_roadmap, 'temperature':args.temperature,
+                     'ADC_setting':args.ADC_setting,'ADC_rounding_function':args.ADC_rounding_function,
+                     'hardware_estimation':args.hardware_estimation}
 
     best_acc = 0
     start_epoch = 0
