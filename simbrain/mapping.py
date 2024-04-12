@@ -455,7 +455,7 @@ class MimoMapping(Mapping):
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
 
-        self.sim_periph_power = {**self.sim_ADC_power, **self.sim_ADC_power}
+        self.sim_periph_power = {**self.sim_DAC_power, **self.sim_ADC_power}
 
 
 
@@ -741,7 +741,7 @@ class MLPMapping(Mapping):
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
 
-        self.sim_periph_power = {**self.sim_ADC_power, **self.sim_ADC_power}
+        self.sim_periph_power = {**self.sim_DAC_power, **self.sim_ADC_power}
 
         #print("{:.4e}".format(self.sim_periph_power['SarADC_energy']))
 
@@ -1024,7 +1024,7 @@ class CNNMapping(Mapping):
         else:
             raise Exception("Only 4-set ADC are supported!")
 
-        self.sim_periph_power = {**self.sim_ADC_power, **self.sim_ADC_power}
+        self.sim_periph_power = {**self.sim_DAC_power, **self.sim_ADC_power}
 
 
 

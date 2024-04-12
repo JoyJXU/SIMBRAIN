@@ -88,7 +88,7 @@ class Power(torch.nn.Module):
         mem_r = mem_r + total_wire_resistance.unsqueeze(0)
         memristor_c = 1.0 / mem_r
         for i in range(mem_v_bool.size(0)):
-            self.static_read_energy += self.v_read ** 2 * torch.sum(torch.matmul(mem_v_bool[i].float(), memristor_c)) * self.dt * 1/2
+            self.static_read_energy += self.v_read * torch.sum(torch.matmul(mem_v_bool[i].float(), memristor_c)) * self.dt * 1/2
 
         self.read_energy = self.dynamic_read_energy + self.static_read_energy
 

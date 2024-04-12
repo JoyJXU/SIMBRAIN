@@ -25,7 +25,7 @@ parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--hardware_estimation", type=bool, default=True)
-parser.add_argument("--ADC_precision", type=int, default=7)
+parser.add_argument("--ADC_precision", type=int, default=8)
 parser.add_argument("--ADC_setting", type=int, default=2) # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
 parser.add_argument("--ADC_rounding_function", type=str, default='floor') # floor or round
 parser.add_argument("--wire_width", type=int, default=10000)
