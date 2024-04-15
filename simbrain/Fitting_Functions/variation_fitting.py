@@ -63,7 +63,7 @@ class Variation(object):
                 self.data[i][int(self.data.shape[0] / 2) - 10:int(self.data.shape[0] / 2)]
             )
             self.G_on_variation[i] = np.average(self.data[i][self.data.shape[0] - 10:])
-            plt.plot(self.data[i], c='orange', linewidth=0.4, alpha=1)
+            # plt.plot(self.data[i], c='orange', linewidth=0.4, alpha=1)
 
         self.P_off_variation = np.zeros(self.data.shape[1])
         self.P_on_variation = np.zeros(self.data.shape[1])
@@ -151,16 +151,16 @@ class Variation(object):
 
     @timer
     def d2d_P_fitting(self):
-        P_off_num = 50
-        P_on_num = 50
-        P_off_list = np.linspace(round(self.P_off) - 0.46, round(self.P_off) + 1.5, P_off_num)
-        P_on_list = np.linspace(round(self.P_on) - 0.46, round(self.P_on) + 1.5, P_on_num)
+        P_off_num = 100
+        P_on_num = 100
+        P_off_list = np.linspace(round(self.P_off) - 0.48, round(self.P_off) + 1.5, P_off_num)
+        P_on_list = np.linspace(round(self.P_on) - 0.48, round(self.P_on) + 1.5, P_on_num)
         P_off_list[P_off_list < 0] = 0
         if P_off_list[1] == 0:
-            P_off_list = np.linspace(round(self.P_off) + 0.02, round(self.P_off) + 1, P_off_num)
+            P_off_list = np.linspace(round(self.P_off) + 0.01, round(self.P_off) + 1, P_off_num)
         P_on_list[P_on_list < 0] = 0
         if P_on_list[1] == 0:
-            P_on_list = np.linspace(round(self.P_on) + 0.02, round(self.P_on) + 1, P_on_num)
+            P_on_list = np.linspace(round(self.P_on) + 0.01, round(self.P_on) + 1, P_on_num)
 
         # TODO: How to obtain V_write? From data files?
         V_write_pos = np.full(self.pos_points, 3.15)
@@ -218,8 +218,8 @@ class Variation(object):
             bin_edge_off[:bins_num],
             Poff_hist / Poff_hist.sum() / edge_diff_off
         )
+        Poff_mu = self.P_off * (1 + params[0])
         Poff_sigma = params[1]
-        # print(self.P_off * (1 + params[0]), Poff_sigma)
 
         Pon_hist, bin_edge_on = np.histogram(P_on_cal, bins=bins_num)
         edge_diff_on = bin_edge_on[1] - bin_edge_on[0]
@@ -228,10 +228,10 @@ class Variation(object):
             bin_edge_on[:bins_num],
             Pon_hist / Pon_hist.sum() / edge_diff_on
         )
+        Pon_mu = self.P_on * (1 + params[0])
         Pon_sigma = params[1]
-        # print(self.P_on * (1 + params[0]), Pon_sigma)
 
-        return Poff_sigma, Pon_sigma
+        return Poff_mu, Poff_sigma, Pon_mu, Pon_sigma
 
     @timer
     def c2c_fitting(self):
@@ -313,6 +313,11 @@ class Variation(object):
         z2 = np.polyfit(x_mean, var_x_average, 1)
         p2 = np.poly1d(z2)
         # print(p2)
+
+        self.x_mean = x_mean
+        self.var_x_average = var_x_average
+        self.memx_total = best_memx_total
+        self.variation_x = variation_x
 
         sigma_relative = math.sqrt(z2[0] * math.pi / 2)
         sigma_absolute = math.sqrt(z2[1] * math.pi / 2)
