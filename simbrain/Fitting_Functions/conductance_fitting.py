@@ -53,10 +53,6 @@ class Conductance(object):
         self.delta_t = dictionary['delta_t']
         self.V_write = np.array(data['Pulse Voltage(V)'])
         self.read_voltage = np.array(data['Read Voltage(V)'][0])
-        # TODO: del temp variable "sample_interval"
-        self.sample_interval = dictionary['sample_interval']
-        if self.sample_interval is None:
-            self.sample_interval = 1
 
         self.start_point_r = 0
         self.points_r = int(self.V_write.shape[0] / 2)
@@ -155,11 +151,10 @@ class Conductance(object):
         k_on_list = -np.logspace(-4, 9, k_on_num, base=10)
 
         # rise
-        V_write_r_temp = self.V_write[self.start_point_r: self.start_point_r + self.points_r]
-        V_write_r = V_write_r_temp[0:self.points_r:self.sample_interval]
+        V_write_r = self.V_write[self.start_point_r: self.start_point_r + self.points_r]
         x_init_r = self.x_r[0]
-        mem_x_r = np.zeros(self.points_r // self.sample_interval)
-        mem_c_r = np.zeros(self.points_r // self.sample_interval)
+        mem_x_r = np.zeros(self.points_r)
+        mem_c_r = np.zeros(self.points_r)
         INDICATOR_r = np.ones([k_off_num, P_off_num])
         indicator_temp_r = 90
         min_x_r = 0
@@ -175,10 +170,8 @@ class Conductance(object):
                     x_init_r,
                     V_write_r
                 )
-                mem_x_r_repeat = [val for val in mem_x_r for i in range(self.sample_interval)]
-                mem_c_r_repeat = [val for val in mem_c_r for i in range(self.sample_interval)]
 
-                INDICATOR_r[i][j] = self.RRMSE_PERCENT(mem_c_r_repeat, self.conductance_r)
+                INDICATOR_r[i][j] = self.RRMSE_PERCENT(mem_c_r, self.conductance_r)
                 if INDICATOR_r[i][j] <= indicator_temp_r:
                     min_x_r = i
                     min_y_r = j
@@ -188,11 +181,10 @@ class Conductance(object):
         self.P_off = P_off_list[min_y_r]
 
         # decline
-        V_write_d_temp = self.V_write[self.start_point_d: self.start_point_d + self.points_d]
-        V_write_d = V_write_d_temp[0:self.points_d:self.sample_interval]
+        V_write_d = self.V_write[self.start_point_d: self.start_point_d + self.points_d]
         x_init_d = self.x_d[0]
-        mem_x_d = np.zeros(self.points_d // self.sample_interval)
-        mem_c_d = np.zeros(self.points_d // self.sample_interval)
+        mem_x_d = np.zeros(self.points_d)
+        mem_c_d = np.zeros(self.points_d)
         INDICATOR_d = np.ones([k_on_num, P_on_num])
         indicator_temp_d = 90
         min_x_d = 0
@@ -208,10 +200,8 @@ class Conductance(object):
                     x_init_d,
                     V_write_d
                 )
-                mem_x_d_repeat = [val for val in mem_x_d for i in range(self.sample_interval)]
-                mem_c_d_repeat = [val for val in mem_c_d for i in range(self.sample_interval)]
 
-                INDICATOR_d[i][j] = self.RRMSE_PERCENT(mem_c_d_repeat, self.conductance_d)
+                INDICATOR_d[i][j] = self.RRMSE_PERCENT(mem_c_d, self.conductance_d)
                 if INDICATOR_d[i][j] <= indicator_temp_d:
                     min_x_d = i
                     min_y_d = j
@@ -222,12 +212,11 @@ class Conductance(object):
 
         return self.P_off, self.P_on, self.k_off, self.k_on
 
+    @timer
     def c2c_fitting(self):
-        V_write_r_temp = self.V_write[self.start_point_r: self.start_point_r + self.points_r]
-        V_write_r = V_write_r_temp[0:self.points_r:self.sample_interval]
+        V_write_r = self.V_write[self.start_point_r: self.start_point_r + self.points_r]
         x_init_r = self.x_r[0]
-        V_write_d_temp = self.V_write[self.start_point_d: self.start_point_d + self.points_d]
-        V_write_d = V_write_d_temp[0:self.points_d:self.sample_interval]
+        V_write_d = self.V_write[self.start_point_d: self.start_point_d + self.points_d]
         x_init_d = self.x_d[0]
         
         best_mem_x_r, _ = self.Memristor_conductance_model(
@@ -236,10 +225,8 @@ class Conductance(object):
         best_mem_x_d, _ = self.Memristor_conductance_model(
             self.k_off, self.k_on, self.P_off, self.P_on, x_init_d, V_write_d
         )
-        best_mem_x_r_repeat = np.repeat(best_mem_x_r, self.sample_interval)
-        best_mem_x_d_repeat = np.repeat(best_mem_x_d, self.sample_interval)
 
-        best_memx_total = np.concatenate((best_mem_x_r_repeat, best_mem_x_d_repeat))
+        best_memx_total = np.concatenate((best_mem_x_r, best_mem_x_d))
         x_total = np.concatenate((self.x_r, self.x_d))
 
         variation_x = abs(best_memx_total - x_total)
@@ -285,8 +272,12 @@ class Conductance(object):
         p2 = np.poly1d(z2)
         # print(p2)
 
+        self.x_mean = x_mean
+        self.var_x_average = var_x_average
+        self.memx_total = best_memx_total
+        self.variation_x = variation_x
+
         sigma_relative = math.sqrt(z2[0] * math.pi / 2)
         sigma_absolute = math.sqrt(z2[1] * math.pi / 2)
 
         return sigma_relative, sigma_absolute
-    
