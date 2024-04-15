@@ -16,6 +16,7 @@ class MemristorFitting(object):
     """
     Abstract base class for memristor fitting.
     """
+
     def __init__(
             self,
             sim_params: dict = {},
@@ -246,7 +247,7 @@ class MemristorFitting(object):
                     + "/memristordata/variation.xlsx",
                     mem_info_temp
                 )
-                Poff_sigma, Pon_sigma = variation_temp.d2d_P_fitting()
+                _, Poff_sigma, _, Pon_sigma = variation_temp.d2d_P_fitting()
                 mem_info.update(
                     {
                         "Poff_sigma": Pon_sigma,
@@ -337,7 +338,7 @@ class MemristorFitting(object):
                 if self.aging_effect == 1:
                     Aging_k_off, Aging_k_on = aging_cal.fitting_equation1()
                 else:
-                    Aging_k_off, Aging_k_on = aging_cal.fitting_equation2()
+                    Aging_k_off, _, Aging_k_on, _ = aging_cal.fitting_equation2()
                 mem_info.update(
                     {
                         "Aging_k_off": Aging_k_off,
@@ -347,51 +348,57 @@ class MemristorFitting(object):
 
         print("\nEnd Memristor Fitting.")
         self.fitting_record = mem_info
-        
+
         with open('../../memristor_device_info.json', 'r') as f:
-            memristor_info_dict = json.load(f)      
+            memristor_info_dict = json.load(f)
         memristor_info_dict['mine'] = self.fitting_record
         with open('../../memristor_device_info.json', 'w') as f:
             json.dump(memristor_info_dict, f, indent=2)
-        
-        V_write = np.full(501, 0.975*2*v_off)
+
+        V_write = np.full(501, 0.975 * 2 * v_off)
         i = 0
-        while(V_write[0] > v_off):
+        while V_write[0] > v_off:
             i += 1
             lut_state, lut_conductance = self.memristor_lut_generate(V_write, mem_info)
             if lut_state[50] > 0.975:
                 V_write *= 0.975
             elif i == 1:
-                for m in range(100,501,50): 
+                for m in range(100, 501, 50):
                     if lut_state[m] > 0.975:
                         cut_num = m
                         break
             else:
                 break
         if i == 1:
-            mine_lut = {        
-        'total_no': cut_num,
-        'voltage': 0.975*2*v_off,
-        'cycle:': 2 * mem_info['delta_t'],
-        'duty ratio': 0.5,
-        'conductance': lut_conductance[0:cut_num+1]
-        }
+            mine_lut = {
+                'total_no': cut_num,
+                'voltage': 0.975 * 2 * v_off,
+                'cycle:': 2 * mem_info['delta_t'],
+                'duty ratio': 0.5,
+                'conductance': lut_conductance[0:cut_num + 1]
+            }
         else:
-            V_write = V_write/0.975
+            V_write = V_write / 0.975
             lut_state, lut_conductance = self.memristor_lut_generate(V_write, mem_info)
-            mine_lut = {        
-        'total_no': 50,
-        'voltage': V_write[0],
-        'cycle:': 2 * mem_info['delta_t'],
-        'duty ratio': 0.5,
-        'conductance': lut_conductance[0:51]
-        }
+            mine_lut = {
+                'total_no': 50,
+                'voltage': V_write[0],
+                'cycle:': 2 * mem_info['delta_t'],
+                'duty ratio': 0.5,
+                'conductance': lut_conductance[0:51]
+            }
+        with open('../../simbrain/Parameter_files/memristor_lut.pkl', 'rb') as f:
+            mem_lut = pickle.load(f)
+        mem_lut['mine'] = mine_lut
+        with open('../../simbrain/Parameter_files/memristor_lut.pkl', 'wb') as f:
+            pickle.dump(mem_lut, f)
+        # TODO: use Parameter_files folder instead of root
         with open('../../memristor_lut.pkl', 'rb') as f:
-            mem_lut = pickle.load(f)                 
+            mem_lut = pickle.load(f)
         mem_lut['mine'] = mine_lut
         with open('../../memristor_lut.pkl', 'wb') as f:
             pickle.dump(mem_lut, f)
-        
+
         return self.fitting_record
 
     def memristor_lut_generate(self, V_write, mem_info):
@@ -406,17 +413,18 @@ class MemristorFitting(object):
         internal_state[0] = 0
         for i in range(points - 1):
             if V_write[i + 1] > mem_info['v_off'] and V_write[i + 1] > 0:
-                delta_x = mem_info['k_off'] * ((V_write[i + 1] / mem_info['v_off'] - 1) ** mem_info['alpha_off']) * J1 * (
-                        (1 - internal_state[i]) ** mem_info['P_off'])
+                delta_x = mem_info['k_off'] * (
+                            (V_write[i + 1] / mem_info['v_off'] - 1) ** mem_info['alpha_off']) * J1 * (
+                                  (1 - internal_state[i]) ** mem_info['P_off'])
                 internal_state[i + 1] = internal_state[i] + mem_info['delta_t'] * delta_x
             elif V_write[i + 1] < mem_info['v_on'] and V_write[i + 1] < 0:
                 delta_x = mem_info['k_on'] * ((V_write[i + 1] / mem_info['v_on'] - 1) ** mem_info['alpha_on']) * J1 * (
                         internal_state[i] ** mem_info['P_on'])
-                internal_state[i + 1] = internal_state[i] + mem_info['delta_t'] * delta_x                     
+                internal_state[i + 1] = internal_state[i] + mem_info['delta_t'] * delta_x
             else:
                 delta_x = 0
                 internal_state[i + 1] = internal_state[i]
-            if internal_state[i + 1] < 0: 
+            if internal_state[i + 1] < 0:
                 internal_state[i + 1] = 0
             elif internal_state[i + 1] > 1:
                 internal_state[i + 1] = 1
