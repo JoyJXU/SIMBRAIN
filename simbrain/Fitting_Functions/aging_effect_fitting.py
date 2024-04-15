@@ -98,6 +98,9 @@ class AgingEffect(object):
         )
 
         Aging_off = params_off[0]
+        b_off = params_off[1]
         Aging_on = params_on[0]
+        b_on = params_on[1]
 
-        return Aging_off, Aging_on
+        return Aging_off, b_off, Aging_on, b_on
+        
