@@ -39,11 +39,11 @@ class StuckAtFault:
         SAF_lambda = np.count_nonzero(self.data[0]) / self.data.shape[0]
 
         SA_0 = []
-        for i in range(600):
-            SA_0.append(np.count_nonzero(self.data[mem_t * i] == -1) / len(self.data[mem_t * i]))
+        for i in range(self.data.shape[1]):
+            SA_0.append(np.count_nonzero(self.data[mem_t * i] == -1) / self.data.shape[0])
         SA_1 = []
-        for i in range(600):
-            SA_1.append(np.count_nonzero(self.data[mem_t * i] == 1) / len(self.data[mem_t * i]))
+        for i in range(self.data.shape[1]):
+            SA_1.append(np.count_nonzero(self.data[mem_t * i] == 1) / self.data.shape[0])
         SAF_ratio_list = np.array(SA_1) / (np.array(SA_0) + np.array(SA_1))
         bins_num = 10
         SAF_ratio_hist, bin_edge_on = np.histogram(SAF_ratio_list, bins=bins_num)

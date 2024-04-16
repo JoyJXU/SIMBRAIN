@@ -118,7 +118,7 @@ class IVCurve(object):
         alpha_off_num = 10
         alpha_on_num = 10
         alpha_off_list = [i+1 for i in range(alpha_off_num)]
-        alpha_on_list = [i*1 for i in range(alpha_on_num)]
+        alpha_on_list = [i+1 for i in range(alpha_on_num)]
 
         if None in [self.k_off, self.k_on]:
             k_off_num = 1000
@@ -132,27 +132,27 @@ class IVCurve(object):
             k_on_list = np.array(self.k_on)
 
         V_write = self.voltage
-        points = len(V_write)
-        V_write_p = V_write[:int(points / 2)]
-        V_write_n = V_write[int(points / 2):]
-        current_p = self.current[:int(points / 2)]
-        current_n = self.current[int(points / 2):]
+        points_r = np.sum(V_write>0)
+        V_write_r = V_write[:points_r]
+        V_write_d = V_write[points_r:]
+        current_r = self.current[:points_r]
+        current_d = self.current[points_r:]
 
-        x_init_p = (current_p[0] / self.voltage[0] - self.G_on) / (self.G_off - self.G_on)
-        if x_init_p < 0:
-            x_init_p = 0
-        elif x_init_p > 1:
-            x_init_p = 1
-        x_init_n = (current_n[0] / self.voltage[int(points / 2)] - self.G_on) / (self.G_off - self.G_on)
-        if x_init_n < 0:
-            x_init_n = 0
-        elif x_init_n > 1:
-            x_init_n = 1
+        x_init_r = (current_r[0] / self.voltage[0] - self.G_on) / (self.G_off - self.G_on)
+        if x_init_r < 0:
+            x_init_r = 0
+        elif x_init_r > 1:
+            x_init_r = 1
+        x_init_d = (current_d[0] / self.voltage[points_r] - self.G_on) / (self.G_off - self.G_on)
+        if x_init_d < 0:
+            x_init_d = 0
+        elif x_init_d > 1:
+            x_init_d = 1
 
-        INDICATOR_p = np.ones([k_off_num, alpha_off_num])
-        INDICATOR_n = np.ones([k_on_num, alpha_on_num])
-        indicator_temp_p = 90
-        indicator_temp_n = 90
+        INDICATOR_r = np.ones([k_off_num, alpha_off_num])
+        INDICATOR_d = np.ones([k_on_num, alpha_on_num])
+        indicator_temp_r = 90
+        indicator_temp_d = 90
         min_x = 0
         min_y = 0
 
@@ -161,40 +161,40 @@ class IVCurve(object):
         for i in range(k_off_num):
             for j in range(alpha_off_num):
                 self.k_off = k_off_list[i]
-                mem_x_p, mem_c_p = self.Memristor_conductance_model(
+                mem_x_r, mem_c_r = self.Memristor_conductance_model(
                     alpha_off_list[j],
                     alpha_on_list[0],
-                    x_init_p,
-                    V_write_p
+                    x_init_r,
+                    V_write_r
                 )
-                current_fit_p = np.array(mem_c_p) * np.array(V_write_p)
+                current_fit_r = np.array(mem_c_r) * np.array(V_write_r)
                 # RRMSE calculation
-                i_diff = np.array(list(map(lambda x: x[0] - x[1], zip(current_fit_p, current_p))))
-                INDICATOR_p[i][j] = np.sqrt(np.dot(i_diff, i_diff) / np.dot(current_p, current_p) / int(points / 2))
+                i_diff = np.array(list(map(lambda x: x[0] - x[1], zip(current_fit_r, current_r))))
+                INDICATOR_r[i][j] = np.sqrt(np.dot(i_diff, i_diff) / np.dot(current_r, current_r) / points_r)
 
-                if INDICATOR_p[i][j] <= indicator_temp_p:
+                if INDICATOR_r[i][j] <= indicator_temp_r:
                     min_x = j
-                    indicator_temp_p = INDICATOR_p[i][j]
+                    indicator_temp_r = INDICATOR_r[i][j]
 
         # negative
         self.k_off = k_off_list[0]
         for i in range(k_on_num):
             for j in range(alpha_on_num):
                 self.k_on = k_on_list[i]
-                mem_x_n, mem_c_n = self.Memristor_conductance_model(
+                mem_x_d, mem_c_d = self.Memristor_conductance_model(
                     alpha_off_list[0],
                     alpha_on_list[j],
-                    x_init_n,
-                    V_write_n
+                    x_init_d,
+                    V_write_d
                 )
-                current_fit_n = np.array(mem_c_n) * np.array(V_write_n)
+                current_fit_d = np.array(mem_c_d) * np.array(V_write_d)
                 # RRMSE calculation
-                i_diff = np.array(list(map(lambda x: x[0] - x[1], zip(current_fit_n, current_n))))
-                INDICATOR_n[i][j] = np.sqrt(np.dot(i_diff, i_diff) / np.dot(current_n, current_n) / int(points / 2))
+                i_diff = np.array(list(map(lambda x: x[0] - x[1], zip(current_fit_d, current_d))))
+                INDICATOR_d[i][j] = np.sqrt(np.dot(i_diff, i_diff) / np.dot(current_d, current_d) / points_r)
 
-                if INDICATOR_n[i][j] <= indicator_temp_n:
+                if INDICATOR_d[i][j] <= indicator_temp_d:
                     min_y = j
-                    indicator_temp_n = INDICATOR_n[i][j]
+                    indicator_temp_d = INDICATOR_d[i][j]
 
         self.alpha_off = alpha_off_list[min_x]
         self.alpha_on = alpha_on_list[min_y]

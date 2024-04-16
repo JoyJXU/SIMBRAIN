@@ -55,9 +55,9 @@ class Conductance(object):
         self.read_voltage = np.array(data['Read Voltage(V)'][0])
 
         self.start_point_r = 0
-        self.points_r = int(self.V_write.shape[0] / 2)
-        self.start_point_d = int(self.V_write.shape[0] / 2)
-        self.points_d = int(self.V_write.shape[0] / 2)
+        self.points_r = np.sum(self.V_write>0)
+        self.start_point_d = self.start_point_r + np.sum(self.V_write>0)
+        self.points_d = np.sum(self.V_write<0)
 
         self.current_r = np.array(data['Current(A)'])[self.start_point_r: self.start_point_r + self.points_r]
         self.conductance_r = self.current_r / self.read_voltage

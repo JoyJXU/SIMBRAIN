@@ -72,7 +72,7 @@ gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
@@ -105,10 +105,7 @@ print(json.dumps(sim_params, indent=4, separators=(',', ':')))
 
 exp = MemristorFitting(sim_params, my_memristor_r)
 if exp.device_name == "mine":
-    if exp.mem_size is None:
-        print("Error! Missing mem_size.")
-    else:
-        exp.mem_fitting()
+    exp.mem_fitting()
     fitting_record_w = exp.fitting_record
 else:
     fitting_record_w = my_memristor_r

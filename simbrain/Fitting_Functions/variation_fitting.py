@@ -54,7 +54,6 @@ class Variation(object):
         self.V_write_pos = np.full(self.pos_points, 3.15)
         self.V_write_neg = np.full(self.neg_points, -3.05)
 
-        fig = plt.figure(figsize=(12.8, 7.2))
         self.G_off_variation = np.zeros(self.data.shape[1])
         self.G_on_variation = np.zeros(self.data.shape[1])
 
