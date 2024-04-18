@@ -120,7 +120,7 @@
         "delta_t":1.6e-6,
         "duty_ratio":0.5,
         "v_read": 0.1,
-        "mem_size":1e-4,
+        "mem_size":3.5e-7,
         "relax_ratio":1.25
     },
     "ferro_resistance_abandon":
