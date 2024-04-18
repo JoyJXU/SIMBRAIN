@@ -379,13 +379,14 @@ def run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, 
                     # mem_t update
                     _crossbar.mem_t_update()
 
-                    # print power results
-                    _crossbar.total_energy_calculation()
-                    sim_power = _crossbar.sim_power
-                    total_energy = sim_power['total_energy']
-                    average_power = sim_power['average_power']
-                    print("total_energy=", total_energy)
-                    print("average_power=", average_power)
+                    if sim_params['hardware_estimation']:
+                        # print power results
+                        _crossbar.total_energy_calculation()
+                        sim_power = _crossbar.sim_power
+                        total_energy = sim_power['total_energy']
+                        average_power = sim_power['average_power']
+                        print("total_energy=", total_energy)
+                        print("average_power=", average_power)
 
                 # Error calculation
                 error = utility.cal_error(golden_model, cross)

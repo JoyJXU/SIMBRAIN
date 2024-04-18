@@ -34,12 +34,14 @@ parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--input_bit", type=int, default=8)
-parser.add_argument("--ADC_precision", type=int, default=8)
+parser.add_argument("--ADC_precision", type=int, default=16)
+parser.add_argument("--ADC_setting", type=int, default=4)  # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
+parser.add_argument("--ADC_rounding_function", type=str, default='floor')  # floor or round
 parser.add_argument("--wire_width", type=int, default=200) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP')  # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--power_estimation", type=int, default=True)
+parser.add_argument("--hardware_estimation", type=int, default=True)
 args = parser.parse_args()
 
 
@@ -130,8 +132,9 @@ if __name__ == '__main__':
                   'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
                   'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
                   'batch_interval': 1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
+                  'ADC_setting': args.ADC_setting, 'ADC_rounding_function': args.ADC_rounding_function,
                   'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
-                  'power_estimation': args.power_estimation}
+                  'hardware_estimation': args.hardware_estimation}
 
     best_acc = 0
     start_epoch = 0
