@@ -28,12 +28,9 @@ class Conductance(object):
             file,
             sheet_name=0,
             header=None,
-            names=[
-                'Pulse Voltage(V)',
-                'Current(A)',
-                'Read Voltage(V)'
-            ]
+            index_col=None,
         ))
+        data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)', 'Current(A)'] + list(data.columns[3:])
 
         # Initialize parameters
         self.P_off = 1
@@ -55,9 +52,9 @@ class Conductance(object):
         self.read_voltage = np.array(data['Read Voltage(V)'][0])
 
         self.start_point_r = 0
-        self.points_r = np.sum(self.V_write>0)
-        self.start_point_d = self.start_point_r + np.sum(self.V_write>0)
-        self.points_d = np.sum(self.V_write<0)
+        self.points_r = np.sum(self.V_write > 0)
+        self.start_point_d = self.start_point_r + np.sum(self.V_write > 0)
+        self.points_d = np.sum(self.V_write < 0)
 
         self.current_r = np.array(data['Current(A)'])[self.start_point_r: self.start_point_r + self.points_r]
         self.conductance_r = self.current_r / self.read_voltage
@@ -140,13 +137,13 @@ class Conductance(object):
 
     @timer
     def fitting(self):
-        P_off_num = 20
-        P_on_num = 20
+        P_off_num = 100
+        P_on_num = 100
         P_off_list = np.logspace(-1, 1, P_off_num, base=10)
         P_on_list = np.logspace(-1, 1, P_on_num, base=10)
 
-        k_off_num = 200
-        k_on_num = 200
+        k_off_num = 500
+        k_on_num = 500
         k_off_list = np.logspace(-4, 9, k_off_num, base=10)
         k_on_list = -np.logspace(-4, 9, k_on_num, base=10)
 
@@ -211,73 +208,3 @@ class Conductance(object):
         self.P_on = P_on_list[min_y_d]
 
         return self.P_off, self.P_on, self.k_off, self.k_on
-
-    @timer
-    def c2c_fitting(self):
-        V_write_r = self.V_write[self.start_point_r: self.start_point_r + self.points_r]
-        x_init_r = self.x_r[0]
-        V_write_d = self.V_write[self.start_point_d: self.start_point_d + self.points_d]
-        x_init_d = self.x_d[0]
-        
-        best_mem_x_r, _ = self.Memristor_conductance_model(
-            self.k_off, self.k_on, self.P_off, self.P_on, x_init_r, V_write_r
-        )
-        best_mem_x_d, _ = self.Memristor_conductance_model(
-            self.k_off, self.k_on, self.P_off, self.P_on, x_init_d, V_write_d
-        )
-
-        best_memx_total = np.concatenate((best_mem_x_r, best_mem_x_d))
-        x_total = np.concatenate((self.x_r, self.x_d))
-
-        variation_x = abs(best_memx_total - x_total)
-
-        # %% Variation Analysis
-        var_x_complex = []
-        for i in range(len(x_total)):
-            var_x_complex.append((x_total[i], variation_x[i]))
-
-        def takeFirst(ele):
-            return ele[0]
-
-        # Sort
-        var_x_complex.sort(key=takeFirst)
-
-        # %% Variation Clustering
-        x_sorted = np.array([i[0] for i in var_x_complex])
-        var_x_sorted = np.array([i[1] for i in var_x_complex])
-
-        group_no = 10
-
-        # Group with pulse number
-        total_points = self.points_r + self.points_d
-        every_points = math.ceil(total_points / group_no)
-
-        x_mean = []
-        var_x_median = []
-        var_x_average = []
-        for i in range(group_no):
-            temp_x_mean = np.mean(x_sorted[every_points * i:(every_points * (i + 1))])
-            temp_var_median = np.median(var_x_sorted[every_points * i:(every_points * (i + 1))])
-            # TODO: Fit with average
-            temp_var_average = np.mean(var_x_sorted[every_points * i:(every_points * (i + 1))])
-            x_mean.append(temp_x_mean ** 2)
-            var_x_median.append(temp_var_median ** 2)
-            var_x_average.append(temp_var_average ** 2)
-
-        z1 = np.polyfit(x_mean, var_x_median, 1)
-        p1 = np.poly1d(z1)
-        # print(p1)
-
-        z2 = np.polyfit(x_mean, var_x_average, 1)
-        p2 = np.poly1d(z2)
-        # print(p2)
-
-        self.x_mean = x_mean
-        self.var_x_average = var_x_average
-        self.memx_total = best_memx_total
-        self.variation_x = variation_x
-
-        sigma_relative = math.sqrt(z2[0] * math.pi / 2)
-        sigma_absolute = math.sqrt(z2[1] * math.pi / 2)
-
-        return sigma_relative, sigma_absolute

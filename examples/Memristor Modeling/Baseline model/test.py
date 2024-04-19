@@ -16,15 +16,15 @@ def main():
         "../../../memristordata/conductance.xlsx",
         sheet_name=0,
         header=None,
-        names=[
-            'Pulse Voltage(V)',
-            'Current(A)',
-            'Read Voltage(V)'
-        ]
+        index_col=None,
     ))
+    data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)', 'Current(A)'] + list(data.columns[3:])
+
     conductance = np.array(data['Current(A)']) / np.array(data['Read Voltage(V)'][0])
-    G_off = np.average(conductance[int(conductance.shape[0] / 2) - 10:int(conductance.shape[0] / 2)])
-    G_on = np.average(conductance[conductance.shape[0] - 10:])
+    conductance_r = conductance[:np.sum(np.array(data['Pulse Voltage(V)']) > 0)]
+    conductance_d = conductance[np.sum(np.array(data['Pulse Voltage(V)']) > 0):]
+    G_off = np.average(conductance_r[conductance_r.shape[0] - 10:])
+    G_on = np.average(conductance_d[conductance_d.shape[0] - 10:])
     dict.update(
         {
             "G_off": G_off,
@@ -35,6 +35,7 @@ def main():
     file = "../../../memristordata/IV_curve.xlsx"
     exp_1 = IVCurve(file, dict)
     alpha_off, alpha_on = exp_1.fitting()
+    alpha_off, alpha_on = 5, 5
     dict.update(
         {
             "alpha_off": alpha_off,
@@ -42,7 +43,7 @@ def main():
         }
     )
 
-    file = "../../../memristordata/Conductance.xlsx"
+    file = "../../../memristordata/conductance.xlsx"
     exp_2 = Conductance(file, dict)
     P_off, P_on, k_off, k_on = exp_2.fitting()
     dict.update(

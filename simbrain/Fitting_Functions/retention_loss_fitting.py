@@ -35,7 +35,7 @@ class RetentionLoss(object):
         self.time = np.array(data['Time(s)'])
         self.conductance = np.array(data['Conductance(S)'])
         self.delta_t = data['Time(s)'][1] - data['Time(s)'][0]
-        # TODO: modify w_init
+        # TODO: Use mean value instead?
         self.w_init = 1.225E-10
         self.points = len(self.time)
 
@@ -49,13 +49,13 @@ class RetentionLoss(object):
 
         return internal_state
 
-    def RRMSE_MEAN(self, conductance_100):
-        R_diff = list(map(lambda x: x[0] - x[1], zip(conductance_100, self.conductance)))
-        square_sum = np.dot(R_diff, R_diff)
-        mean_square_sum = square_sum / self.points
-        RMSE = np.sqrt(mean_square_sum)
-        RRMSE_mean = RMSE / np.mean(self.conductance)
-        return RRMSE_mean
+    # def RRMSE_MEAN(self, conductance_100):
+    #     R_diff = list(map(lambda x: x[0] - x[1], zip(conductance_100, self.conductance)))
+    #     square_sum = np.dot(R_diff, R_diff)
+    #     mean_square_sum = square_sum / self.points
+    #     RMSE = np.sqrt(mean_square_sum)
+    #     RRMSE_mean = RMSE / np.mean(self.conductance)
+    #     return RRMSE_mean
 
     @timer
     def fitting(self):
@@ -69,22 +69,22 @@ class RetentionLoss(object):
         # tau = 0.012478, beta = 1.066
         return tau, beta
 
-    @timer
-    def fitting_RRMSE(self):
-        min = 1000
-        mink = 1
-        minb = 1
-        k_num = 100
-        b_num = 100
-        k = np.logspace(-10, 0, k_num, base=2)
-        b = np.logspace(0, 1, b_num, base=2)
-
-        for i in range(k_num):
-            for j in range(b_num):
-                m = self.RRMSE_MEAN(self.retention_loss(self.time, k[i], b[j]))
-                if m < min:
-                    min = m
-                    mink = i
-                    minb = j
-
-        return k[mink], b[minb]
+    # @timer
+    # def fitting_RRMSE(self):
+    #     min = 1000
+    #     mink = 1
+    #     minb = 1
+    #     k_num = 100
+    #     b_num = 100
+    #     k = np.logspace(-10, 0, k_num, base=2)
+    #     b = np.logspace(0, 1, b_num, base=2)
+    #
+    #     for i in range(k_num):
+    #         for j in range(b_num):
+    #             m = self.RRMSE_MEAN(self.retention_loss(self.time, k[i], b[j]))
+    #             if m < min:
+    #                 min = m
+    #                 mink = i
+    #                 minb = j
+    #
+    #     return k[mink], b[minb]

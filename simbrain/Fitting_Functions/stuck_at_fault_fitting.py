@@ -37,23 +37,9 @@ class StuckAtFault:
     def pre_deployment_fitting(self):
         mem_t = self.data.columns[1] - self.data.columns[0]
         SAF_lambda = np.count_nonzero(self.data[0]) / self.data.shape[0]
-
-        SA_0 = []
-        for i in range(self.data.shape[1]):
-            SA_0.append(np.count_nonzero(self.data[mem_t * i] == -1) / self.data.shape[0])
-        SA_1 = []
-        for i in range(self.data.shape[1]):
-            SA_1.append(np.count_nonzero(self.data[mem_t * i] == 1) / self.data.shape[0])
-        SAF_ratio_list = np.array(SA_1) / (np.array(SA_0) + np.array(SA_1))
-        bins_num = 10
-        SAF_ratio_hist, bin_edge_on = np.histogram(SAF_ratio_list, bins=bins_num)
-        edge_diff_on = bin_edge_on[1] - bin_edge_on[0]
-        params, _ = curve_fit(
-            gaussian,
-            bin_edge_on[:bins_num],
-            SAF_ratio_hist / SAF_ratio_hist.sum() / edge_diff_on,
-        )
-        SAF_ratio = params[0]
+        SA_0 = np.count_nonzero(self.data[0] == -1) / self.data.shape[0]
+        SA_1 = np.count_nonzero(self.data[0] == 1) / self.data.shape[0]
+        SAF_ratio = np.array(SA_1) / (np.array(SA_0) + np.array(SA_1))
 
         return SAF_lambda, SAF_ratio
 

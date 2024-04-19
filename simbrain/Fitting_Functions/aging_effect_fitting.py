@@ -20,6 +20,7 @@ class AgingEffect(object):
     def __init__(
             self,
             file,
+            dictionary,
             **kwargs,
     ) -> None:
         data = pd.DataFrame(pd.read_excel(
@@ -42,14 +43,17 @@ class AgingEffect(object):
         self.LRS = data['LRS']
         self.points = len(self.Cycle)
 
-        self.CYCLE = self.Cycle / 1000
+        self.CYCLE = self.Cycle
         self.HHRS = 1 / self.HRS
         self.LLRS = 1 / self.LRS
 
+        self.sampling_rate = dictionary['sampling_rate']
+        if self.sampling_rate is None:
+            self.sampling_rate = 1
         self.G_0 = 1
         G_0_i = 0
-        self.G_0_H = 1 / np.median(self.HRS[G_0_i:G_0_i + 4096])
-        self.G_0_L = 1 / np.median(self.LRS[G_0_i:G_0_i + 4096])
+        self.G_0_H = 1 / np.median(self.HRS[G_0_i:G_0_i + self.sampling_rate])
+        self.G_0_L = 1 / np.median(self.LRS[G_0_i:G_0_i + self.sampling_rate])
 
     def equation_1(self, CYCLE, r):
         return self.G_0 * np.power(1 - r, CYCLE)

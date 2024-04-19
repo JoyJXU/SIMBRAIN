@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import norm
+from simbrain.Fitting_Functions.conductance_fitting import Conductance
 from simbrain.Fitting_Functions.variation_fitting import Variation
 
 
@@ -16,8 +17,8 @@ def main():
         {
             'v_off': 2,
             'v_on': -2,
-            'G_off': 1.11e-9,
-            'G_on': 4.36e-10,
+            'G_off': None,
+            'G_on': None,
             'alpha_off': None,
             'alpha_on': None,
             'k_off': None,
@@ -27,40 +28,69 @@ def main():
             'delta_t': 30 * 1e-3,
         }
     )
-    file = "../../../memristordata/variation.xlsx"
+    file = "../../../memristordata/conductance.xlsx"
 
-    Goff_mu, Goff_sigma, Gon_mu, Gon_sigma = Variation(
+    _, Goff_sigma, _, Gon_sigma = Variation(
         file,
         dict
     ).d2d_G_fitting()
     dict.update(
         {
-            "Goff_mu": Goff_mu,
-            "Gon_mu": Gon_mu,
             "Goff_sigma": Goff_sigma,
             "Gon_sigma": Gon_sigma,
         }
     )
+
+    data = pd.DataFrame(pd.read_excel(
+        file,
+        sheet_name=0,
+        header=None,
+        index_col=None,
+    ))
+    data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)', 'Current(A)'] + list(data.columns[3:])
+
+    conductance = np.array(data['Current(A)']) / np.array(data['Read Voltage(V)'][0])
+    conductance_r = conductance[:np.sum(np.array(data['Pulse Voltage(V)']) > 0)]
+    conductance_d = conductance[np.sum(np.array(data['Pulse Voltage(V)']) > 0):]
+    G_off = np.average(conductance_r[conductance_r.shape[0] - 10:])
+    G_on = np.average(conductance_d[conductance_d.shape[0] - 10:])
     dict.update(
         {
-            'alpha_off': 5,
-            'alpha_on': 5,
-            'k_off': 20.8,
-            'k_on': -5.2,
-            'P_off': 1.36,
-            'P_on': 0.39,
+            'G_off': G_off,
+            'G_on': G_on
         }
     )
+    alpha_off, alpha_on = 5, 5
+    dict.update(
+        {
+            "alpha_off": alpha_off,
+            "alpha_on": alpha_on
+        }
+    )
+    P_off, P_on, k_off, k_on = Conductance(file, dict).fitting()
+    dict.update(
+        {
+            'k_off': k_off,
+            'k_on': k_on,
+            'P_off': P_off,
+            'P_on': P_on,
+            'G_off': None,
+            'G_on': None
+        }
+    )
+
     exp = Variation(
-        "../../../memristordata/variation.xlsx",
-        dict)
-    Poff_mu, Poff_sigma, Pon_mu, Pon_sigma = exp.d2d_P_fitting()
+        "../../../memristordata/conductance.xlsx",
+        dict
+    )
+    _, Poff_sigma, _, Pon_sigma = exp.d2d_P_fitting()
     dict.update(
         {
             "Poff_sigma": Pon_sigma,
             "Pon_sigma": Poff_sigma
         }
     )
+    print(exp.P_off, exp.P_on)
     sigma_relative, sigma_absolute = exp.c2c_fitting()
     dict.update(
         {
@@ -78,42 +108,40 @@ def main():
         json.dump(dict, f, indent=2)
 
     # Plot
-    G_off_cal = (exp.G_off_variation - exp.G_off) / exp.G_off
-    G_on_cal = (exp.G_on_variation - exp.G_on) / exp.G_on
-    plot_x_1 = np.arange(Goff_mu - 3 * Goff_sigma, Goff_mu + 3 * Goff_sigma, 1e-3)
-    plot_x_2 = np.arange(Gon_mu - 3 * Gon_sigma, Gon_mu + 3 * Gon_sigma, 1e-3)
-    plot_y_1 = norm.pdf(plot_x_1, Goff_mu, Goff_sigma)
-    plot_y_2 = norm.pdf(plot_x_2, Gon_mu, Gon_sigma)
+    plot_x_1 = np.linspace(exp.G_off * (1 - 3 * Goff_sigma), exp.G_off * (1 + 3 * Goff_sigma))
+    plot_x_2 = np.linspace(exp.G_on * (1 - 3 * Gon_sigma), exp.G_on * (1 + 3 * Gon_sigma))
+    plot_y_1 = norm.pdf(plot_x_1, exp.G_off, exp.G_off * Goff_sigma)
+    plot_y_2 = norm.pdf(plot_x_2, exp.G_on, exp.G_on * Gon_sigma)
 
     fig = plt.figure(figsize=(12, 16))
     ax1 = fig.add_subplot(321)
-    ax1.hist(G_off_cal, bins=10, density=True)
+    ax1.hist(exp.G_off_variation, bins=10, density=True)
     ax1.plot(plot_x_1, plot_y_1, c='r')
-    ax1.set_xlabel('x')
+    ax1.set_xlabel('G_off')
     ax1.set_ylabel('Probability Density')
     ax1.set_title('D2D Variation (G_off)')
     ax2 = fig.add_subplot(322)
-    ax2.hist(G_on_cal, bins=10, density=True)
+    ax2.hist(exp.G_on_variation, bins=10, density=True)
     ax2.plot(plot_x_2, plot_y_2, c='r')
-    ax2.set_xlabel('x')
+    ax2.set_xlabel('G_on')
     ax2.set_ylabel('Probability Density')
     ax2.set_title('D2D Variation (G_on)')
 
-    plot_x_1 = np.arange(Poff_mu - 3 * Poff_sigma, Poff_mu + 3 * Poff_sigma, 1e-3)
-    plot_x_2 = np.arange(Pon_mu - 3 * Pon_sigma, Pon_mu + 3 * Pon_sigma, 1e-3)
-    plot_y_1 = norm.pdf(plot_x_1, Poff_mu, Poff_sigma)
-    plot_y_2 = norm.pdf(plot_x_2, Pon_mu, Pon_sigma)
+    plot_x_1 = np.linspace(exp.P_off * (1 - 3 * Poff_sigma), exp.P_off * (1 + 3 * Poff_sigma))
+    plot_x_2 = np.linspace(exp.P_on * (1 - 3 * Pon_sigma), exp.P_on * (1 + 3 * Pon_sigma))
+    plot_y_1 = norm.pdf(plot_x_1, exp.P_off, exp.P_off * Poff_sigma)
+    plot_y_2 = norm.pdf(plot_x_2, exp.P_on, exp.P_on * Pon_sigma)
 
     ax3 = fig.add_subplot(323)
     ax3.hist(exp.P_off_variation, bins=10, density=True)
     ax3.plot(plot_x_1, plot_y_1, c='r')
-    ax3.set_xlabel('x')
+    ax3.set_xlabel('P_off')
     ax3.set_ylabel('Probability Density')
     ax3.set_title('D2D Variation (P_off)')
     ax4 = fig.add_subplot(324)
     ax4.hist(exp.P_on_variation, bins=10, density=True)
     ax4.plot(plot_x_2, plot_y_2, c='r')
-    ax4.set_xlabel('x')
+    ax4.set_xlabel('P_on')
     ax4.set_ylabel('Probability Density')
     ax4.set_title('D2D Variation (P_on)')
 

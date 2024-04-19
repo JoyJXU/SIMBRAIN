@@ -26,7 +26,7 @@ class Variation(object):
     def __init__(
             self,
             file,
-            dictionary,
+            dictionary: dict = {},
             **kwargs,
     ) -> None:
         self.data = pd.DataFrame(pd.read_excel(
@@ -35,6 +35,7 @@ class Variation(object):
             header=None,
             index_col=None
         ))
+        self.data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)'] + list(self.data.columns[2:] - 2)
 
         self.J1 = 1
         self.v_off = dictionary['v_off']
@@ -49,26 +50,33 @@ class Variation(object):
         self.P_on = dictionary['P_on']
         self.delta_t = dictionary['delta_t']
 
-        self.pos_points = int(self.data.shape[0] / 2)
-        self.neg_points = self.data.shape[0] - int(self.data.shape[0] / 2)
-        self.V_write_pos = np.full(self.pos_points, 3.15)
-        self.V_write_neg = np.full(self.neg_points, -3.05)
+        self.V_write = np.array(self.data['Pulse Voltage(V)'])
+        self.points_r = np.sum(self.V_write > 0)
+        self.points_d = np.sum(self.V_write < 0)
 
-        self.G_off_variation = np.zeros(self.data.shape[1])
-        self.G_on_variation = np.zeros(self.data.shape[1])
+        self.V_write_r = self.V_write[:self.points_r]
+        self.V_write_d = self.V_write[self.points_r:]
+        self.read_voltage = np.array(self.data['Read Voltage(V)'])[0]
 
-        for i in range(self.data.shape[1]):
+        self.device_num = self.data.shape[1] - 2
+        self.G_off_variation = np.zeros(self.device_num)
+        self.G_on_variation = np.zeros(self.device_num)
+
+        for i in range(self.device_num):
             self.G_off_variation[i] = np.average(
-                self.data[i][int(self.data.shape[0] / 2) - 10:int(self.data.shape[0] / 2)]
+                self.data[i][self.points_r - 10:self.points_r] / self.read_voltage
             )
-            self.G_on_variation[i] = np.average(self.data[i][self.data.shape[0] - 10:])
+            self.G_on_variation[i] = np.average(
+                self.data[i][self.points_r + self.points_d - 10:] / self.read_voltage
+            )
             # plt.plot(self.data[i], c='orange', linewidth=0.4, alpha=1)
 
-        self.P_off_variation = np.zeros(self.data.shape[1])
-        self.P_on_variation = np.zeros(self.data.shape[1])
+        # if self.G_off is None:
+        self.G_off = np.mean(self.G_off_variation)
+        # if self.G_on is None:
+        self.G_on = np.mean(self.G_on_variation)
 
-    def Memristor_conductance_model(self, P_off,
-                                    P_on, V_write, initial):
+    def Memristor_conductance_model(self, P_off, P_on, V_write, initial):
         points = len(V_write)
         # initialization
         internal_state = [0 for i in range(points)]
@@ -150,6 +158,9 @@ class Variation(object):
 
     @timer
     def d2d_P_fitting(self):
+        self.P_off_variation = np.zeros(self.device_num)
+        self.P_on_variation = np.zeros(self.device_num)
+
         P_off_num = 100
         P_on_num = 100
         P_off_list = np.linspace(round(self.P_off) - 0.48, round(self.P_off) + 1.5, P_off_num)
@@ -161,21 +172,16 @@ class Variation(object):
         if P_on_list[1] == 0:
             P_on_list = np.linspace(round(self.P_on) + 0.01, round(self.P_on) + 1, P_on_num)
 
-        # TODO: How to obtain V_write? From data files?
-        V_write_pos = np.full(self.pos_points, 3.15)
-        V_write_neg = np.full(self.neg_points, -3.05)
-
-        self.P_off_variation = np.ones(self.data.shape[1])
-        for i in range(self.data.shape[1]):
+        for i in range(self.device_num):
             INDICATOR_r = np.ones(P_off_num)
             indicator_temp_r = 90
             min_x_r = 0
-            conductance_r = np.array(self.data[i][:self.pos_points])
+            conductance_r = np.array(self.data[i][:self.points_r] / self.read_voltage)
             for j in range(P_off_num):
                 mem_x_r = np.array(self.Memristor_conductance_model(
                     P_off_list[j],
                     P_on_list[0],
-                    V_write_pos,
+                    self.V_write_r,
                     0
                 ))
                 mem_c_r = self.G_off_variation[i] * mem_x_r + self.G_on_variation[i] * (1 - mem_x_r)
@@ -185,18 +191,17 @@ class Variation(object):
                     indicator_temp_r = INDICATOR_r[j]
             self.P_off_variation[i] = P_off_list[min_x_r]
 
-        self.P_on_variation = np.ones(self.data.shape[1])
-        for i in range(self.data.shape[1]):
+        for i in range(self.device_num):
             INDICATOR_d = np.ones(P_on_num)
             indicator_temp_d = 90
             min_x_d = 0
-            conductance_d = np.array(self.data[i][self.pos_points:])
+            conductance_d = np.array(self.data[i][self.points_r:] / self.read_voltage)
             for j in range(P_on_num):
                 mem_x_d = np.array(self.Memristor_conductance_model(
                     P_off_list[0],
                     P_on_list[j],
-                    V_write_neg,
-                    (self.data[i][self.pos_points - 1] - self.G_on_variation[i])
+                    self.V_write_d,
+                    (self.data[i][self.points_r - 1] / self.read_voltage - self.G_on_variation[i])
                     / (self.G_off_variation[i] - self.G_on_variation[i])
                 ))
                 mem_c_d = self.G_off_variation[i] * mem_x_d + self.G_on_variation[i] * (1 - mem_x_d)
@@ -205,6 +210,9 @@ class Variation(object):
                     min_x_d = j
                     indicator_temp_d = INDICATOR_d[j]
             self.P_on_variation[i] = P_on_list[min_x_d]
+
+        self.P_off = np.mean(self.P_off_variation)
+        self.P_on = np.mean(self.P_on_variation)
 
         P_off_cal = (self.P_off_variation - self.P_off) / self.P_off
         P_on_cal = (self.P_on_variation - self.P_on) / self.P_on
@@ -234,36 +242,33 @@ class Variation(object):
 
     @timer
     def c2c_fitting(self):
-        V_write_pos = np.full(self.pos_points, 3.15)
-        V_write_neg = np.full(self.neg_points, -3.05)
-
         best_mem_x_r = []
         best_mem_x_d = []
-        for i in range(self.data.shape[1]):
+        for i in range(self.device_num):
             best_mem_x_r.append(np.array(self.Memristor_conductance_model(
                 self.P_off_variation[i],
                 self.P_on_variation[i],
-                V_write_pos,
+                self.V_write_r,
                 0
             )))
             best_mem_x_d.append(np.array(self.Memristor_conductance_model(
                 self.P_off_variation[i],
                 self.P_on_variation[i],
-                V_write_neg,
-                (self.data[i][self.pos_points - 1] - self.G_on_variation[i])
+                self.V_write_d,
+                (self.data[i][self.points_r - 1] / self.read_voltage - self.G_on_variation[i])
                 / (self.G_off_variation[i] - self.G_on_variation[i])
             )))
         best_memx_total = np.concatenate((np.array(best_mem_x_r), np.array(best_mem_x_d)), axis=1).flatten()
 
         x_r = []
         x_d = []
-        for i in range(self.data.shape[1]):
-            conductance_r = np.array(self.data[i][:self.pos_points])
+        for i in range(self.device_num):
+            conductance_r = np.array(self.data[i][:self.points_r] / self.read_voltage)
             x_r.append(
                 (conductance_r - self.G_on_variation[i])
                 / (self.G_off_variation[i] - self.G_on_variation[i])
             )
-            conductance_d = np.array(self.data[i][self.pos_points:])
+            conductance_d = np.array(self.data[i][self.points_r:] / self.read_voltage)
             x_d.append(
                 (conductance_d - self.G_on_variation[i])
                 / (self.G_off_variation[i] - self.G_on_variation[i])
@@ -290,7 +295,7 @@ class Variation(object):
         group_no = 10
 
         # Group with pulse number
-        total_points = self.data.shape[0] * self.data.shape[1]
+        total_points = (self.points_r + self.points_d) * self.device_num
         every_points = math.ceil(total_points / group_no)
 
         x_mean = []
@@ -299,7 +304,6 @@ class Variation(object):
         for i in range(group_no):
             temp_x_mean = np.mean(x_sorted[every_points * i:(every_points * (i + 1))])
             temp_var_median = np.median(var_x_sorted[every_points * i:(every_points * (i + 1))])
-            # TODO: Fit with average
             temp_var_average = np.mean(var_x_sorted[every_points * i:(every_points * (i + 1))])
             x_mean.append(temp_x_mean ** 2)
             var_x_median.append(temp_var_median ** 2)
@@ -320,5 +324,7 @@ class Variation(object):
 
         sigma_relative = math.sqrt(z2[0] * math.pi / 2)
         sigma_absolute = math.sqrt(z2[1] * math.pi / 2)
+        # sigma_relative = 1
+        # sigma_absolute = 1
 
         return sigma_relative, sigma_absolute

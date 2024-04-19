@@ -47,12 +47,6 @@ class IVCurve(object):
         self.v_off = dictionary['v_off']
         self.v_on = dictionary['v_on']
 
-        # TODO: use D2D G_mu as G
-        # self.G_off = dictionary['Goff_mu']
-        # self.G_on = dictionary['Gon_mu']
-        # if None in [self.G_off, self.G_on]:
-        #     self.G_off = dictionary['G_off']
-        #     self.G_on = dictionary['G_on']
         self.G_off = dictionary['G_off']
         self.G_on = dictionary['G_on']
 
@@ -117,8 +111,8 @@ class IVCurve(object):
     def fitting(self):
         alpha_off_num = 10
         alpha_on_num = 10
-        alpha_off_list = [i+1 for i in range(alpha_off_num)]
-        alpha_on_list = [i+1 for i in range(alpha_on_num)]
+        alpha_off_list = [i + 1 for i in range(alpha_off_num)]
+        alpha_on_list = [i + 1 for i in range(alpha_on_num)]
 
         if None in [self.k_off, self.k_on]:
             k_off_num = 1000
@@ -132,7 +126,7 @@ class IVCurve(object):
             k_on_list = np.array(self.k_on)
 
         V_write = self.voltage
-        points_r = np.sum(V_write>0)
+        points_r = np.sum(V_write > 0)
         V_write_r = V_write[:points_r]
         V_write_d = V_write[points_r:]
         current_r = self.current[:points_r]
@@ -200,4 +194,3 @@ class IVCurve(object):
         self.alpha_on = alpha_on_list[min_y]
 
         return self.alpha_off, self.alpha_on
-        

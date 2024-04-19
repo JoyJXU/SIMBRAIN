@@ -39,6 +39,9 @@ class MemristorFitting(object):
         self.mem_size = my_memristor['mem_size']
         self.fitting_record = my_memristor
 
+        if self.mem_size is None:
+            raise Exception("Error! Missing mem_size.")
+
     def mem_fitting(self):
         # %% Obtain memristor parameters
         mem_info = copy.copy(self.fitting_record)
@@ -74,11 +77,11 @@ class MemristorFitting(object):
 
         print("Start Memristor Fitting:\n")
 
-        if self.mem_size == None:
+        if self.mem_size is None:
             raise Exception("miss mem_size data!")
 
         # %% Pre-deployment SAF
-        if self.stuck_at_fault in [1, 3]:
+        if self.stuck_at_fault in [1, 2]:
             if None not in [SAF_lambda, SAF_ratio]:
                 pass
             elif not os.path.isfile(
@@ -99,28 +102,49 @@ class MemristorFitting(object):
                     }
                 )
 
-        # %%G_off, G_on
+        # %% D2D variation G_off/G_on
+        if self.d2d_variation in [1, 2]:
+            if None not in [Gon_sigma, Goff_sigma]:
+                pass
+            elif not os.path.isfile(
+                    os.path.dirname(os.path.dirname(__file__))
+                    + "/memristordata/conductance.xlsx"
+            ):
+                raise Exception("Error! Missing data files.\nFailed to update Goff_sigma, Gon_sigma.")
+            else:
+                print("Device to Device Variation calculating...")
+                Goff_mu, Goff_sigma, Gon_mu, Gon_sigma = Variation(
+                    os.path.dirname(os.path.dirname(__file__))
+                    + "/memristordata/conductance.xlsx",
+                    mem_info
+                ).d2d_G_fitting()
+                mem_info.update(
+                    {
+                        "Goff_sigma": Goff_sigma,
+                        "Gon_sigma": Gon_sigma,
+                    }
+                )
+
+        # %% G_off, G_on
         if None not in [G_off, G_on]:
             pass
         elif not os.path.isfile(
                 os.path.dirname(os.path.dirname(__file__))
                 + "/memristordata/conductance.xlsx"
         ):
+            # TODO: Use raise Exception or print if default alpha is 5?
             raise Exception("Error! Missing data files.\nFailed to update G_off, G_on.")
         else:
             data = pd.DataFrame(pd.read_excel(
                 os.path.dirname(os.path.dirname(__file__)) + "/memristordata/conductance.xlsx",
                 sheet_name=0,
                 header=None,
-                names=[
-                    'Pulse Voltage(V)',
-                    'Current(A)',
-                    'Read Voltage(V)'
-                ]
+                index_col=None,
             ))
+            data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)', 'Current(A)'] + list(data.columns[3:])
             conductance = np.array(data['Current(A)']) / np.array(data['Read Voltage(V)'])
-            conductance_r = conductance[:np.sum(np.array(data['Pulse Voltage(V)'])>0)]
-            conductance_d = conductance[np.sum(np.array(data['Pulse Voltage(V)'])>0):]
+            conductance_r = conductance[:np.sum(np.array(data['Pulse Voltage(V)']) > 0)]
+            conductance_d = conductance[np.sum(np.array(data['Pulse Voltage(V)']) > 0):]
             G_off = np.average(conductance_r[conductance_r.shape[0] - 10:])
             G_on = np.average(conductance_d[conductance_d.shape[0] - 10:])
             mem_info.update(
@@ -130,49 +154,7 @@ class MemristorFitting(object):
                 }
             )
 
-        # %% D2D variation G_off/G_on
-        if self.d2d_variation in [1, 2]:
-            if None not in [Gon_sigma, Goff_sigma]:
-                pass
-            elif None in [G_off, G_on]:
-                raise Exception("Error! Missing required parameters.\nFailed to update Goff_sigma, Gon_sigma.")
-            elif not os.path.isfile(
-                    os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/variation.xlsx"
-            ):
-                raise Exception("Error! Missing data files.\nFailed to update Poff_sigma, Pon_sigma.")
-            else:
-                print("Device to Device Variation calculating...")
-                # TODO: use practical device params instead of mem_info_temp
-                mem_info_temp = {
-                    'v_off': 2,
-                    'v_on': -2,
-                    'G_off': 1.11e-9,
-                    'G_on': 4.36e-10,
-                    'alpha_off': None,
-                    'alpha_on': None,
-                    'k_off': None,
-                    'k_on': None,
-                    'P_off': None,
-                    'P_on': None,
-                    'delta_t': 30 * 1e-3,
-                }
-                Goff_mu, Goff_sigma, Gon_mu, Gon_sigma = Variation(
-                    os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/variation.xlsx",
-                    mem_info_temp
-                ).d2d_G_fitting()
-                mem_info.update(
-                    {
-                        "Goff_mu": Goff_mu,
-                        "Gon_mu": Gon_mu,
-                        "Goff_sigma": Goff_sigma,
-                        "Gon_sigma": Gon_sigma,
-                    }
-                )
-
         # %% Baseline Model(IV curve)
-        # TODO: Use G_mu instead of G in fitting functions if considering D2D Variation
         print("Baseline Model calculating...")
         if None not in [alpha_off, alpha_on]:
             pass
@@ -199,7 +181,7 @@ class MemristorFitting(object):
         # %% Baseline Model(Conductance)
         if None not in [P_off, P_on, k_off, k_on]:
             pass
-        elif None in [v_off, v_on, G_off, G_on, alpha_off, alpha_on]:
+        elif None in [v_off, v_on, G_off, G_on]:
             raise Exception("Error! Missing required parameters.\nFailed to update P_off, P_on, k_off, k_on.")
         elif not os.path.isfile(
                 os.path.dirname(os.path.dirname(__file__))
@@ -221,6 +203,7 @@ class MemristorFitting(object):
                     "k_on": k_on
                 }
             )
+            # TODO: Save V_write if conductance.xlsx and variation.xlsx have been merged?
 
         # %% D2D variation nonlinearity
         if self.d2d_variation in [1, 3]:
@@ -228,29 +211,15 @@ class MemristorFitting(object):
                 pass
             elif not os.path.isfile(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/variation.xlsx"
+                    + "/memristordata/conductance.xlsx"
             ):
                 raise Exception("Error! Missing data files.\nFailed to update Poff_sigma, Pon_sigma.")
             else:
                 print("Device to Device Variation(Nonlinearity) calculating...")
-                # TODO: use practical device params instead of mem_info_temp
-                mem_info_temp = {
-                    'v_off': 2,
-                    'v_on': -2,
-                    'G_off': 1.11e-9,
-                    'G_on': 4.36e-10,
-                    'alpha_off': 5,
-                    'alpha_on': 5,
-                    'k_off': 20.8,
-                    'k_on': -5.2,
-                    'P_off': 1.36,
-                    'P_on': 0.39,
-                    'delta_t': 30 * 1e-3,
-                }
                 variation_temp = Variation(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/variation.xlsx",
-                    mem_info_temp
+                    + "/memristordata/conductance.xlsx",
+                    mem_info
                 )
                 _, Poff_sigma, _, Pon_sigma = variation_temp.d2d_P_fitting()
                 mem_info.update(
@@ -266,15 +235,12 @@ class MemristorFitting(object):
                 pass
             elif not os.path.isfile(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/variation.xlsx"
+                    + "/memristordata/conductance.xlsx"
             ):
                 raise Exception("Error! Missing data files.\nFailed to update sigma_relative, sigma_absolute.")
             else:
                 print("Cycle to Cycle Variation calculating...")
-                if self.d2d_variation not in [1, 3]:
-                    sigma_relative, sigma_absolute = conductance_temp.c2c_fitting()
-                else:
-                    sigma_relative, sigma_absolute = variation_temp.c2c_fitting()
+                sigma_relative, sigma_absolute = variation_temp.c2c_fitting()
                 mem_info.update(
                     {
                         "sigma_relative": sigma_relative,
@@ -283,7 +249,7 @@ class MemristorFitting(object):
                 )
 
         # %% Post-deployment SAF
-        if self.stuck_at_fault in [1, 2]:
+        if self.stuck_at_fault in [1]:
             if None not in [SAF_delta]:
                 pass
             elif not os.path.isfile(
@@ -338,7 +304,8 @@ class MemristorFitting(object):
                 print("Aging Effect calculating...")
                 aging_cal = AgingEffect(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/aging_effect.xlsx"
+                    + "/memristordata/aging_effect.xlsx",
+                    mem_info
                 )
                 if self.aging_effect == 1:
                     Aging_k_off, Aging_k_on = aging_cal.fitting_equation1()
@@ -354,6 +321,12 @@ class MemristorFitting(object):
         print("\nEnd Memristor Fitting.")
         self.fitting_record = mem_info
 
+        with open('../../simbrain/Parameter_files/memristor_device_info.json', 'r') as f:
+            memristor_info_dict = json.load(f)
+        memristor_info_dict['mine'] = self.fitting_record
+        with open('../../simbrain/Parameter_files/memristor_device_info.json', 'w') as f:
+            json.dump(memristor_info_dict, f, indent=2)
+        # TODO: Use Parameter_files folder instead of root.
         with open('../../memristor_device_info.json', 'r') as f:
             memristor_info_dict = json.load(f)
         memristor_info_dict['mine'] = self.fitting_record
@@ -392,14 +365,14 @@ class MemristorFitting(object):
                 'voltage': V_write[0],
                 'cycle:': 2 * mem_info['delta_t'],
                 'duty ratio': 0.5,
-                'conductance': lut_conductance[0:best_states_num+1]
+                'conductance': lut_conductance[0:best_states_num + 1]
             }
         with open('../../simbrain/Parameter_files/memristor_lut.pkl', 'rb') as f:
             mem_lut = pickle.load(f)
         mem_lut['mine'] = mine_lut
         with open('../../simbrain/Parameter_files/memristor_lut.pkl', 'wb') as f:
             pickle.dump(mem_lut, f)
-        # TODO: use Parameter_files folder instead of root
+        # TODO: Use Parameter_files folder instead of root.
         with open('../../memristor_lut.pkl', 'rb') as f:
             mem_lut = pickle.load(f)
         mem_lut['mine'] = mine_lut
@@ -421,7 +394,7 @@ class MemristorFitting(object):
         for i in range(points - 1):
             if V_write[i + 1] > mem_info['v_off'] and V_write[i + 1] > 0:
                 delta_x = mem_info['k_off'] * (
-                            (V_write[i + 1] / mem_info['v_off'] - 1) ** mem_info['alpha_off']) * J1 * (
+                        (V_write[i + 1] / mem_info['v_off'] - 1) ** mem_info['alpha_off']) * J1 * (
                                   (1 - internal_state[i]) ** mem_info['P_off'])
                 internal_state[i + 1] = internal_state[i] + mem_info['delta_t'] * delta_x
             elif V_write[i + 1] < mem_info['v_on'] and V_write[i + 1] < 0:
