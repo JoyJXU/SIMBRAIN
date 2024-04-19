@@ -153,9 +153,15 @@ class ADC_Module(torch.nn.Module):
 
         if self.sim_params['hardware_estimation']:
             if self.ADC_rounding_function == 'floor':
-                self.ADC_module_power = ADC_Module_Power(sim_params=self.sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
-                self.ADC_module_area = ADC_Module_Area(sim_params=sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
-            else :
+                self.ADC_module_power = ADC_Module_Power(sim_params=self.sim_params,
+                                                         shape=self.shape,
+                                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict,
+                                                         memristor_info_dict=self.memristor_info_dict)
+                self.ADC_module_area = ADC_Module_Area(sim_params=sim_params,
+                                                       shape=self.shape,
+                                                       CMOS_tech_info_dict=self.CMOS_tech_info_dict,
+                                                       memristor_info_dict=self.memristor_info_dict)
+            else:
                 raise Exception("Only floor function ADC supports hardware estimation!")
 
 
