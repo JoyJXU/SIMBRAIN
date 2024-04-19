@@ -151,7 +151,7 @@ class ADC_Module(torch.nn.Module):
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.read_v_amp = self.memristor_info_dict[self.device_name]['v_read']
 
-        if self.hardware_estimation == True:
+        if self.sim_params['hardware_estimation']:
             if self.ADC_rounding_function == 'floor':
                 self.ADC_module_power = ADC_Module_Power(sim_params=self.sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
                 self.ADC_module_area = ADC_Module_Area(sim_params=sim_params, shape=self.shape, CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
@@ -172,31 +172,23 @@ class ADC_Module(torch.nn.Module):
 
 
     def ADC_read(self, mem_i_sequence, total_wire_resistance, high_cut_ratio) -> None:
-      # Shift add to get the output current
+        # Initial mem_i
         mem_i = torch.zeros(self.batch_size, mem_i_sequence.shape[2], self.shape[1], device=mem_i_sequence.device)
 
-        # Plan A: get max and min from mem_i_sequence
-        # mem_i_sequence_max, _ = mem_i_sequence.max(dim=-1)
-        #mem_i_sequence_max = mem_i_sequence_max.unsqueeze(-1).expand_as(mem_i_sequence)
-        # mem_i_sequence_min, _ = mem_i_sequence.min(dim=-1)
-        #mem_i_sequence_min = mem_i_sequence_min.unsqueeze(-1).expand_as(mem_i_sequence)
-
-        # self.mem_i_max_tmp = max(self.mem_i_max_tmp, float(torch.max(mem_i_sequence)))
-
-        # Plan B: calculate the real max and min
-        mem_i_sequence_min = torch.zeros_like(mem_i_sequence)
+        # calculate the theoretical max and min
         mem_i_max = high_cut_ratio * torch.sum(self.read_v_amp/(1/self.Goff + total_wire_resistance), dim=0)
-        mem_i_sequence_max = mem_i_max.unsqueeze(0).unsqueeze(1).unsqueeze(2).expand_as(mem_i_sequence)
-        mem_i_step = (mem_i_sequence_max - mem_i_sequence_min) / (2**self.ADC_precision)
-        mem_i_index = torch.where(mem_i_step!=0, (mem_i_sequence - mem_i_sequence_min) / mem_i_step, 0)
+        mem_i_min = 0
+        mem_i_step = (mem_i_max - mem_i_min) / (2**self.ADC_precision)
+        mem_i_index = (mem_i_sequence - mem_i_min) / mem_i_step
         if self.ADC_rounding_function == 'round':
             mem_i_index = torch.clamp(torch.floor(mem_i_index + 0.5), 0, 2**self.ADC_precision-1)
         elif self.ADC_rounding_function == 'floor':
             mem_i_index = torch.clamp(torch.floor(mem_i_index), 0, 2**self.ADC_precision-1)
         else:
             raise Exception("Only round and floor function are supported!")
-        mem_i_sequence_quantized = mem_i_index * mem_i_step + mem_i_sequence_min
+        mem_i_sequence_quantized = mem_i_index * mem_i_step + mem_i_min
 
+        # Shift add to get the output current
         for i in range(self.input_bit):
             mem_i += mem_i_sequence_quantized[i, :, :, :] * 2 ** i
 
