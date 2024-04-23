@@ -31,18 +31,18 @@ parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--input_bit", type=int, default=8)
-parser.add_argument("--hardware_estimation", type=bool, default=True)
 parser.add_argument("--ADC_precision", type=int, default=16)
-parser.add_argument("--ADC_setting", type=int, default=4) # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
-parser.add_argument("--ADC_rounding_function", type=str, default='floor') # floor or round
-parser.add_argument("--wire_width", type=int, default=10000)
+parser.add_argument("--ADC_setting", type=int, default=4)  # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
+parser.add_argument("--ADC_rounding_function", type=str, default='floor')  # floor or round
+parser.add_argument("--wire_width", type=int, default=200) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
 parser.add_argument("--CMOS_technode", type=int, default=32)
-parser.add_argument("--device_roadmap", type=str, default='HP') # HP or LP
+parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
+parser.add_argument("--hardware_estimation", type=int, default=False)
 args = parser.parse_args()
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -56,15 +56,14 @@ else:
 print("Running on Device = ", device)
 
 # Mem device setup
-mem_device = {'device_structure':args.memristor_structure, 'device_name': args.memristor_device,
-                 'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
-                 'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-                 'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 
-                 'input_bit': args.input_bit,'batch_interval': 1, 
-                 'CMOS_technode':args.CMOS_technode, 'ADC_precision':args.ADC_precision, 
-                 'ADC_setting':args.ADC_setting,'ADC_rounding_function':args.ADC_rounding_function,
-                 'device_roadmap':args.device_roadmap, 'temperature':args.temperature, 'hardware_estimation':args.hardware_estimation}
-
+sim_params = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
+              'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
+              'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
+              'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
+              'batch_interval': 1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
+              'ADC_setting': args.ADC_setting,'ADC_rounding_function': args.ADC_rounding_function,
+              'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
+              'hardware_estimation': args.hardware_estimation}
 
 # Dataset prepare
 print('==> Preparing data..')
@@ -81,11 +80,11 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 
 # Network Model
 print('==> Building memristor-based model..')
-net = mem_VGG('VGG16', mem_device=mem_device)
+net = mem_VGG('VGG16', mem_device=sim_params)
 net = net.to(device)
 
-if args.hardware_estimation == True:
-    # print power results
+# print area results
+if sim_params['hardware_estimation']:
     total_area = 0
     for layer in net.features.children():
         if isinstance(layer, Mem_Conv2d):
@@ -158,7 +157,7 @@ for test_cnt in range(args.rep):
     acc = 100.*correct/total
     print('Accuracy Results:' + str(acc))
 
-    if args.hardware_estimation == True:
+    if sim_params['hardware_estimation']:
         # print power results
         total_energy = 0
         average_power = 0
@@ -183,7 +182,7 @@ for test_cnt in range(args.rep):
             total_reset_energy += sim_power['reset_energy']
             total_energy += sim_power['total_energy']
             average_power += sim_power['average_power']
-    
+
         print("total_energy=" + str(total_energy))
         print("total_read_energy=" + str(total_read_energy))
         print("total_write_energy=" + str(total_write_energy))

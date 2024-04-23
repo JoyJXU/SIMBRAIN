@@ -5,6 +5,9 @@ from simbrain.periphcircuit import ADC_Module
 import json
 import pickle
 import torch
+import math
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 class Mapping(torch.nn.Module):
     # language=rst
@@ -26,7 +29,8 @@ class Mapping(torch.nn.Module):
         """
         super().__init__()
 
-        self.device_name = sim_params['device_name'] 
+        self.sim_params = sim_params
+        self.device_name = sim_params['device_name']
         self.device_structure = sim_params['device_structure']
         self.CMOS_technode = sim_params['CMOS_technode']
         self.device_roadmap = sim_params['device_roadmap']
@@ -50,17 +54,15 @@ class Mapping(torch.nn.Module):
 
         with open('../../memristor_device_info.json', 'r') as f:
             self.memristor_info_dict = json.load(f)
-        assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"  
-        self.vneg = self.memristor_info_dict[self.device_name]['vinput_neg']
-        self.vpos = self.memristor_info_dict[self.device_name]['vinput_pos']
+        assert self.device_name in self.memristor_info_dict.keys(), "Invalid Memristor Device!"
         self.Gon = self.memristor_info_dict[self.device_name]['G_on']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.v_read = self.memristor_info_dict[self.device_name]['v_read']
-        
+
         with open('../../CMOS_tech_info.json', 'r') as f:
             self.CMOS_tech_info_dict = json.load(f)
-        assert self.device_roadmap in self.CMOS_tech_info_dict.keys(), "Invalid Memristor Device!"  
-        assert str(self.CMOS_technode) in self.CMOS_tech_info_dict[self.device_roadmap].keys(), "Invalid Memristor Device!" 
+        assert self.device_roadmap in self.CMOS_tech_info_dict.keys(), "Invalid Memristor Device!"
+        assert str(self.CMOS_technode) in self.CMOS_tech_info_dict[self.device_roadmap].keys(), "Invalid Memristor Device!"
 
         self.trans_ratio = 1 / (self.Goff - self.Gon)
 
@@ -123,6 +125,10 @@ class STDPMapping(Mapping):
         self.register_buffer("mem_v_read", torch.Tensor())
         self.register_buffer("x", torch.Tensor())
         self.register_buffer("s", torch.Tensor())
+        self.vneg = 0
+        self.vpos = 0
+        self.trace_decay = 0
+
 
     def set_batch_size_stdp(self, batch_size, learning) -> None:
         self.learning = learning
@@ -130,7 +136,8 @@ class STDPMapping(Mapping):
         self.mem_array.set_batch_size(batch_size=self.batch_size)
         self.DAC_module.set_batch_size(batch_size=batch_size)
         self.ADC_module.set_batch_size(batch_size=batch_size)
-        self.mem_v_read = torch.zeros(batch_size, 1, self.shape[0], device=self.mem_v_read.device)
+
+        self.mem_v_read = torch.zeros(1, batch_size, 1, self.shape[0], device=self.mem_v_read.device)
         self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
         self.s = torch.zeros(batch_size, *self.shape, device=self.s.device)
 
@@ -141,6 +148,99 @@ class STDPMapping(Mapping):
             self.mem_t.fill_(torch.min(self.mem_t_batch_update[:]))
 
         self.mem_array.mem_t = self.mem_t
+
+
+    def voltage_generation(self, trace_decay, plot) -> None:
+        # Simulation Setup
+        points = 150
+        spike = torch.zeros(points)
+        ori_trace = torch.zeros(points)
+        mem_x = torch.zeros(points)
+
+        # STDP Setup
+        spike[10] = 1
+
+        # Original Trace
+        for i in range(len(spike) - 1):
+            ori_trace[i + 1] = ori_trace[i] * trace_decay + spike[i]
+
+            if ori_trace[i + 1] > 1:
+                ori_trace[i + 1] = 1
+
+        # Memristor-based Trace
+        test_array = MemristorArray(sim_params=self.sim_params, shape=(1, 1), memristor_info_dict=self.memristor_info_dict)
+        test_array.set_batch_size(batch_size=1)
+        mem_info = self.memristor_info_dict[self.device_name]
+
+        dt = mem_info['delta_t'] * mem_info['duty_ratio']
+        k_off = mem_info['k_off']
+        v_off = mem_info['v_off']
+        alpha_off = mem_info['alpha_off']
+        v_pos = v_off * (math.pow(1 / (dt * k_off), 1.0 / alpha_off) + 1)
+
+        if mem_info['P_on'] == 1:
+            k_on = mem_info['k_on']
+            v_on = mem_info['v_on']
+            alpha_on = mem_info['alpha_on']
+            v_neg = v_on * (math.pow((trace_decay - 1) / (dt * k_on), 1.0 / alpha_on) + 1)
+        else:
+            # Enable batch processing for searching the best v_neg
+            v_on = mem_info['v_on']
+            n_test = 500
+            v_tensor = torch.arange(v_on, v_on - 0.01 * n_test, -0.01)
+
+            test_array.set_batch_size(batch_size=n_test)
+            test_x = torch.zeros(points, n_test, 1, 1)
+
+            for t in range(points - 1):
+                mem_s = torch.tensor(spike[t], dtype=torch.float64)
+                mem_v = v_tensor if mem_s == 0 else torch.tensor(v_pos).expand(n_test)
+
+                mem_c = test_array.memristor_write(mem_v=mem_v.unsqueeze(1).unsqueeze(2))
+                test_x[t + 1] = (mem_c - self.Gon) * self.trans_ratio
+
+            # Compare results
+            golden_x = ori_trace.reshape(points, 1, 1, 1).expand(-1, n_test, -1, -1)
+            mse = torch.zeros(n_test)
+            for i in range(n_test):
+                mse[i] = F.mse_loss(test_x[:, i, :, :], golden_x[:, i, :, :])
+            min_mse, min_index = torch.min(mse, 0)
+            v_neg = float(v_tensor[min_index])
+
+        if plot:
+            blue = (47 / 255, 130 / 255, 189 / 255)
+            green = (98 / 255, 149 / 255, 61 / 255)
+
+            plt.figure(figsize=(13, 4.5))
+            grid = plt.GridSpec(14, 17, wspace=0.5, hspace=0.5)
+            ax = plt.subplot(grid[0:14, 0:17])
+
+            test_array.set_batch_size(batch_size=1)
+            for t in range(points - 1):
+                mem_s = torch.tensor(spike[t], dtype=torch.float64)
+                mem_v = mem_s.unsqueeze(0).unsqueeze(0).unsqueeze(1)
+                mem_v[mem_v == 0] = v_neg
+                mem_v[mem_v == 1] = v_pos
+
+                mem_c = test_array.memristor_write(mem_v=mem_v)
+
+                # mem to nn
+                temp_x = (mem_c - self.Gon) * self.trans_ratio
+                mem_x[t+1] = temp_x.squeeze()
+
+            # Plot the original trace and memristor trace
+            plot_x = range(points)
+            # Original
+            ax.plot(ori_trace, color=blue, label='Original Trace')
+            ax.plot(mem_x, color=green, label='Memristor Trace')
+            ax.legend(frameon=False)
+
+            plt.tight_layout()
+            plt.savefig('voltage_generation.png', dpi=300, bbox_inches='tight')
+            plt.show()
+
+        self.vneg = v_neg
+        self.vpos = v_pos
 
 
     def mapping_write_stdp(self, s):
@@ -183,14 +283,16 @@ class STDPMapping(Mapping):
         s_sum = torch.unsqueeze(s_sum, 1)
 
         self.mem_v_read.zero_()
-        self.mem_v_read[s_sum.bool()] = self.v_read
-        
+        self.mem_v_read[0, s_sum.bool()] = 1
+
         self.mem_v_read = self.DAC_module.DAC_read(mem_v=self.mem_v_read, sgn=None)
- 
+
         mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read)
 
-        mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i.unsqueeze(0), total_wire_resistance=self.mem_array.total_wire_resistance, high_cut_ratio=1)
-        
+        mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i,
+                                             total_wire_resistance=self.mem_array.total_wire_resistance,
+                                             high_cut_ratio=1)
+
         # current to trace
         self.mem_x_read = (mem_i/self.v_read - self.Gon) * self.trans_ratio
 
@@ -277,8 +379,8 @@ class MimoMapping(Mapping):
                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
-        
-        
+
+
         self.batch_interval = sim_params['batch_interval']
 
 
@@ -302,7 +404,7 @@ class MimoMapping(Mapping):
             self.ADC_module_neg.set_batch_size(batch_size=batch_size)
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
-            
+
         self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
 
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
@@ -319,12 +421,13 @@ class MimoMapping(Mapping):
         self.mem_v.fill_(-100)  # TODO: check the reset voltage
         # Adopt large negative pulses to reset the memristor array
         # self.mem_array.memristor_reset(mem_v=self.mem_v)
-        # self.mem_pos_pos.memristor_reset(mem_v=self.mem_v)
-        # self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
-        # self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
-        # self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
-        # self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
-        # self.DAC_module_neg.DAC_reset(mem_v=self.mem_v)
+        self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
+        self.DAC_module_neg.DAC_reset(mem_v=self.mem_v)
+
+        self.mem_pos_pos.memristor_reset(mem_v=self.mem_v)
+        self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
+        self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
+        self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
 
         total_wr_cycle = self.memristor_luts[self.device_name]['total_no']
         write_voltage = self.memristor_luts[self.device_name]['voltage']
@@ -335,12 +438,12 @@ class MimoMapping(Mapping):
         # Vector to Pulse Serial
         self.write_pulse_no = self.m2v(matrix_pos)
         # Matrix to memristor
-        # Memristor programming using multiple identical pulses (up to 400)
         DAC_write_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
         self.DAC_module_pos.DAC_write(mem_v=DAC_write_v, mem_v_amp=write_voltage)
+        # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
-            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)           
+            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)
             self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
 
         # Negative weight write
@@ -348,9 +451,9 @@ class MimoMapping(Mapping):
         # Vector to Pulse Serial
         self.write_pulse_no = self.m2v(matrix_neg)
         # Matrix to memristor
-        # Memristor programming using multiple identical pulses (up to 400)
         DAC_write_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
         self.DAC_module_neg.DAC_write(mem_v=DAC_write_v, mem_v_amp=write_voltage)
+        # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
             self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
@@ -358,16 +461,15 @@ class MimoMapping(Mapping):
 
 
     def mapping_read_mimo(self, target_v):
-        
         v_read_pos = self.DAC_module_pos.DAC_read(mem_v=target_v, sgn='pos')
         v_read_neg = self.DAC_module_neg.DAC_read(mem_v=target_v, sgn='neg')
- 
+
         # memristor sequential read
         mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
-        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg) 
+        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
         mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
-        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)   
-        
+        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
+
         if self.ADC_setting == 4:
             mem_i_pos_pos = self.ADC_module_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance, high_cut_ratio=4/self.ADC_setting)
             mem_i_neg_pos = self.ADC_module_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance, high_cut_ratio=4/self.ADC_setting)
@@ -382,7 +484,7 @@ class MimoMapping(Mapping):
             mem_i = mem_i_pos - mem_i_neg
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
-            
+
         # Current to results
         self.mem_x_read = self.trans_ratio * mem_i / (2 ** self.input_bit - 1) / self.v_read
 
@@ -436,27 +538,26 @@ class MimoMapping(Mapping):
             self.ADC_module_neg.ADC_energy_calculation(mem_t=self.mem_pos_neg.mem_t)
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
-            
-            
+
         self.sim_power = {key: self.mem_pos_pos.power.sim_power[key] + self.mem_neg_pos.power.sim_power[key] +
-                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key] 
+                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key] if key != 'time'
+                          else self.mem_pos_pos.power.sim_power[key]
                           for key in self.mem_pos_pos.power.sim_power.keys()}
-        
-        self.sim_DAC_power = {key: self.DAC_module_pos.DAC_module_power.sim_power[key] + self.DAC_module_neg.DAC_module_power.sim_power[key] 
-                          for key in self.DAC_module_pos.DAC_module_power.sim_power.keys()} 
-        
+
+        self.sim_DAC_power = {key: self.DAC_module_pos.DAC_module_power.sim_power[key] + self.DAC_module_neg.DAC_module_power.sim_power[key]
+                          for key in self.DAC_module_pos.DAC_module_power.sim_power.keys()}
+
         if self.ADC_setting == 4:
             self.sim_ADC_power = {key: self.ADC_module_pos_pos.ADC_module_power.sim_power[key] + self.ADC_module_neg_pos.ADC_module_power.sim_power[key] +
                                    self.ADC_module_pos_neg.ADC_module_power.sim_power[key] + self.ADC_module_neg_neg.ADC_module_power.sim_power[key]
                               for key in self.ADC_module_pos_pos.ADC_module_power.sim_power.keys()}
         elif self.ADC_setting == 2:
-            self.sim_ADC_power = {key: self.ADC_module_pos.ADC_module_power.sim_power[key] + self.ADC_module_neg.ADC_module_power.sim_power[key] 
-                              for key in self.ADC_module_pos.ADC_module_power.sim_power.keys()}    
+            self.sim_ADC_power = {key: self.ADC_module_pos.ADC_module_power.sim_power[key] + self.ADC_module_neg.ADC_module_power.sim_power[key]
+                              for key in self.ADC_module_pos.ADC_module_power.sim_power.keys()}
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
 
         self.sim_periph_power = {**self.sim_DAC_power, **self.sim_ADC_power}
-
 
 
     def total_area_calculation(self) -> None:
@@ -465,31 +566,32 @@ class MimoMapping(Mapping):
         Calculate total area for memristor-based architecture. Called when power is reported.
         """
         self.sim_area = {'mem_area': self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area +
-                               self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area}
-        
+                                     self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area}
+
         sim_switch_matrix_row_area_pos, sim_switch_matrix_col_area_pos = self.DAC_module_pos.DAC_module_area.DAC_module_cal_area()
         sim_switch_matrix_row_area_neg, sim_switch_matrix_col_area_neg = self.DAC_module_neg.DAC_module_area.DAC_module_cal_area()
         sim_switch_matrix_row_area = sim_switch_matrix_row_area_neg + sim_switch_matrix_row_area_pos
         sim_switch_matrix_col_area = sim_switch_matrix_col_area_neg + sim_switch_matrix_col_area_pos
-        
+
         if self.ADC_setting == 4:
             sim_shiftadd_area_pos_pos, sim_SarADC_area_pos_pos = self.ADC_module_pos_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()   
-            sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()  
-            sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()  
+            sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()
+            sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()
+            sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()
             sim_SarADC_area = sim_SarADC_area_neg_neg + sim_SarADC_area_neg_pos + sim_SarADC_area_pos_neg + sim_SarADC_area_pos_pos
             sim_shiftadd_area = sim_shiftadd_area_neg_neg + sim_shiftadd_area_neg_pos + sim_shiftadd_area_pos_neg + sim_shiftadd_area_pos_pos
         elif self.ADC_setting == 2:
             sim_shiftadd_area_pos, sim_SarADC_area_pos = self.ADC_module_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg, sim_SarADC_area_neg = self.ADC_module_neg.ADC_module_area.ADC_module_cal_area()   
+            sim_shiftadd_area_neg, sim_SarADC_area_neg = self.ADC_module_neg.ADC_module_area.ADC_module_cal_area()
             sim_shiftadd_area = sim_shiftadd_area_neg + sim_shiftadd_area_pos
             sim_SarADC_area = sim_SarADC_area_neg + sim_SarADC_area_pos
         else:
-            raise Exception("Only 2-set and 4-set ADC are supported!")     
-        
-        self.sim_DAC_area = {'sim_switch_matrix_row_area':sim_switch_matrix_row_area, 'sim_switch_matrix_col_area':sim_switch_matrix_col_area,
-                             'sim_shiftadd_area':sim_shiftadd_area,'sim_SarADC_area':sim_SarADC_area,
-                             'sim_total_periph_area':sim_switch_matrix_row_area+sim_switch_matrix_col_area+sim_shiftadd_area+sim_SarADC_area}
+            raise Exception("Only 2-set and 4-set ADC are supported!")
+
+        self.sim_DAC_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
+                             'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
+                             'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
+                             'sim_total_periph_area': sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area}
 
 
 class MLPMapping(Mapping):
@@ -535,7 +637,6 @@ class MLPMapping(Mapping):
         self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
 
-        
         self.DAC_module_pos = DAC_Module(sim_params=sim_params, shape=self.shape,
                                     CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
         self.DAC_module_neg = DAC_Module(sim_params=sim_params, shape=self.shape,
@@ -557,8 +658,7 @@ class MLPMapping(Mapping):
                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
-        
-        
+
         self.batch_interval = sim_params['batch_interval']
 
 
@@ -586,7 +686,6 @@ class MLPMapping(Mapping):
         self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.write_pulse_no.device)
 
         self.norm_ratio = torch.zeros(batch_size, device=self.norm_ratio.device)
-        # TODO: For MLP, batch_interval consist of reset + write + read?
         # self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
@@ -601,12 +700,13 @@ class MLPMapping(Mapping):
         # Memristor reset first
         self.mem_v.fill_(-100)  # TODO: check the reset voltage
         # Adopt large negative pulses to reset the memristor array
+        self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
+        self.DAC_module_neg.DAC_reset(mem_v=self.mem_v)
+
         self.mem_pos_pos.memristor_reset(mem_v=self.mem_v)
         self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
         self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
         self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
-        self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
-        self.DAC_module_neg.DAC_reset(mem_v=self.mem_v)
 
         # Transform target_x to [0, 1]
         self.norm_ratio = torch.max(torch.abs(target_x.reshape(target_x.shape[0], -1)), dim=1)[0]
@@ -619,12 +719,12 @@ class MLPMapping(Mapping):
         # Vector to Pulse Serial
         self.write_pulse_no = self.m2v(matrix_pos / self.norm_ratio)
         # Matrix to memristor
-        # Memristor programming using multiple identical pulses (up to 400)
         DAC_write_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
         self.DAC_module_pos.DAC_write(mem_v=DAC_write_v, mem_v_amp=write_voltage)
+        # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
-            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)           
+            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)
             self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
 
         # Negative weight write
@@ -632,9 +732,9 @@ class MLPMapping(Mapping):
         # Vector to Pulse Serial
         self.write_pulse_no = self.m2v(matrix_neg / self.norm_ratio)
         # Matrix to memristor
-        # Memristor programming using multiple identical pulses (up to 400)
         DAC_write_v = (self.write_pulse_no < (counter * total_wr_cycle)) * write_voltage
         self.DAC_module_neg.DAC_write(mem_v=DAC_write_v, mem_v_amp=write_voltage)
+        # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
             self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
@@ -648,13 +748,13 @@ class MLPMapping(Mapping):
         mem_v = (target_v / read_norm.unsqueeze(1)).unsqueeze(0)
         v_read_pos = self.DAC_module_pos.DAC_read(mem_v=mem_v, sgn='pos')
         v_read_neg = self.DAC_module_neg.DAC_read(mem_v=mem_v, sgn='neg')
- 
+
         # memristor sequential read
         mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
-        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg) 
+        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
         mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
-        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)   
-        
+        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
+
         if self.ADC_setting == 4:
             mem_i_pos_pos = self.ADC_module_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance, high_cut_ratio=1/self.ADC_setting)
             mem_i_neg_pos = self.ADC_module_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance, high_cut_ratio=1/self.ADC_setting)
@@ -668,7 +768,7 @@ class MLPMapping(Mapping):
             mem_i_neg = self.ADC_module_pos.ADC_read(mem_i_sequence_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance, high_cut_ratio=1/self.ADC_setting)
             mem_i = mem_i_pos - mem_i_neg
         else:
-            raise Exception("Only 2-set and 4-set ADC are supported!")            
+            raise Exception("Only 2-set and 4-set ADC are supported!")
         # Current to results
         self.mem_x_read = read_norm.unsqueeze(1) / (
                     2 ** self.input_bit - 1) * self.norm_ratio * self.trans_ratio * mem_i / self.v_read
@@ -723,27 +823,26 @@ class MLPMapping(Mapping):
             self.ADC_module_neg.ADC_energy_calculation(mem_t=self.mem_pos_neg.mem_t)
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
-            
-            
+
+
         self.sim_power = {key: self.mem_pos_pos.power.sim_power[key] + self.mem_neg_pos.power.sim_power[key] +
-                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key] 
+                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key] if key != 'time'
+                          else self.mem_pos_pos.power.sim_power[key]
                           for key in self.mem_pos_pos.power.sim_power.keys()}
-        
-        self.sim_DAC_power = {key: self.DAC_module_pos.DAC_module_power.sim_power[key] + self.DAC_module_neg.DAC_module_power.sim_power[key] 
-                          for key in self.DAC_module_pos.DAC_module_power.sim_power.keys()} 
+
+        self.sim_DAC_power = {key: self.DAC_module_pos.DAC_module_power.sim_power[key] + self.DAC_module_neg.DAC_module_power.sim_power[key]
+                          for key in self.DAC_module_pos.DAC_module_power.sim_power.keys()}
         if self.ADC_setting == 4:
             self.sim_ADC_power = {key: self.ADC_module_pos_pos.ADC_module_power.sim_power[key] + self.ADC_module_neg_pos.ADC_module_power.sim_power[key] +
                                    self.ADC_module_pos_neg.ADC_module_power.sim_power[key] + self.ADC_module_neg_neg.ADC_module_power.sim_power[key]
                               for key in self.ADC_module_pos_pos.ADC_module_power.sim_power.keys()}
         elif self.ADC_setting == 2:
-            self.sim_ADC_power = {key: self.ADC_module_pos.ADC_module_power.sim_power[key] + self.ADC_module_neg.ADC_module_power.sim_power[key] 
-                              for key in self.ADC_module_pos.ADC_module_power.sim_power.keys()}    
+            self.sim_ADC_power = {key: self.ADC_module_pos.ADC_module_power.sim_power[key] + self.ADC_module_neg.ADC_module_power.sim_power[key]
+                              for key in self.ADC_module_pos.ADC_module_power.sim_power.keys()}
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
 
         self.sim_periph_power = {**self.sim_DAC_power, **self.sim_ADC_power}
-
-        #print("{:.4e}".format(self.sim_periph_power['SarADC_energy']))
 
 
     def total_area_calculation(self) -> None:
@@ -753,30 +852,31 @@ class MLPMapping(Mapping):
         """
         self.sim_area = {'mem_area': self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area +
                                self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area}
-        
+
         sim_switch_matrix_row_area_pos, sim_switch_matrix_col_area_pos = self.DAC_module_pos.DAC_module_area.DAC_module_cal_area()
         sim_switch_matrix_row_area_neg, sim_switch_matrix_col_area_neg = self.DAC_module_neg.DAC_module_area.DAC_module_cal_area()
         sim_switch_matrix_row_area = sim_switch_matrix_row_area_neg + sim_switch_matrix_row_area_pos
         sim_switch_matrix_col_area = sim_switch_matrix_col_area_neg + sim_switch_matrix_col_area_pos
-        
+
         if self.ADC_setting == 4:
             sim_shiftadd_area_pos_pos, sim_SarADC_area_pos_pos = self.ADC_module_pos_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()   
-            sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()  
-            sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()  
+            sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()
+            sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()
+            sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()
             sim_SarADC_area = sim_SarADC_area_neg_neg + sim_SarADC_area_neg_pos + sim_SarADC_area_pos_neg + sim_SarADC_area_pos_pos
             sim_shiftadd_area = sim_shiftadd_area_neg_neg + sim_shiftadd_area_neg_pos + sim_shiftadd_area_pos_neg + sim_shiftadd_area_pos_pos
         elif self.ADC_setting == 2:
             sim_shiftadd_area_pos, sim_SarADC_area_pos = self.ADC_module_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg, sim_SarADC_area_neg = self.ADC_module_neg.ADC_module_area.ADC_module_cal_area()   
+            sim_shiftadd_area_neg, sim_SarADC_area_neg = self.ADC_module_neg.ADC_module_area.ADC_module_cal_area()
             sim_shiftadd_area = sim_shiftadd_area_neg + sim_shiftadd_area_pos
             sim_SarADC_area = sim_SarADC_area_neg + sim_SarADC_area_pos
         else:
-            raise Exception("Only 2-set and 4-set ADC are supported!")     
-        
-        self.sim_DAC_area = {'sim_switch_matrix_row_area':sim_switch_matrix_row_area, 'sim_switch_matrix_col_area':sim_switch_matrix_col_area,
-                             'sim_shiftadd_area':sim_shiftadd_area,'sim_SarADC_area':sim_SarADC_area,
-                             'sim_total_periph_area':sim_switch_matrix_row_area+sim_switch_matrix_col_area+sim_shiftadd_area+sim_SarADC_area}
+            raise Exception("Only 2-set and 4-set ADC are supported!")
+
+        self.sim_DAC_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
+                             'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
+                             'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
+                             'sim_total_periph_area': sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area}
 
 
 class CNNMapping(Mapping):
@@ -786,10 +886,10 @@ class CNNMapping(Mapping):
     """
 
     def __init__(
-            self,
-            sim_params: dict = {},
-            shape: Optional[Iterable[int]] = None,
-            **kwargs,
+        self,
+        sim_params: dict = {},
+        shape: Optional[Iterable[int]] = None,
+        **kwargs,
     ) -> None:
         # language=rst
         """
@@ -821,8 +921,7 @@ class CNNMapping(Mapping):
         # Corssbar for negative input and negative weight
         self.mem_neg_neg = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
-        
-        
+
         self.DAC_module_pos = DAC_Module(sim_params=sim_params, shape=self.shape,
                                     CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
         self.DAC_module_neg = DAC_Module(sim_params=sim_params, shape=self.shape,
@@ -839,7 +938,6 @@ class CNNMapping(Mapping):
                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
         else:
             raise Exception("Only 4-set ADC are supported!")
-        
 
         self.batch_interval = sim_params['batch_interval']
 
@@ -849,7 +947,7 @@ class CNNMapping(Mapping):
         self.mem_neg_pos.set_batch_size(batch_size=batch_size)
         self.mem_pos_neg.set_batch_size(batch_size=batch_size)
         self.mem_neg_neg.set_batch_size(batch_size=batch_size)
-        
+
         self.DAC_module_pos.set_batch_size(batch_size=batch_size)
         self.DAC_module_neg.set_batch_size(batch_size=batch_size)
 
@@ -877,12 +975,13 @@ class CNNMapping(Mapping):
         # Memristor reset first
         self.mem_v.fill_(-100)  # TODO: check the reset voltage
         # Adopt large negative pulses to reset the memristor array
-        # self.mem_pos_pos.memristor_reset(mem_v=self.mem_v)
-        # self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
-        # self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
-        # self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
-        # self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
-        # self.DAC_module_neg.DAC_reset(mem_v=self.mem_v)
+        self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
+        self.DAC_module_neg.DAC_reset(mem_v=self.mem_v)
+
+        self.mem_pos_pos.memristor_reset(mem_v=self.mem_v)
+        self.mem_neg_pos.memristor_reset(mem_v=self.mem_v)
+        self.mem_pos_neg.memristor_reset(mem_v=self.mem_v)
+        self.mem_neg_neg.memristor_reset(mem_v=self.mem_v)
 
         # Transform target_x to [0, 1]
         self.norm_ratio_pos = torch.max(torch.relu(target_x).reshape(target_x.shape[0], -1), dim=1)[0]
@@ -896,12 +995,12 @@ class CNNMapping(Mapping):
         # Vector to Pulse Serial
         write_pulse_no = self.m2v(matrix_pos / self.norm_ratio_pos)
         # Matrix to memristor
-        # Memristor programming using multiple identical pulses (up to 400)
         DAC_write_v = (write_pulse_no < (counter * total_wr_cycle)) * write_voltage
         self.DAC_module_pos.DAC_write(mem_v=DAC_write_v, mem_v_amp=write_voltage)
+        # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
-            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)          
+            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)
             self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
 
         # Negative weight write
@@ -909,9 +1008,9 @@ class CNNMapping(Mapping):
         # Vector to Pulse Serial
         write_pulse_no = self.m2v(matrix_neg / self.norm_ratio_neg)
         # Matrix to memristor
-        # Memristor programming using multiple identical pulses (up to 400)
         DAC_write_v = (write_pulse_no < (counter * total_wr_cycle)) * write_voltage
         self.DAC_module_neg.DAC_write(mem_v=DAC_write_v, mem_v_amp=write_voltage)
+        # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
             self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
@@ -925,27 +1024,26 @@ class CNNMapping(Mapping):
         mem_v = target_v / read_norm.unsqueeze(0).unsqueeze(2)
         v_read_pos = self.DAC_module_pos.DAC_read(mem_v=mem_v, sgn='pos')
         v_read_neg = self.DAC_module_neg.DAC_read(mem_v=mem_v, sgn='neg')
- 
+
         # memristor sequential read
         mem_i_sequence_pos_pos = self.mem_pos_pos.memristor_read(mem_v=v_read_pos)
-        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg) 
+        mem_i_sequence_neg_pos = self.mem_neg_pos.memristor_read(mem_v=v_read_neg)
         mem_i_sequence_pos_neg = self.mem_pos_neg.memristor_read(mem_v=v_read_pos)
-        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)   
-        
+        mem_i_sequence_neg_neg = self.mem_neg_neg.memristor_read(mem_v=v_read_neg)
+
         if self.ADC_setting == 4:
             mem_i_pos_pos = self.ADC_module_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, total_wire_resistance=self.mem_pos_pos.total_wire_resistance, high_cut_ratio=2/self.ADC_setting)
             mem_i_neg_pos = self.ADC_module_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, total_wire_resistance=self.mem_neg_pos.total_wire_resistance, high_cut_ratio=2/self.ADC_setting)
             mem_i_pos_neg = self.ADC_module_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, total_wire_resistance=self.mem_pos_neg.total_wire_resistance, high_cut_ratio=2/self.ADC_setting)
             mem_i_neg_neg = self.ADC_module_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, total_wire_resistance=self.mem_neg_neg.total_wire_resistance, high_cut_ratio=2/self.ADC_setting)
-            mem_i_pos = mem_i_pos_pos - mem_i_neg_pos 
+            mem_i_pos = mem_i_pos_pos - mem_i_neg_pos
             mem_i_neg = mem_i_pos_neg - mem_i_neg_neg
         else:
-            raise Exception("Only 4-set ADC are supported!")   
-        
-        mem_i_pos = mem_i_pos_pos - mem_i_neg_pos 
-        mem_i_neg = mem_i_pos_neg - mem_i_neg_neg  
+            raise Exception("Only 4-set ADC are supported!")
 
-        
+        mem_i_pos = mem_i_pos_pos - mem_i_neg_pos
+        mem_i_neg = mem_i_pos_neg - mem_i_neg_neg
+
         # Current to results
         self.mem_x_read = self.norm_ratio_pos * self.trans_ratio * (
                     read_norm.unsqueeze(1) / (2 ** self.input_bit - 1) / self.v_read * mem_i_pos - (
@@ -1009,23 +1107,22 @@ class CNNMapping(Mapping):
             self.ADC_module_neg_neg.ADC_energy_calculation(mem_t=self.mem_neg_neg.mem_t)
         else:
             raise Exception("Only 4-set ADC are supported!")
-            
-            
+
         self.sim_power = {key: self.mem_pos_pos.power.sim_power[key] + self.mem_neg_pos.power.sim_power[key] +
-                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key] 
+                               self.mem_pos_neg.power.sim_power[key] + self.mem_neg_neg.power.sim_power[key] if key != 'time'
+                          else self.mem_pos_pos.power.sim_power[key]
                           for key in self.mem_pos_pos.power.sim_power.keys()}
-        
-        self.sim_DAC_power = {key: self.DAC_module_pos.DAC_module_power.sim_power[key] + self.DAC_module_neg.DAC_module_power.sim_power[key] 
-                          for key in self.DAC_module_pos.DAC_module_power.sim_power.keys()} 
+
+        self.sim_DAC_power = {key: self.DAC_module_pos.DAC_module_power.sim_power[key] + self.DAC_module_neg.DAC_module_power.sim_power[key]
+                          for key in self.DAC_module_pos.DAC_module_power.sim_power.keys()}
         if self.ADC_setting == 4:
             self.sim_ADC_power = {key: self.ADC_module_pos_pos.ADC_module_power.sim_power[key] + self.ADC_module_neg_pos.ADC_module_power.sim_power[key] +
                                    self.ADC_module_pos_neg.ADC_module_power.sim_power[key] + self.ADC_module_neg_neg.ADC_module_power.sim_power[key]
-                              for key in self.ADC_module_pos_pos.ADC_module_power.sim_power.keys()}  
+                              for key in self.ADC_module_pos_pos.ADC_module_power.sim_power.keys()}
         else:
             raise Exception("Only 4-set ADC are supported!")
 
         self.sim_periph_power = {**self.sim_DAC_power, **self.sim_ADC_power}
-
 
 
     def total_area_calculation(self) -> None:
@@ -1040,18 +1137,20 @@ class CNNMapping(Mapping):
         sim_switch_matrix_row_area_neg, sim_switch_matrix_col_area_neg = self.DAC_module_neg.DAC_module_area.DAC_module_cal_area()
         sim_switch_matrix_row_area = sim_switch_matrix_row_area_neg + sim_switch_matrix_row_area_pos
         sim_switch_matrix_col_area = sim_switch_matrix_col_area_neg + sim_switch_matrix_col_area_pos
-        
+
         if self.ADC_setting == 4:
             sim_shiftadd_area_pos_pos, sim_SarADC_area_pos_pos = self.ADC_module_pos_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()   
-            sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()  
-            sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()  
+            sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()
+            sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()
+            sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()
             sim_SarADC_area = sim_SarADC_area_neg_neg + sim_SarADC_area_neg_pos + sim_SarADC_area_pos_neg + sim_SarADC_area_pos_pos
             sim_shiftadd_area = sim_shiftadd_area_neg_neg + sim_shiftadd_area_neg_pos + sim_shiftadd_area_pos_neg + sim_shiftadd_area_pos_pos
         else:
-            raise Exception("Only 4-set ADC are supported!")     
-        
-        self.sim_DAC_area = {'sim_switch_matrix_row_area':sim_switch_matrix_row_area, 'sim_switch_matrix_col_area':sim_switch_matrix_col_area,
-                             'sim_shiftadd_area':sim_shiftadd_area,'sim_SarADC_area':sim_SarADC_area,
-                             'sim_total_periph_area':sim_switch_matrix_row_area+sim_switch_matrix_col_area+sim_shiftadd_area+sim_SarADC_area}
+            raise Exception("Only 4-set ADC are supported!")
+
+        self.sim_DAC_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
+                             'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
+                             'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
+                             'sim_total_periph_area': sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area}
+
 
