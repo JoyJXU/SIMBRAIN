@@ -69,7 +69,7 @@ def train(epoch):
                 layer.mem_update()
         if isinstance(net.classifier, Mem_Linear):
             if args.stuck_at_fault == True:
-                layer.crossbar.update_SAF_mask()
+                net.classifier.crossbar.update_SAF_mask()
             net.classifier.mem_update()
 
         train_loss += loss.item()
