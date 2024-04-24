@@ -85,6 +85,8 @@ print('==> Write Memristor..')
 start_time = time.time()
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
+        if args.stuck_at_fault == True:
+            layer.crossbar.update_SAF_mask()
         layer.mem_update()
 end_time = time.time()
 exe_time = end_time - start_time

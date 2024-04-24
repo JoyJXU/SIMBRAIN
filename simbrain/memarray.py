@@ -135,8 +135,8 @@ class MemristorArray(torch.nn.Module):
             self.Gon_d2d = torch.zeros(*self.shape, device=self.Gon_d2d.device)
             self.Goff_d2d = torch.zeros(*self.shape, device=self.Goff_d2d.device)
             # Add d2d variation
-            self.Gon_d2d.normal_(mean=G_on, std=Gon_sigma)
-            self.Goff_d2d.normal_(mean=G_off, std=Goff_sigma)
+            self.Gon_d2d.normal_(mean=G_on, std=Gon_sigma*G_on)
+            self.Goff_d2d.normal_(mean=G_off, std=Goff_sigma*G_off)
             # Clipping
             self.Gon_d2d = torch.clamp(self.Gon_d2d, min=0)
             self.Goff_d2d = torch.clamp(self.Goff_d2d, min=0)
@@ -155,8 +155,8 @@ class MemristorArray(torch.nn.Module):
             self.Pon_d2d = torch.zeros(*self.shape, device=self.Pon_d2d.device)
             self.Poff_d2d = torch.zeros(*self.shape, device=self.Poff_d2d.device)
             # Add d2d variation
-            self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma)
-            self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma)
+            self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma*P_on)
+            self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma*P_off)
             # Clipping
             self.Pon_d2d = torch.clamp(self.Pon_d2d, min=0)
             self.Poff_d2d = torch.clamp(self.Poff_d2d, min=0)

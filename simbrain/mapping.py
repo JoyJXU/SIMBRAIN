@@ -85,10 +85,7 @@ class Mapping(torch.nn.Module):
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.mem_x_read = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_x_read.device)
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
-       
-
-    def update_SAF_mask(self) -> None:
-        self.mem_array.update_SAF_mask()
+      
 
 
 class STDPMapping(Mapping):
@@ -314,6 +311,9 @@ class STDPMapping(Mapping):
 
     def mem_t_update(self) -> None:
         self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
+        
+    def update_SAF_mask(self) -> None:
+        self.mem_array.update_SAF_mask()
 
 
 class MimoMapping(Mapping):
@@ -514,7 +514,12 @@ class MimoMapping(Mapping):
         self.mem_neg_pos.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_pos_neg.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_neg_neg.mem_t += self.batch_interval * (self.batch_size - 1)
-
+        
+    def update_SAF_mask(self) -> None:
+        self.mem_pos_pos.update_SAF_mask()
+        self.mem_pos_neg.update_SAF_mask()
+        self.mem_neg_pos.update_SAF_mask()
+        self.mem_neg_neg.update_SAF_mask()
 
     def total_energy_calculation(self) -> None:
         # language=rst
@@ -800,7 +805,12 @@ class MLPMapping(Mapping):
         self.mem_pos_neg.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_neg_neg.mem_t += self.batch_interval * (self.batch_size - 1)
 
-
+    def update_SAF_mask(self) -> None:
+        self.mem_pos_pos.update_SAF_mask()
+        self.mem_pos_neg.update_SAF_mask()
+        self.mem_neg_pos.update_SAF_mask()
+        self.mem_neg_neg.update_SAF_mask()
+        
     def total_energy_calculation(self) -> None:
         # language=rst
         """
@@ -1086,6 +1096,12 @@ class CNNMapping(Mapping):
         self.mem_neg_pos.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_pos_neg.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_neg_neg.mem_t += self.batch_interval * (self.batch_size - 1)
+
+    def update_SAF_mask(self) -> None:
+        self.mem_pos_pos.update_SAF_mask()
+        self.mem_pos_neg.update_SAF_mask()
+        self.mem_neg_pos.update_SAF_mask()
+        self.mem_neg_neg.update_SAF_mask()
 
 
     def total_energy_calculation(self) -> None:

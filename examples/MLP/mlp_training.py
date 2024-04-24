@@ -64,7 +64,7 @@ for k, v in args.__dict__.items():
 print("========================================")
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -99,6 +99,8 @@ if sim_params['hardware_estimation']:
 # Memristor write
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
+        if args.stuck_at_fault == True:
+            layer.crossbar.update_SAF_mask()
         layer.mem_update()
 
 # optimizer
@@ -126,6 +128,8 @@ try:
             # Memristor write
             for layer_name, layer in model.layers.items():
                 if isinstance(layer, Mem_Linear):
+                    if args.stuck_at_fault == True:
+                        layer.crossbar.update_SAF_mask()                    
                     layer.mem_update()
                     # mem_t update
                     layer.crossbar.mem_t_update()

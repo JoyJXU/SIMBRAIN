@@ -126,9 +126,14 @@ for test_cnt in range(args.rep):
     # Memristor write
     for layer in net.features.children():
         if isinstance(layer, Mem_Conv2d):
+            if args.stuck_at_fault == True:
+                layer.crossbar.update_SAF_mask()
             layer.mem_update()
     if isinstance(net.classifier, Mem_Linear):
+        if args.stuck_at_fault == True:
+            net.classifier.crossbar.update_SAF_mask()
         net.classifier.mem_update()
+
 
     net = net.to(device)
 
