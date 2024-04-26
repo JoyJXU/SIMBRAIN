@@ -314,6 +314,30 @@ class STDPMapping(Mapping):
         
     def update_SAF_mask(self) -> None:
         self.mem_array.update_SAF_mask()
+        
+    def total_area_calculation(self) -> None:
+        # language=rst
+        """
+        Calculate total area for memristor-based architecture. Called when power is reported.
+        """
+        self.sim_mem_area = self.mem_array.area.array_area
+
+        DAC_height_row, DAC_width_row, DAC_height_col, DAC_width_col, sim_switch_matrix_row_area, sim_switch_matrix_col_area = self.DAC_module.DAC_module_area.DAC_module_cal_area()
+        ADC_height, ADC_width, sim_shiftadd_area, sim_SarADC_area = self.ADC_module.ADC_module_area.ADC_module_cal_area()
+        periph_total_area = sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area
+        self.sim_periph_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
+                             'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
+                             'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
+                             'sim_total_periph_area': periph_total_area}
+    
+        total_height = max(self.mem_array.length_col + ADC_height + DAC_height_col, DAC_height_row)
+        total_width = DAC_width_row + max(self.mem_array.length_row, DAC_width_col, ADC_width)
+        self.sim_total_area = total_height * total_width
+        
+        self.sim_area = {'sim_mem_area':self.sim_mem_area,
+                         'sim_periph_area':periph_total_area,
+                         'sim_total_area':self.sim_total_area,
+                         'sim_used_area_ratio':(self.sim_mem_area+periph_total_area)/self.sim_total_area}
 
 
 class MimoMapping(Mapping):
@@ -570,33 +594,63 @@ class MimoMapping(Mapping):
         """
         Calculate total area for memristor-based architecture. Called when power is reported.
         """
-        self.sim_area = {'mem_area': self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area +
-                                     self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area}
+        self.sim_mem_area = self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area + self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area
 
-        sim_switch_matrix_row_area_pos, sim_switch_matrix_col_area_pos = self.DAC_module_pos.DAC_module_area.DAC_module_cal_area()
-        sim_switch_matrix_row_area_neg, sim_switch_matrix_col_area_neg = self.DAC_module_neg.DAC_module_area.DAC_module_cal_area()
+        DAC_height_row_pos, DAC_width_row_pos, DAC_height_col_pos, DAC_width_col_pos, sim_switch_matrix_row_area_pos, sim_switch_matrix_col_area_pos = self.DAC_module_pos.DAC_module_area.DAC_module_cal_area()
+        DAC_height_row_neg, DAC_width_row_neg, DAC_height_col_neg, DAC_width_col_neg, sim_switch_matrix_row_area_neg, sim_switch_matrix_col_area_neg = self.DAC_module_neg.DAC_module_area.DAC_module_cal_area()
         sim_switch_matrix_row_area = sim_switch_matrix_row_area_neg + sim_switch_matrix_row_area_pos
         sim_switch_matrix_col_area = sim_switch_matrix_col_area_neg + sim_switch_matrix_col_area_pos
 
         if self.ADC_setting == 4:
-            sim_shiftadd_area_pos_pos, sim_SarADC_area_pos_pos = self.ADC_module_pos_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()
+            ADC_height_pos_pos, ADC_width_pos_pos, sim_shiftadd_area_pos_pos, sim_SarADC_area_pos_pos = self.ADC_module_pos_pos.ADC_module_area.ADC_module_cal_area()
+            ADC_height_neg_pos, ADC_width_neg_pos, sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()
+            ADC_height_pos_neg, ADC_width_pos_neg, sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()
+            ADC_height_neg_neg, ADC_width_neg_neg, sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()
             sim_SarADC_area = sim_SarADC_area_neg_neg + sim_SarADC_area_neg_pos + sim_SarADC_area_pos_neg + sim_SarADC_area_pos_pos
             sim_shiftadd_area = sim_shiftadd_area_neg_neg + sim_shiftadd_area_neg_pos + sim_shiftadd_area_pos_neg + sim_shiftadd_area_pos_pos
         elif self.ADC_setting == 2:
-            sim_shiftadd_area_pos, sim_SarADC_area_pos = self.ADC_module_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg, sim_SarADC_area_neg = self.ADC_module_neg.ADC_module_area.ADC_module_cal_area()
+            ADC_height_pos, ADC_width_pos, sim_shiftadd_area_pos, sim_SarADC_area_pos = self.ADC_module_pos.ADC_module_area.ADC_module_cal_area()
+            ADC_height_neg, ADC_width_neg, sim_shiftadd_area_neg, sim_SarADC_area_neg = self.ADC_module_neg.ADC_module_area.ADC_module_cal_area()
             sim_shiftadd_area = sim_shiftadd_area_neg + sim_shiftadd_area_pos
             sim_SarADC_area = sim_SarADC_area_neg + sim_SarADC_area_pos
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
 
-        self.sim_DAC_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
+        periph_total_area = sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area
+        self.sim_periph_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
                              'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
                              'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
-                             'sim_total_periph_area': sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area}
+                             'sim_total_periph_area': periph_total_area}
+        
+        if self.ADC_setting == 4:
+            total_height_pos_pos = max(self.mem_pos_pos.length_col + ADC_height_pos_pos + DAC_height_col_pos, DAC_height_row_pos)
+            total_width_pos_pos = DAC_width_row_pos + max(self.mem_pos_pos.length_row, DAC_width_col_pos, ADC_width_pos_pos)
+            total_height_neg_pos = self.mem_neg_pos.length_col + ADC_height_neg_pos
+            total_width_neg_pos = max(self.mem_neg_pos.length_row, ADC_width_neg_pos)
+            total_height_pos_neg = max(self.mem_pos_neg.length_col + ADC_height_pos_neg + DAC_height_col_neg, DAC_height_row_neg)
+            total_width_pos_neg = DAC_width_row_neg + max(self.mem_pos_neg.length_row, DAC_width_col_neg, ADC_width_pos_neg)
+            total_height_neg_neg = self.mem_neg_neg.length_col + ADC_height_neg_neg
+            total_width_neg_neg = max(self.mem_neg_neg.length_row, ADC_width_neg_neg)
+        elif self.ADC_setting == 2:
+            total_height_pos_pos = max(self.mem_pos_pos.length_col + ADC_height_pos + DAC_height_col_pos, DAC_height_row_pos)
+            total_width_pos_pos = DAC_width_row_pos + max(self.mem_pos_pos.length_row, DAC_width_col_pos, ADC_width_pos)
+            total_height_neg_pos = self.mem_neg_pos.length_col
+            total_width_neg_pos = self.mem_neg_pos.length_row
+            total_height_pos_neg = max(self.mem_pos_neg.length_col + ADC_height_neg + DAC_height_col_neg, DAC_height_row_neg)
+            total_width_pos_neg = DAC_width_row_neg + max(self.mem_pos_neg.length_row, DAC_width_col_neg, ADC_width_neg)
+            total_height_neg_neg = self.mem_neg_neg.length_col
+            total_width_neg_neg = self.mem_neg_neg.length_row
+        else:
+            raise Exception("Only 2-set and 4-set ADC are supported!")
+            
+        self.sim_total_area = total_height_pos_pos * total_width_pos_pos + total_height_pos_neg * total_width_pos_neg \
+                    + total_height_neg_pos * total_width_neg_pos + total_height_neg_neg * total_width_neg_neg
+        
+        self.sim_area = {'sim_mem_area':self.sim_mem_area,
+                         'sim_periph_area':periph_total_area,
+                         'sim_total_area':self.sim_total_area,
+                         'sim_used_area_ratio':(self.sim_mem_area+periph_total_area)/self.sim_total_area}
+            
 
 
 class MLPMapping(Mapping):
@@ -860,33 +914,62 @@ class MLPMapping(Mapping):
         """
         Calculate total area for memristor-based architecture. Called when power is reported.
         """
-        self.sim_area = {'mem_area': self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area +
-                               self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area}
+        self.sim_mem_area = self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area + self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area
 
-        sim_switch_matrix_row_area_pos, sim_switch_matrix_col_area_pos = self.DAC_module_pos.DAC_module_area.DAC_module_cal_area()
-        sim_switch_matrix_row_area_neg, sim_switch_matrix_col_area_neg = self.DAC_module_neg.DAC_module_area.DAC_module_cal_area()
+        DAC_height_row_pos, DAC_width_row_pos, DAC_height_col_pos, DAC_width_col_pos, sim_switch_matrix_row_area_pos, sim_switch_matrix_col_area_pos = self.DAC_module_pos.DAC_module_area.DAC_module_cal_area()
+        DAC_height_row_neg, DAC_width_row_neg, DAC_height_col_neg, DAC_width_col_neg, sim_switch_matrix_row_area_neg, sim_switch_matrix_col_area_neg = self.DAC_module_neg.DAC_module_area.DAC_module_cal_area()
         sim_switch_matrix_row_area = sim_switch_matrix_row_area_neg + sim_switch_matrix_row_area_pos
         sim_switch_matrix_col_area = sim_switch_matrix_col_area_neg + sim_switch_matrix_col_area_pos
 
         if self.ADC_setting == 4:
-            sim_shiftadd_area_pos_pos, sim_SarADC_area_pos_pos = self.ADC_module_pos_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()
+            ADC_height_pos_pos, ADC_width_pos_pos, sim_shiftadd_area_pos_pos, sim_SarADC_area_pos_pos = self.ADC_module_pos_pos.ADC_module_area.ADC_module_cal_area()
+            ADC_height_neg_pos, ADC_width_neg_pos, sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()
+            ADC_height_pos_neg, ADC_width_pos_neg, sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()
+            ADC_height_neg_neg, ADC_width_neg_neg, sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()
             sim_SarADC_area = sim_SarADC_area_neg_neg + sim_SarADC_area_neg_pos + sim_SarADC_area_pos_neg + sim_SarADC_area_pos_pos
             sim_shiftadd_area = sim_shiftadd_area_neg_neg + sim_shiftadd_area_neg_pos + sim_shiftadd_area_pos_neg + sim_shiftadd_area_pos_pos
         elif self.ADC_setting == 2:
-            sim_shiftadd_area_pos, sim_SarADC_area_pos = self.ADC_module_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg, sim_SarADC_area_neg = self.ADC_module_neg.ADC_module_area.ADC_module_cal_area()
+            ADC_height_pos, ADC_width_pos, sim_shiftadd_area_pos, sim_SarADC_area_pos = self.ADC_module_pos.ADC_module_area.ADC_module_cal_area()
+            ADC_height_neg, ADC_width_neg, sim_shiftadd_area_neg, sim_SarADC_area_neg = self.ADC_module_neg.ADC_module_area.ADC_module_cal_area()
             sim_shiftadd_area = sim_shiftadd_area_neg + sim_shiftadd_area_pos
             sim_SarADC_area = sim_SarADC_area_neg + sim_SarADC_area_pos
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
 
-        self.sim_DAC_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
+        periph_total_area = sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area
+        self.sim_periph_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
                              'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
                              'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
-                             'sim_total_periph_area': sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area}
+                             'sim_total_periph_area': periph_total_area}
+        
+        if self.ADC_setting == 4:
+            total_height_pos_pos = max(self.mem_pos_pos.length_col + ADC_height_pos_pos + DAC_height_col_pos, DAC_height_row_pos)
+            total_width_pos_pos = DAC_width_row_pos + max(self.mem_pos_pos.length_row, DAC_width_col_pos, ADC_width_pos_pos)
+            total_height_neg_pos = self.mem_neg_pos.length_col + ADC_height_neg_pos
+            total_width_neg_pos = max(self.mem_neg_pos.length_row, ADC_width_neg_pos)
+            total_height_pos_neg = max(self.mem_pos_neg.length_col + ADC_height_pos_neg + DAC_height_col_neg, DAC_height_row_neg)
+            total_width_pos_neg = DAC_width_row_neg + max(self.mem_pos_neg.length_row, DAC_width_col_neg, ADC_width_pos_neg)
+            total_height_neg_neg = self.mem_neg_neg.length_col + ADC_height_neg_neg
+            total_width_neg_neg = max(self.mem_neg_neg.length_row, ADC_width_neg_neg)
+        elif self.ADC_setting == 2:
+            total_height_pos_pos = max(self.mem_pos_pos.length_col + ADC_height_pos + DAC_height_col_pos, DAC_height_row_pos)
+            total_width_pos_pos = DAC_width_row_pos + max(self.mem_pos_pos.length_row, DAC_width_col_pos, ADC_width_pos)
+            total_height_neg_pos = self.mem_neg_pos.length_col
+            total_width_neg_pos = self.mem_neg_pos.length_row
+            total_height_pos_neg = max(self.mem_pos_neg.length_col + ADC_height_neg + DAC_height_col_neg, DAC_height_row_neg)
+            total_width_pos_neg = DAC_width_row_neg + max(self.mem_pos_neg.length_row, DAC_width_col_neg, ADC_width_neg)
+            total_height_neg_neg = self.mem_neg_neg.length_col
+            total_width_neg_neg = self.mem_neg_neg.length_row
+        else:
+            raise Exception("Only 2-set and 4-set ADC are supported!")
+            
+        self.sim_total_area = total_height_pos_pos * total_width_pos_pos + total_height_pos_neg * total_width_pos_neg \
+                    + total_height_neg_pos * total_width_neg_pos + total_height_neg_neg * total_width_neg_neg
+        
+        self.sim_area = {'sim_mem_area':self.sim_mem_area,
+                         'sim_periph_area':periph_total_area,
+                         'sim_total_area':self.sim_total_area,
+                         'sim_used_area_ratio':(self.sim_mem_area+periph_total_area)/self.sim_total_area}
 
 
 class CNNMapping(Mapping):
@@ -1146,27 +1229,47 @@ class CNNMapping(Mapping):
         """
         Calculate total area for memristor-based architecture. Called when power is reported.
         """
-        self.sim_area = {'mem_area': self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area +
-                               self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area}
+        self.sim_mem_area = self.mem_pos_pos.area.array_area + self.mem_neg_pos.area.array_area + self.mem_pos_neg.area.array_area + self.mem_neg_neg.area.array_area
 
-        sim_switch_matrix_row_area_pos, sim_switch_matrix_col_area_pos = self.DAC_module_pos.DAC_module_area.DAC_module_cal_area()
-        sim_switch_matrix_row_area_neg, sim_switch_matrix_col_area_neg = self.DAC_module_neg.DAC_module_area.DAC_module_cal_area()
+        DAC_height_row_pos, DAC_width_row_pos, DAC_height_col_pos, DAC_width_col_pos, sim_switch_matrix_row_area_pos, sim_switch_matrix_col_area_pos = self.DAC_module_pos.DAC_module_area.DAC_module_cal_area()
+        DAC_height_row_neg, DAC_width_row_neg, DAC_height_col_neg, DAC_width_col_neg, sim_switch_matrix_row_area_neg, sim_switch_matrix_col_area_neg = self.DAC_module_neg.DAC_module_area.DAC_module_cal_area()
         sim_switch_matrix_row_area = sim_switch_matrix_row_area_neg + sim_switch_matrix_row_area_pos
         sim_switch_matrix_col_area = sim_switch_matrix_col_area_neg + sim_switch_matrix_col_area_pos
 
         if self.ADC_setting == 4:
-            sim_shiftadd_area_pos_pos, sim_SarADC_area_pos_pos = self.ADC_module_pos_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()
-            sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()
+            ADC_height_pos_pos, ADC_width_pos_pos, sim_shiftadd_area_pos_pos, sim_SarADC_area_pos_pos = self.ADC_module_pos_pos.ADC_module_area.ADC_module_cal_area()
+            ADC_height_neg_pos, ADC_width_neg_pos, sim_shiftadd_area_neg_pos, sim_SarADC_area_neg_pos = self.ADC_module_neg_pos.ADC_module_area.ADC_module_cal_area()
+            ADC_height_pos_neg, ADC_width_pos_neg, sim_shiftadd_area_pos_neg, sim_SarADC_area_pos_neg = self.ADC_module_pos_neg.ADC_module_area.ADC_module_cal_area()
+            ADC_height_neg_neg, ADC_width_neg_neg, sim_shiftadd_area_neg_neg, sim_SarADC_area_neg_neg = self.ADC_module_neg_neg.ADC_module_area.ADC_module_cal_area()
             sim_SarADC_area = sim_SarADC_area_neg_neg + sim_SarADC_area_neg_pos + sim_SarADC_area_pos_neg + sim_SarADC_area_pos_pos
             sim_shiftadd_area = sim_shiftadd_area_neg_neg + sim_shiftadd_area_neg_pos + sim_shiftadd_area_pos_neg + sim_shiftadd_area_pos_pos
         else:
-            raise Exception("Only 4-set ADC are supported!")
+            raise Exception("Only 2-set and 4-set ADC are supported!")
 
-        self.sim_DAC_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
+        periph_total_area = sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area
+        self.sim_periph_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
                              'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
                              'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
-                             'sim_total_periph_area': sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area}
+                             'sim_total_periph_area': periph_total_area}
+        
+        if self.ADC_setting == 4:
+            total_height_pos_pos = max(self.mem_pos_pos.length_col + ADC_height_pos_pos + DAC_height_col_pos, DAC_height_row_pos)
+            total_width_pos_pos = DAC_width_row_pos + max(self.mem_pos_pos.length_row, DAC_width_col_pos, ADC_width_pos_pos)
+            total_height_neg_pos = self.mem_neg_pos.length_col + ADC_height_neg_pos
+            total_width_neg_pos = max(self.mem_neg_pos.length_row, ADC_width_neg_pos)
+            total_height_pos_neg = max(self.mem_pos_neg.length_col + ADC_height_pos_neg + DAC_height_col_neg, DAC_height_row_neg)
+            total_width_pos_neg = DAC_width_row_neg + max(self.mem_pos_neg.length_row, DAC_width_col_neg, ADC_width_pos_neg)
+            total_height_neg_neg = self.mem_neg_neg.length_col + ADC_height_neg_neg
+            total_width_neg_neg = max(self.mem_neg_neg.length_row, ADC_width_neg_neg)
+        else:
+            raise Exception("Only 2-set and 4-set ADC are supported!")
+            
+        self.sim_total_area = total_height_pos_pos * total_width_pos_pos + total_height_pos_neg * total_width_pos_neg \
+                    + total_height_neg_pos * total_width_neg_pos + total_height_neg_neg * total_width_neg_neg
+        
+        self.sim_area = {'sim_mem_area':self.sim_mem_area,
+                         'sim_periph_area':periph_total_area,
+                         'sim_total_area':self.sim_total_area,
+                         'sim_used_area_ratio':(self.sim_mem_area+periph_total_area)/self.sim_total_area}
 
 

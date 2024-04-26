@@ -80,7 +80,7 @@ class DAC_Module_Power(torch.nn.Module):
         mem_size = self.memristor_info_dict[self.device_name]['mem_size']
         length_col = self.shape[0] * self.relax_ratio_col * mem_size
         if length_col < min_cell_height:
-            raise ValueError("[SwitchMatrix] Pass gate width is even much larger than the array width! You need to choose smaller technode, make relax_ratio_col or self.shape[0] larger.")
+            length_col = min_cell_height
         num_tg_pair_per_col = (int)(length_col / min_cell_height)
         num_col_tg_pair = (int)(math.ceil((float)(self.shape[0]) / num_tg_pair_per_col))
         num_tg_pair_per_col = (int)(math.ceil((float)(self.shape[0]) / num_col_tg_pair))
@@ -115,7 +115,7 @@ class DAC_Module_Power(torch.nn.Module):
         mem_size = self.memristor_info_dict[self.device_name]['mem_size']
         length_row = self.shape[1] * self.relax_ratio_row * mem_size
         if length_row < min_cell_width * 2:
-            raise ValueError("[SwitchMatrix] Pass gate length is even much larger than the array height! You need to choose smaller technode, make relax_ratio_row or self.shape[1] larger.")
+            length_row = min_cell_width * 2
         num_tg_pair_per_row = (int)(length_row / (min_cell_width * 2))
         num_row_tg_pair = (int)(math.ceil((float)(self.shape[1]) / num_tg_pair_per_row))
         num_tg_pair_per_row = (int)(math.ceil((float)(self.shape[1]) / num_row_tg_pair))

@@ -38,11 +38,11 @@ parser.add_argument("--wire_width", type=int, default=200) # In practice, proces
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--hardware_estimation", type=int, default=False)
+parser.add_argument("--hardware_estimation", type=int, default=True)
 args = parser.parse_args()
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,12 +90,12 @@ if sim_params['hardware_estimation']:
         if isinstance(layer, Mem_Conv2d):
             layer.crossbar.total_area_calculation()
             sim_area = layer.crossbar.sim_area
-            total_area += sim_area['mem_area']
+            total_area += sim_area['sim_total_area']
     if isinstance(net.classifier, Mem_Linear):
         layer = net.classifier
         layer.crossbar.total_area_calculation()
         sim_area = layer.crossbar.sim_area
-        total_area += sim_area['mem_area']
+        total_area += sim_area['sim_total_area']
     print("total_area=" + str(total_area))
 
 # Load Pre-trained Model

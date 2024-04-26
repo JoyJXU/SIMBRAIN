@@ -112,7 +112,7 @@ def main():
         # Area print
         if sim_params['hardware_estimation']:
             _crossbar.total_area_calculation()
-            print("total crossbar area=", _crossbar.sim_area['mem_area'], " m2")
+            print("total area=", _crossbar.sim_area['sim_total_area'], " m2")
 
         # run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, _logs)
         run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, _logs)

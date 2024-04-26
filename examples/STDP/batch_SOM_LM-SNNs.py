@@ -43,7 +43,7 @@ parser.add_argument("--intensity", type=float, default=64)
 parser.add_argument("--progress_interval", type=int, default=10)
 parser.add_argument("--update_interval", type=int, default=250)
 parser.add_argument("--update_inhibation_weights", type=int, default=500)
-parser.add_argument("--plot_interval", type=int, default=250)
+parser.add_argument("--plot_interval", type=int, default=250) 
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
@@ -143,7 +143,8 @@ for test_cnt in range(multiple_test_no):
     if sim_params['device_name'] != 'trace' and sim_params['hardware_estimation']:
         total_area = 0
         for l in network.layers:
-            total_area += network.layers[l].transform.mem_array.area.array_area
+            network.layers[l].transform.total_area_calculation()
+            total_area += network.layers[l].transform.sim_area['sim_total_area']
         print("total crossbar area=", total_area, " m2")
     
     # %% Load MNIST data.

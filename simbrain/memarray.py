@@ -87,8 +87,8 @@ class MemristorArray(torch.nn.Module):
         relax_ratio_col = self.memristor_info_dict[self.device_name]['relax_ratio_col'] # Leave space for adjacent memristors
         relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_col'] # Leave space for adjacent memristors
         mem_size = self.memristor_info_dict[self.device_name]['mem_size']
-        length_row = shape[1] * relax_ratio_col * mem_size
-        length_col = shape[0] * relax_ratio_row * mem_size
+        self.length_row = shape[1] * relax_ratio_col * mem_size
+        self.length_col = shape[0] * relax_ratio_row * mem_size
         AR = self.tech_info_dict[str(self.wire_width)]['AR']
         Rho = self.tech_info_dict[str(self.wire_width)]['Rho']
         wire_resistance_unit_col = relax_ratio_col * mem_size * Rho / (AR * self.wire_width * self.wire_width * 1e-18)
@@ -99,8 +99,8 @@ class MemristorArray(torch.nn.Module):
 
         self.hardware_estimation = sim_params['hardware_estimation']
         if self.hardware_estimation:
-            self.power = Power(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=length_row, length_col=length_col)
-            self.area = Area(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=length_row, length_col=length_col)
+            self.power = Power(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=self.length_row, length_col=self.length_col)
+            self.area = Area(sim_params=sim_params, shape=self.shape, memristor_info_dict=self.memristor_info_dict, length_row=self.length_row, length_col=self.length_col)
 
 
     def set_batch_size(self, batch_size) -> None:

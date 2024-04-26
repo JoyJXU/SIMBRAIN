@@ -32,7 +32,7 @@ parser.add_argument("--wire_width", type=int, default=200) # In practice, proces
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--hardware_estimation", type=int, default=False)
+parser.add_argument("--hardware_estimation", type=int, default=True)
 args = parser.parse_args()
 
 # Sets up Gpu use
@@ -74,11 +74,9 @@ if sim_params['hardware_estimation']:
     total_area = 0
     for layer_name, layer in model.layers.items():
         if isinstance(layer, Mem_Linear):
-            total_area += layer.crossbar.mem_pos_pos.area.array_area
-            total_area += layer.crossbar.mem_neg_pos.area.array_area
-            total_area += layer.crossbar.mem_pos_neg.area.array_area
-            total_area += layer.crossbar.mem_neg_neg.area.array_area
-    print("total crossbar area=", total_area, " m2")
+            layer.crossbar.total_area_calculation()
+            total_area += layer.crossbar.sim_area['sim_total_area']
+    print("total area=", total_area, " m2")
 
 # Memristor write
 print('==> Write Memristor..')
