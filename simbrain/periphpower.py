@@ -77,7 +77,7 @@ class DAC_Module_Power(torch.nn.Module):
         res_mem_cell_on_at_vw = 1 / self.Goff
         resTg = res_mem_cell_on_at_vw / self.shape[1] * self.IR_DROP_TOLERANCE
         min_cell_height = self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
-        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
         length_col = self.shape[0] * self.relax_ratio_col * mem_size
         if length_col < min_cell_height:
             length_col = min_cell_height
@@ -112,7 +112,7 @@ class DAC_Module_Power(torch.nn.Module):
         num_row_tg_pair = 1
         min_cell_width = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
 
-        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
         length_row = self.shape[1] * self.relax_ratio_row * mem_size
         if length_row < min_cell_width * 2:
             length_row = min_cell_width * 2

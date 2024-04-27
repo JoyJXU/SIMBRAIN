@@ -86,7 +86,7 @@ class MemristorArray(torch.nn.Module):
         self.wire_width = sim_params['wire_width']
         relax_ratio_col = self.memristor_info_dict[self.device_name]['relax_ratio_col'] # Leave space for adjacent memristors
         relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_col'] # Leave space for adjacent memristors
-        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
         self.length_row = shape[1] * relax_ratio_col * mem_size
         self.length_col = shape[0] * relax_ratio_row * mem_size
         AR = self.tech_info_dict[str(self.wire_width)]['AR']

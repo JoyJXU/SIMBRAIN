@@ -63,8 +63,8 @@ class DAC_Module_Area(torch.nn.Module):
         if newHeight:  # DFF in multiple columns given the total height
             # Calculate the number of DFF per column
             if newHeight < hDff:
-                print("[Warning-DFF] Pass gate length is larger than the array height, which may cause problems in module matching!\n\
-                      It is recommended to choose a smaller technode or increase the relax_ratio_col and shape_col.")
+                print("[Warning-DFF] Pass gate length is larger than the array height, which may cause problems in module matching!\
+                      \nIt is recommended to choose a smaller technode or increase the relax_ratio_col and shape_col.")
                 newHeight = hDff
             numDFFPerCol = int(newHeight / hDff)
             if numDFFPerCol > numDff:
@@ -76,8 +76,8 @@ class DAC_Module_Area(torch.nn.Module):
         elif newWidth:  # DFF in multiple rows given the total width
             # Calculate the number of DFF per row
             if newWidth < wDff:
-                print("[Warning-DFF] Pass gate width is larger than the array width, which may cause problems in module matching!\n\
-                      It is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
+                print("[Warning-DFF] Pass gate width is larger than the array width, which may cause problems in module matching!\
+                      \nIt is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
                 newWidth = wDff
             numDFFPerRow = int(newWidth / wDff)
             if numDFFPerRow > numDff:
@@ -110,8 +110,8 @@ class DAC_Module_Area(torch.nn.Module):
                 self.DFF_area_calculation(newHeight, None, numDff)
                 
                 if newHeight < minCellHeight:
-                    print("[Warning-Switch_matrix] Pass gate length is larger than the array height, which may cause problems in module matching!\n\
-                          It is recommended to choose a smaller technode or increase the relax_ratio_col and shape_col.")
+                    print("[Warning-Switch_matrix] Pass gate length is larger than the array height, which may cause problems in module matching!\
+                          \nIt is recommended to choose a smaller technode or increase the relax_ratio_col and shape_col.")
                     newHeight = minCellHeight
                 numTgPairPerCol = int(newHeight / minCellHeight)  # Get max # Tg pair per column (this is not the final # Tg pair per column because the last column may have less # Tg)
                 numColTgPair = int(math.ceil(self.shape[0] / numTgPairPerCol))  # Get min # columns based on this max # Tg pair per column
@@ -148,8 +148,8 @@ class DAC_Module_Area(torch.nn.Module):
                 
                 minCellWidth = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter  # min standard cell width for 1 Tg
                 if 2 * minCellWidth > newWidth:
-                    print("[Warning-Switch_matrix] Pass gate width is larger than the array width, which may cause problems in module matching!\n\
-                          It is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
+                    print("[Warning-Switch_matrix] Pass gate width is larger than the array width, which may cause problems in module matching!\
+                          \nIt is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
                     newWidth = 2 * minCellWidth
                 numTgPairPerRow = int(newWidth / (minCellWidth * 2))  # Get max # Tg pair per row (this is not the final # Tg pair per row because the last row may have less # Tg)
                 numRowTgPair = int(math.ceil(self.shape[1] / numTgPairPerRow))  # Get min # rows based on this max # Tg pair per row
@@ -183,7 +183,7 @@ class DAC_Module_Area(torch.nn.Module):
     def DAC_module_cal_area(self) -> None:
         relax_ratio_col = self.memristor_info_dict[self.device_name]['relax_ratio_col']  # Leave space for adjacent memristors
         relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_row']  # Leave space for adjacent memristors
-        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
         length_row = self.shape[1] * relax_ratio_row * mem_size
         length_col = self.shape[0] * relax_ratio_col * mem_size
         DAC_Height_Row, DAC_Width_Row, Switchmatrix_Area_Row = self.Switchmatrix_area_calculation(length_col, 0, "ROW_MODE")
@@ -246,8 +246,8 @@ class ADC_Module_Area(torch.nn.Module):
 
         # Calculate the number of adder per row
         if newWidth < self.wAdder:
-            print("[Warning-Adder] Pass gate width is larger than the array width, which may cause problems in module matching!\n\
-                  It is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
+            print("[Warning-Adder] Pass gate width is larger than the array width, which may cause problems in module matching!\
+                  \nIt is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
             newWidth = self.wAdder              
         numAdderPerRow = int(newWidth / self.wAdder)
         if numAdderPerRow > numAdder:
@@ -271,7 +271,7 @@ class ADC_Module_Area(torch.nn.Module):
         self.ShiftAdder_width = max(self.Adder_width, self.Dff_width)
 
         self.INV_NAND_area = self.CMOS_technode_meter * self.MAX_TRANSISTOR_HEIGHT * newWidth
-        self.ShiftAdder_area = self.Adder_area + self.Dff_area
+        self.ShiftAdder_area = self.Adder_area + self.Dff_area + self.INV_NAND_area
 
         return self.ShiftAdder_height, self.ShiftAdder_width, self.ShiftAdder_area
 
@@ -289,8 +289,8 @@ class ADC_Module_Area(torch.nn.Module):
 
         # Calculate the number of DFF per row
         if newWidth < wDff:
-            print("[Warning-DFF] Pass gate width is larger than the array width, which may cause problems in module matching!\n\
-                  It is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
+            print("[Warning-DFF] Pass gate width is larger than the array width, which may cause problems in module matching!\
+                  \nIt is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
             newWidth = wDff
         numDFFPerRow = int(newWidth / wDff)
         if numDFFPerRow > numDff:
@@ -327,7 +327,7 @@ class ADC_Module_Area(torch.nn.Module):
 
     def ADC_module_cal_area(self) -> None:
         relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_row']  # Leave space for adjacent memristors
-        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
         length_row = self.shape[1] * relax_ratio_row * mem_size
         ShiftAdder_Height, ShiftAdder_Width, ShiftAdder_Area = self.ShiftAdder_area_calculation(length_row)
         SarADC_Height, SarADC_Width, SarADC_Area = self.SarADC_area_calculation(length_row)

@@ -1244,7 +1244,7 @@ class CNNMapping(Mapping):
             sim_SarADC_area = sim_SarADC_area_neg_neg + sim_SarADC_area_neg_pos + sim_SarADC_area_pos_neg + sim_SarADC_area_pos_pos
             sim_shiftadd_area = sim_shiftadd_area_neg_neg + sim_shiftadd_area_neg_pos + sim_shiftadd_area_pos_neg + sim_shiftadd_area_pos_pos
         else:
-            raise Exception("Only 2-set and 4-set ADC are supported!")
+            raise Exception("Only 4-set ADC are supported!")
 
         periph_total_area = sim_switch_matrix_row_area + sim_switch_matrix_col_area + sim_shiftadd_area + sim_SarADC_area
         self.sim_periph_area = {'sim_switch_matrix_row_area': sim_switch_matrix_row_area,
@@ -1262,7 +1262,7 @@ class CNNMapping(Mapping):
             total_height_neg_neg = self.mem_neg_neg.length_col + ADC_height_neg_neg
             total_width_neg_neg = max(self.mem_neg_neg.length_row, ADC_width_neg_neg)
         else:
-            raise Exception("Only 2-set and 4-set ADC are supported!")
+            raise Exception("Only 4-set ADC are supported!")
             
         self.sim_total_area = total_height_pos_pos * total_width_pos_pos + total_height_pos_neg * total_width_pos_neg \
                     + total_height_neg_pos * total_width_neg_pos + total_height_neg_neg * total_width_neg_neg
