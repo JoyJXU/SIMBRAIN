@@ -41,8 +41,8 @@ class Conductance(object):
         # Read parameters
         self.v_off = dictionary['v_off']
         self.v_on = dictionary['v_on']
-        self.G_off = dictionary['G_off']
-        self.G_on = dictionary['G_on']
+        self.G_off = dictionary['G_off_fit']
+        self.G_on = dictionary['G_on_fit']
         self.alpha_off = dictionary['alpha_off']
         self.alpha_on = dictionary['alpha_on']
 
@@ -137,8 +137,8 @@ class Conductance(object):
 
     @timer
     def fitting(self):
-        P_off_num = 100
-        P_on_num = 100
+        P_off_num = 200
+        P_on_num = 200
         P_off_list = np.logspace(-1, 1, P_off_num, base=10)
         P_on_list = np.logspace(-1, 1, P_on_num, base=10)
 

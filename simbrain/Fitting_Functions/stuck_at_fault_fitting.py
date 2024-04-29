@@ -35,11 +35,10 @@ class StuckAtFault:
 
     @timer
     def pre_deployment_fitting(self):
-        mem_t = self.data.columns[1] - self.data.columns[0]
         SAF_lambda = np.count_nonzero(self.data[0]) / self.data.shape[0]
         SA_0 = np.count_nonzero(self.data[0] == -1) / self.data.shape[0]
         SA_1 = np.count_nonzero(self.data[0] == 1) / self.data.shape[0]
-        SAF_ratio = np.array(SA_1) / (np.array(SA_0) + np.array(SA_1))
+        SAF_ratio = np.array(SA_0) / (np.array(SA_0) + np.array(SA_1))
 
         return SAF_lambda, SAF_ratio
 

@@ -36,7 +36,7 @@ class RetentionLoss(object):
         self.conductance = np.array(data['Conductance(S)'])
         self.delta_t = data['Time(s)'][1] - data['Time(s)'][0]
         # TODO: Use mean value instead?
-        self.w_init = 1.225E-10
+        self.w_init = self.conductance[0]
         self.points = len(self.time)
 
     def retention_loss(self, time, k, beta):

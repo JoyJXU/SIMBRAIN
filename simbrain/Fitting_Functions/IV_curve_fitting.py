@@ -47,8 +47,8 @@ class IVCurve(object):
         self.v_off = dictionary['v_off']
         self.v_on = dictionary['v_on']
 
-        self.G_off = dictionary['G_off']
-        self.G_on = dictionary['G_on']
+        self.G_off = dictionary['G_off_fit']
+        self.G_on = dictionary['G_on_fit']
 
         self.k_off = dictionary['k_off']
         self.k_on = dictionary['k_on']

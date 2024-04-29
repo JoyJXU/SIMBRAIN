@@ -452,9 +452,9 @@ class MemristorArray(torch.nn.Module):
 
             if increase_ratio > 0 and SAF_delta > 0:
                 self.Q_mask.uniform_()
-                self.SAF0_mask += (~(self.SAF0_mask + self.SAF1_mask)) & (self.Q_mask < ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio))
+                self.SAF0_mask += (~(self.SAF0_mask + self.SAF1_mask)) & (self.Q_mask < (SAF_ratio * increase_ratio))
                 self.SAF1_mask += (~(self.SAF0_mask + self.SAF1_mask)) & \
-                                  ((self.Q_mask >= ((SAF_ratio / (SAF_ratio + 1)) * increase_ratio)) & (self.Q_mask < increase_ratio))
+                                  ((self.Q_mask >= (SAF_ratio * increase_ratio)) & (self.Q_mask < increase_ratio))
 
 
     def total_energy_calculation(self) -> None:

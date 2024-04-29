@@ -56,6 +56,9 @@ class MemristorFitting(object):
         P_on = mem_info['P_on']
         G_off = mem_info['G_off']
         G_on = mem_info['G_on']
+        G_off_fit = mem_info['G_off_fit']
+        G_on_fit = mem_info['G_on_fit']
+        delta_t = mem_info['delta_t']
 
         sigma_relative = mem_info['sigma_relative']
         sigma_absolute = mem_info['sigma_absolute']
@@ -79,6 +82,10 @@ class MemristorFitting(object):
 
         if self.mem_size is None:
             raise Exception("miss mem_size data!")
+        if None in [v_on,v_off]:
+            raise Exception("miss v_on/v_off data!")
+        if delta_t is None:
+            raise Exception("miss mem_size data!")            
 
         # %% Pre-deployment SAF
         if self.stuck_at_fault in [1, 2]:
@@ -132,25 +139,80 @@ class MemristorFitting(object):
                 os.path.dirname(os.path.dirname(__file__))
                 + "/memristordata/conductance.xlsx"
         ):
-            # TODO: Use raise Exception or print if default alpha is 5?
             raise Exception("Error! Missing data files.\nFailed to update G_off, G_on.")
         else:
+            
             data = pd.DataFrame(pd.read_excel(
                 os.path.dirname(os.path.dirname(__file__)) + "/memristordata/conductance.xlsx",
-                sheet_name=0,
+                sheet_name='Sheet1',
                 header=None,
-                index_col=None,
+                index_col=None
             ))
-            data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)', 'Current(A)'] + list(data.columns[3:])
-            conductance = np.array(data['Current(A)']) / np.array(data['Read Voltage(V)'])
-            conductance_r = conductance[:np.sum(np.array(data['Pulse Voltage(V)']) > 0)]
-            conductance_d = conductance[np.sum(np.array(data['Pulse Voltage(V)']) > 0):]
-            G_off = np.average(conductance_r[conductance_r.shape[0] - 10:])
-            G_on = np.average(conductance_d[conductance_d.shape[0] - 10:])
+            data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)'] + list(data.columns[2:] - 2)
+
+            V_write = np.array(data['Pulse Voltage(V)'])
+            points_r = np.sum(V_write > 0)
+            points_d = np.sum(V_write < 0)
+            read_voltage = np.array(data['Read Voltage(V)'])[0]
+
+            device_num = data.shape[1] - 2
+            G_off_list = np.zeros(device_num)
+            G_on_list = np.zeros(device_num)
+            
+            for i in range(device_num):
+                G_off_list[i] = np.average(
+                    data[i][points_r - 10:points_r] / read_voltage
+                )
+                G_on_list[i] = np.average(
+                    data[i][points_r + points_d - 10:] / read_voltage
+                )
+
+            # if self.G_off is None:
+            G_off = np.mean(G_off_list)
+            # if self.G_on is None:
+            G_on = np.mean(G_on_list)
+            
             mem_info.update(
                 {
                     "G_off": G_off,
                     "G_on": G_on
+                }
+            )
+            
+        # %% G_off_fit, G_on_fit
+        if None not in [G_off_fit, G_on_fit]:
+            pass
+        elif not os.path.isfile(
+                os.path.dirname(os.path.dirname(__file__))
+                + "/memristordata/conductance.xlsx"
+        ):
+            raise Exception("Error! Missing data files.\nFailed to update G_off, G_on.")
+        else:
+            
+            data = pd.DataFrame(pd.read_excel(
+                os.path.dirname(os.path.dirname(__file__)) + "/memristordata/conductance.xlsx",
+                sheet_name='Sheet1',
+                header=None,
+                index_col=None
+            ))
+            data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)'] + list(data.columns[2:] - 2)
+
+            V_write = np.array(data['Pulse Voltage(V)'])
+            points_r = np.sum(V_write > 0)
+            points_d = np.sum(V_write < 0)
+            read_voltage = np.array(data['Read Voltage(V)'])[0]
+
+            device_num = data.shape[1] - 2
+            G_off_list = np.zeros(device_num)
+            G_on_list = np.zeros(device_num)
+            
+            G_off_fit =  np.average(data[0][points_r - 10:points_r] / read_voltage)
+            G_on_fit = np.average(data[0][points_r+points_d - 10:points_r+points_d] / read_voltage)
+                
+            mem_info.update(
+                {
+                    "G_off_fit": G_off_fit,
+                    "G_on_fit": G_on_fit
                 }
             )
 
@@ -158,8 +220,14 @@ class MemristorFitting(object):
         print("Baseline Model calculating...")
         if None not in [alpha_off, alpha_on]:
             pass
-        elif None in [v_off, v_on, G_off, G_on]:
-            raise Exception("Error! Missing required parameters.\nFailed to update alpha_off, alpha_on.")
+        elif None in [G_off_fit, G_on_fit]:
+            print("Warning! Missing required parameters.\ndefault value is 5")
+            mem_info.update(
+                {
+                    "alpha_off": 5,
+                    "alpha_on": 5
+                }
+            )    
         elif not os.path.isfile(
                 os.path.dirname(os.path.dirname(__file__))
                 + "/memristordata/IV_curve.xlsx"
@@ -181,7 +249,7 @@ class MemristorFitting(object):
         # %% Baseline Model(Conductance)
         if None not in [P_off, P_on, k_off, k_on]:
             pass
-        elif None in [v_off, v_on, G_off, G_on]:
+        elif None in [G_off_fit, G_on_fit]:
             raise Exception("Error! Missing required parameters.\nFailed to update P_off, P_on, k_off, k_on.")
         elif not os.path.isfile(
                 os.path.dirname(os.path.dirname(__file__))
@@ -319,6 +387,8 @@ class MemristorFitting(object):
                 )
 
         print("\nEnd Memristor Fitting.")
+        del mem_info['G_off_fit']
+        del mem_info['G_on_fit']
         self.fitting_record = mem_info
 
         with open('../../simbrain/Parameter_files/memristor_device_info.json', 'r') as f:

@@ -72,7 +72,7 @@ gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
