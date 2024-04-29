@@ -292,7 +292,7 @@ class Variation(object):
         x_sorted = np.array([i[0] for i in var_x_complex])
         var_x_sorted = np.array([i[1] for i in var_x_complex])
 
-        group_no = 10
+        group_no = max(10, int((len(x_total)/5)**0.5))
 
         # Group with pulse number
         total_points = (self.points_r + self.points_d) * self.device_num

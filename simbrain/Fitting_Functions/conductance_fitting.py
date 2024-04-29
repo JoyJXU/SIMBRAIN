@@ -137,8 +137,8 @@ class Conductance(object):
 
     @timer
     def fitting(self):
-        P_off_num = 200
-        P_on_num = 200
+        P_off_num = 100
+        P_on_num = 100
         P_off_list = np.logspace(-1, 1, P_off_num, base=10)
         P_on_list = np.logspace(-1, 1, P_on_num, base=10)
 
