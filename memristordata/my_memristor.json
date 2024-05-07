@@ -11,7 +11,8 @@
   "v_off": 2,
   "k_on": null,
   "k_off": null,
-  "delta_t": 30e-3,
+  "delta_t": 0.1,
+  "duty_tatio":0.3,
   "sampling_rate": 4096,
   "trans_ratio": null,
   "vinput_pos": null,
@@ -31,3 +32,4 @@
   "Aging_k_off": null,
   "mem_size": 1e-4
 }
+

@@ -104,12 +104,15 @@ with open("../../memristordata/my_memristor.json") as f:
 print(json.dumps(sim_params, indent=4, separators=(',', ':')))
 
 exp = MemristorFitting(sim_params, my_memristor_r)
+
 if exp.device_name == "mine":
     exp.mem_fitting()
     fitting_record_w = exp.fitting_record
 else:
     fitting_record_w = my_memristor_r
-
+    
+del my_memristor_r['G_off_fit']
+del my_memristor_r['G_on_fit']
 diff_1 = {k: my_memristor_r[k] for k in my_memristor_r if my_memristor_r[k] != fitting_record_w[k]}
 diff_2 = {k: fitting_record_w[k] for k in fitting_record_w if my_memristor_r[k] != fitting_record_w[k]}
 print('Before update:\n', json.dumps(diff_1, indent=4, separators=(',', ':')))

@@ -161,8 +161,8 @@ class Variation(object):
         self.P_off_variation = np.zeros(self.device_num)
         self.P_on_variation = np.zeros(self.device_num)
 
-        P_off_num = 100
-        P_on_num = 100
+        P_off_num = 10
+        P_on_num = 10
         P_off_list = np.linspace(round(self.P_off) - 0.48, round(self.P_off) + 1.5, P_off_num)
         P_on_list = np.linspace(round(self.P_on) - 0.48, round(self.P_on) + 1.5, P_on_num)
         P_off_list[P_off_list < 0] = 0
@@ -324,7 +324,5 @@ class Variation(object):
 
         sigma_relative = math.sqrt(z2[0] * math.pi / 2)
         sigma_absolute = math.sqrt(z2[1] * math.pi / 2)
-        # sigma_relative = 1
-        # sigma_absolute = 1
 
         return sigma_relative, sigma_absolute
