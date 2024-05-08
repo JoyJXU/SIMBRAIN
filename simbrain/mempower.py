@@ -45,10 +45,13 @@ class Power(torch.nn.Module):
         self.static_reset_energy = 0
         self.register_buffer("selected_write_energy", torch.Tensor())
         self.register_buffer("half_selected_write_energy", torch.Tensor())
+
+        self.v_read = memristor_info_dict[self.device_name]['v_read']
         
         self.wire_cap_row = length_row * 0.2e-15/1e-6
         self.wire_cap_col = length_col * 0.2e-15/1e-6
         self.dt = memristor_info_dict[self.device_name]['delta_t']
+        self.dr = memristor_info_dict[self.device_name]['duty_ratio']
     
         self.sim_power = {}
 
@@ -69,22 +72,24 @@ class Power(torch.nn.Module):
         self.half_selected_write_energy = torch.zeros(batch_size, *self.shape, device=self.half_selected_write_energy.device)
 
 
-    def read_energy_calculation(self, mem_v_read, mem_c, total_wire_resistance) -> None:
+    def read_energy_calculation(self, mem_v_bool, mem_c, total_wire_resistance) -> None:
         # language=rst
         """
         Calculate read energy for memrisotr crossbar. Called when the crossbar is read.
 
-        :param mem_v_read: Read voltage, shape [batchsize, read_no=1, crossbar_row].
+        :param mem_v_bool: Read voltage, shape [batchsize, read_no=1, crossbar_row], type: bool.
         :param mem_c: Memristor crossbar conductance, shape [batchsize, crossbar_row, crossbar_col].
         :param total_wire_resistance: Wire resistance for every memristor in the crossbar, shape [batchsize, crossbar_row, crossbar_col].
         """
-        mem_v2 = mem_v_read ** 2
-        self.dynamic_read_energy += torch.sum(mem_v2 * self.wire_cap_row)
+        # Use nonzero instead of torch.sum() to save memory
+        v_sum = torch.nonzero(mem_v_bool).size(0)
+        self.dynamic_read_energy += self.v_read ** 2 * v_sum * self.wire_cap_row
 
         mem_r = 1.0 / mem_c
         mem_r = mem_r + total_wire_resistance.unsqueeze(0)
         memristor_c = 1.0 / mem_r
-        self.static_read_energy += torch.sum(torch.matmul(mem_v2, memristor_c)) * self.dt * 1/2
+        for i in range(mem_v_bool.size(0)):
+            self.static_read_energy += self.v_read ** 2 * torch.sum(torch.matmul(mem_v_bool[i].float(), memristor_c)) * self.dt * self.dr
 
         self.read_energy = self.dynamic_read_energy + self.static_read_energy
 
@@ -107,7 +112,7 @@ class Power(torch.nn.Module):
             mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
             mem_r = mem_r + total_wire_resistance.unsqueeze(0)
             mem_c = 1.0 / mem_r
-            self.selected_write_energy = mem_v * mem_v * 1 / 2 * self.dt * mem_c
+            self.selected_write_energy = mem_v * mem_v * self.dr * self.dt * mem_c
             self.static_write_energy += torch.sum(self.selected_write_energy)
 
         elif self.device_structure in {'crossbar', 'mimo'}:
@@ -126,7 +131,7 @@ class Power(torch.nn.Module):
             selected_mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
             selected_mem_r = selected_mem_r + total_wire_resistance.unsqueeze(0)
             selected_mem_c = 1.0 / selected_mem_r
-            self.selected_write_energy = (mem_v * mem_v * 1 / 2 * self.dt * selected_mem_c)
+            self.selected_write_energy = (mem_v * mem_v * self.dr * self.dt * selected_mem_c)
 
             # half selected write energy
             r_after = 1.0 / mem_c
@@ -138,7 +143,7 @@ class Power(torch.nn.Module):
             c_pre = 1.0 / r_pre
 
             counter = torch.arange(self.shape[0], device=self.selected_write_energy.device)
-            self.half_selected_write_energy = (1 / 2 * V_write) * (1 / 2 * V_write) * 1 / 2 * self.dt * (
+            self.half_selected_write_energy = (1 / 2 * V_write) * (1 / 2 * V_write) * self.dr * self.dt * (
                         counter[None, :, None] * c_pre + counter.flip(0)[None, :, None] * c_after)
 
             self.static_write_energy += torch.sum(self.selected_write_energy) + torch.sum(self.half_selected_write_energy)
@@ -193,7 +198,7 @@ class Power(torch.nn.Module):
             mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
             mem_r = mem_r + total_wire_resistance.unsqueeze(0)
             mem_c = 1.0 / mem_r
-            self.static_reset_energy += torch.sum(mem_v * mem_v * 1 / 2 * self.dt * mem_c)
+            self.static_reset_energy += torch.sum(mem_v * mem_v * self.dr * self.dt * mem_c) #?why 1/2
 
         else:
             raise Exception("Only trace, mimo and crossbar architecture are supported!")
@@ -220,4 +225,5 @@ class Power(torch.nn.Module):
                           'write_energy': self.write_energy,
                           'reset_energy': self.reset_energy,
                           'total_energy': self.total_energy,
+                          'time': torch.max(mem_t) * self.dt,
                           'average_power': self.average_power}

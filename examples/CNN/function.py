@@ -5,16 +5,13 @@ from typing import Tuple, Optional
 
 import sys
 sys.path.append('../../')
-from simbrain.mapping import MLPMapping
+from simbrain.mapping import MLPMapping, CNNMapping
 
 class MemLinearFunction(Function):
     @staticmethod
-    def forward(ctx, input: Tensor, weight: Tensor, bias: Tensor, crossbar_pos: MLPMapping, crossbar_neg: MLPMapping) -> Tensor:
-        output_ref = input @ weight.T + bias[None, ...]
-
-        cross_pos = crossbar_pos.mapping_read_mlp(target_v=input)
-        cross_neg = crossbar_neg.mapping_read_mlp(target_v=(input * -1))
-        output = cross_pos + cross_neg
+    def forward(ctx, input: Tensor, weight: Tensor, bias: Tensor, crossbar: MLPMapping) -> Tensor:
+        # output_ref = input @ weight.T + bias[None, ...]
+        output = crossbar.mapping_read_mlp(target_v=input)
 
         if bias is not None:
             output += bias
@@ -24,18 +21,18 @@ class MemLinearFunction(Function):
         return output
 
     @staticmethod
-    def backward(ctx, grad_output: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def backward(ctx, grad_output: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         input, weight = ctx.saved_tensors
         grad_input = grad_output @ weight
         grad_weight = grad_output.T @ input
         grad_bias = grad_output.sum(0)
-        return grad_input, grad_weight, grad_bias, None, None
+        return grad_input, grad_weight, grad_bias, None
 
 
 class MemConv2dFunction(Function):
     @staticmethod
     def forward(ctx, input: Tensor, weight: Tensor, bias: Tensor, stride: int, padding: int,
-                crossbar_pos: MLPMapping, crossbar_neg: MLPMapping) -> Tensor:
+                crossbar: CNNMapping) -> Tensor:
         batch_size, channels, height, width = input.size()
         kernel_size = weight.size(2)
         out_channels = weight.size(0)
@@ -60,9 +57,7 @@ class MemConv2dFunction(Function):
         # Matrix-Multiplication
         # weight_reshape = weight.reshape(out_channels, -1).t()
         # out_unfolded = input_reshape.matmul(weight_reshape)
-        cross_pos = crossbar_pos.mapping_read_cnn(target_v=input_reshape)
-        cross_neg = crossbar_neg.mapping_read_cnn(target_v=(input_reshape * -1))
-        out_unfolded = cross_pos + cross_neg
+        out_unfolded = crossbar.mapping_read_cnn(target_v=input_reshape)
 
         # Reshape the output
         out_unfolded = out_unfolded.reshape(s0, s1, -1)
@@ -81,7 +76,7 @@ class MemConv2dFunction(Function):
         return output
 
     @staticmethod
-    def backward(ctx, grad_output: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def backward(ctx, grad_output: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         input, weight, bias = ctx.saved_tensors
         stride = ctx.stride
         padding = ctx.padding
@@ -97,4 +92,4 @@ class MemConv2dFunction(Function):
         else:
             grad_bias = None
 
-        return grad_input, grad_weight, grad_bias, None, None, None, None
+        return grad_input, grad_weight, grad_bias, None, None, None
