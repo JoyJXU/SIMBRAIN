@@ -143,7 +143,8 @@ for test_cnt in range(multiple_test_no):
     if sim_params['device_name'] != 'trace' and sim_params['hardware_estimation']:
         total_area = 0
         for l in network.layers:
-            total_area += network.layers[l].transform.mem_array.area.array_area
+            network.layers[l].transform.total_area_calculation()
+            total_area += network.layers[l].transform.sim_area['sim_total_area']
         print("total crossbar area=", total_area, " m2")
     
     # %% Load MNIST data.

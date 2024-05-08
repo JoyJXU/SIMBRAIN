@@ -60,10 +60,10 @@ parser.add_argument("--ADC_precision", type=int, default=32)
 parser.add_argument("--ADC_setting", type=int, default=4)  # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
 parser.add_argument("--ADC_rounding_function", type=str, default='floor')  # floor or round
 parser.add_argument("--wire_width", type=int, default=200) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
-parser.add_argument("--CMOS_technode", type=int, default=32)
+parser.add_argument("--CMOS_technode", type=int, default=14)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--hardware_estimation", type=int, default=False)
+parser.add_argument("--hardware_estimation", type=int, default=True)
 args = parser.parse_args()
 
 def main():
@@ -112,7 +112,7 @@ def main():
         # Area print
         if sim_params['hardware_estimation']:
             _crossbar.total_area_calculation()
-            print("total crossbar area=", _crossbar.sim_area['mem_area'], " m2")
+            print("total area=", _crossbar.sim_area['sim_total_area'], " m2")
 
         # run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, _logs)
         run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, _logs)

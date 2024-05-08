@@ -40,6 +40,8 @@ class DAC_Module_Power(torch.nn.Module):
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.dt = memristor_info_dict[self.device_name]['delta_t']
         self.vdd = self.CMOS_tech_info_dict[self.device_roadmap][str(self.CMOS_technode)]['vdd']
+        self.relax_ratio_col = self.memristor_info_dict[self.device_name]['relax_ratio_col'] # Leave space for adjacent memristors
+        self.relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_row']
         self.read_v_amp = self.memristor_info_dict[self.device_name]['v_read']
         self.formula_function = Formula(sim_params=self.sim_params, shape=self.shape,
                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict)
@@ -75,11 +77,9 @@ class DAC_Module_Power(torch.nn.Module):
         res_mem_cell_on_at_vw = 1 / self.Goff
         resTg = res_mem_cell_on_at_vw / self.shape[1] * self.IR_DROP_TOLERANCE
         min_cell_height = self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
-        relax_ratio = self.memristor_info_dict[self.device_name]['relax_ratio'] # Leave space for adjacent memristors
-        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
-        length_col = self.shape[0] * relax_ratio * mem_size
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
+        length_col = self.shape[0] * self.relax_ratio_col * mem_size
         if length_col < min_cell_height:
-            # raise ValueError("[SwitchMatrix] pass gate height is even larger than the array height")
             length_col = min_cell_height
         num_tg_pair_per_col = (int)(length_col / min_cell_height)
         num_col_tg_pair = (int)(math.ceil((float)(self.shape[0]) / num_tg_pair_per_col))
@@ -111,11 +111,11 @@ class DAC_Module_Power(torch.nn.Module):
     def switch_matrix_col_write_initialize(self) -> None:
         num_row_tg_pair = 1
         min_cell_width = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
-        relax_ratio = self.memristor_info_dict[self.device_name]['relax_ratio'] # Leave space for adjacent memristors
-        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
-        length_row = self.shape[1] * relax_ratio * mem_size
-        if length_row < min_cell_width:
-            raise ValueError("[SwitchMatrix] pass gate width is even larger than the array width")
+
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
+        length_row = self.shape[1] * self.relax_ratio_row * mem_size
+        if length_row < min_cell_width * 2:
+            length_row = min_cell_width * 2
         num_tg_pair_per_row = (int)(length_row / (min_cell_width * 2))
         num_row_tg_pair = (int)(math.ceil((float)(self.shape[1]) / num_tg_pair_per_row))
         num_tg_pair_per_row = (int)(math.ceil((float)(self.shape[1]) / num_row_tg_pair))
@@ -159,8 +159,8 @@ class DAC_Module_Power(torch.nn.Module):
                                                                                     heightTransistorRegion=DFF_height_inv)
         self.DFF_energy = 0
 
-    def switch_matrix_read_energy_calculation(self, activity_read, mem_v) -> None:
-        read_times = mem_v.shape[0] * mem_v.shape[1] * self.input_bit
+    def switch_matrix_read_energy_calculation(self, activity_read, mem_v_shape) -> None:
+        read_times = mem_v_shape[0] * mem_v_shape[1] * self.input_bit
         self.switch_matrix_read_energy += (self.switch_matrix_read_cap_tg_drain * 3) * self.read_v_amp * self.read_v_amp * activity_read * self.shape[0] * read_times
         self.switch_matrix_read_energy += (self.switch_matrix_read_cap_gateN + self.switch_matrix_read_cap_gateP) * self.vdd * self.vdd * activity_read * self.shape[0] * read_times
         self.switch_matrix_read_energy += self.DFF_energy_calculation(DFF_num=self.shape[0], DFF_read=read_times)

@@ -64,8 +64,12 @@ def train(epoch):
         # Memristor write
         for layer in net.features.children():
             if isinstance(layer, Mem_Conv2d):
+                if args.stuck_at_fault == True:
+                    layer.crossbar.update_SAF_mask()
                 layer.mem_update()
         if isinstance(net.classifier, Mem_Linear):
+            if args.stuck_at_fault == True:
+                net.classifier.crossbar.update_SAF_mask()
             net.classifier.mem_update()
 
         train_loss += loss.item()
@@ -169,11 +173,30 @@ if __name__ == '__main__':
     net = mem_VGG('VGG16', mem_device=sim_params)
     net = net.to(device)
 
+    # print area results
+    if sim_params['hardware_estimation']:
+        total_area = 0
+        for layer in net.features.children():
+            if isinstance(layer, Mem_Conv2d):
+                layer.crossbar.total_area_calculation()
+                sim_area = layer.crossbar.sim_area
+                total_area += sim_area['sim_total_area']
+        if isinstance(net.classifier, Mem_Linear):
+            layer = net.classifier
+            layer.crossbar.total_area_calculation()
+            sim_area = layer.crossbar.sim_area
+            total_area += sim_area['sim_total_area']
+        print("total_area=" + str(total_area))
+
     # Memristor write
     for layer in net.features.children():
         if isinstance(layer, Mem_Conv2d):
+            if args.stuck_at_fault == True:
+                layer.crossbar.update_SAF_mask()
             layer.mem_update()
     if isinstance(net.classifier, Mem_Linear):
+        if args.stuck_at_fault == True:
+            net.classifier.crossbar.update_SAF_mask()
         net.classifier.mem_update()
 
     criterion = nn.CrossEntropyLoss()

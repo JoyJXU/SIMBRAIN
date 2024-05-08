@@ -90,15 +90,15 @@ if sim_params['hardware_estimation']:
     total_area = 0
     for layer_name, layer in model.layers.items():
         if isinstance(layer, Mem_Linear):
-            total_area += layer.crossbar.mem_pos_pos.area.array_area
-            total_area += layer.crossbar.mem_neg_pos.area.array_area
-            total_area += layer.crossbar.mem_pos_neg.area.array_area
-            total_area += layer.crossbar.mem_neg_neg.area.array_area
-    print("total crossbar area=" + str(total_area) + " m2")
+            layer.crossbar.total_area_calculation()
+            total_area += layer.crossbar.sim_area['sim_total_area']
+    print("total area=" + str(total_area) + " m2")
 
 # Memristor write
 for layer_name, layer in model.layers.items():
     if isinstance(layer, Mem_Linear):
+        if args.stuck_at_fault == True:
+            layer.crossbar.update_SAF_mask()
         layer.mem_update()
 
 # optimizer
@@ -126,6 +126,8 @@ try:
             # Memristor write
             for layer_name, layer in model.layers.items():
                 if isinstance(layer, Mem_Linear):
+                    if args.stuck_at_fault == True:
+                        layer.crossbar.update_SAF_mask()
                     layer.mem_update()
                     # mem_t update
                     layer.crossbar.mem_t_update()

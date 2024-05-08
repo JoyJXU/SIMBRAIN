@@ -62,6 +62,10 @@ class DAC_Module_Area(torch.nn.Module):
 
         if newHeight:  # DFF in multiple columns given the total height
             # Calculate the number of DFF per column
+            if newHeight < hDff:
+                print("[Warning-DFF] Pass gate length is larger than the array height, which may cause problems in module matching!\
+                      \nIt is recommended to choose a smaller technode or increase the relax_ratio_col and shape_col.")
+                newHeight = hDff
             numDFFPerCol = int(newHeight / hDff)
             if numDFFPerCol > numDff:
                 numDFFPerCol = numDff
@@ -71,6 +75,10 @@ class DAC_Module_Area(torch.nn.Module):
 
         elif newWidth:  # DFF in multiple rows given the total width
             # Calculate the number of DFF per row
+            if newWidth < wDff:
+                print("[Warning-DFF] Pass gate width is larger than the array width, which may cause problems in module matching!\
+                      \nIt is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
+                newWidth = wDff
             numDFFPerRow = int(newWidth / wDff)
             if numDFFPerRow > numDff:
                 numDFFPerRow = numDff
@@ -84,7 +92,7 @@ class DAC_Module_Area(torch.nn.Module):
 
         self.Dff_area = self.Dff_height * self.Dff_width
 
-        return self.Dff_area
+        return self.Dff_height, self.Dff_width, self.Dff_area
 
 
     def Switchmatrix_area_calculation(self, newHeight, newWidth, mode):
@@ -97,29 +105,35 @@ class DAC_Module_Area(torch.nn.Module):
             widthTgP = self.formula_function.calculate_on_resistance(self.CMOS_technode_meter,
                                                                      "PMOS") * self.CMOS_technode_meter / (resTg * 2)
             if newHeight:
+                # DFF
+                numDff = self.shape[0]
+                self.DFF_area_calculation(newHeight, None, numDff)
+
                 if newHeight < minCellHeight:
-                    print("[SwitchMatrix] Error: pass gate height is even larger than the array height")
+                    print("[Warning-Switch_matrix] Pass gate length is larger than the array height, which may cause problems in module matching!\
+                          \nIt is recommended to choose a smaller technode or increase the relax_ratio_col and shape_col.")
+                    newHeight = minCellHeight
                 numTgPairPerCol = int(newHeight / minCellHeight)  # Get max # Tg pair per column (this is not the final # Tg pair per column because the last column may have less # Tg)
                 numColTgPair = int(math.ceil(self.shape[0] / numTgPairPerCol))  # Get min # columns based on this max # Tg pair per column
                 numTgPairPerCol = int(math.ceil(self.shape[0] / numColTgPair))  # Get # Tg pair per column based on this min # columns
                 TgHeight = newHeight / numTgPairPerCol
                 wTg, hTg = self.formula_function.calculate_gate_area("INV", 1, widthTgN, widthTgP, TgHeight)
 
-                # DFF
-                numDff = self.shape[0]
-                self.DFF_area_calculation(newHeight, None, numDff)
-
                 self.Switchmatrix_height = newHeight
-                self.Switchmatrix_width = (wTg * 2) * numColTgPair + self.Dff_width
+                self.Switchmatrix_height_total = max(newHeight, self.Dff_height)
+                self.Switchmatrix_width = (wTg * 2) * numColTgPair
+                self.Switchmatrix_width_total = (wTg * 2) * numColTgPair + self.Dff_width
 
             else:
                 wTg, hTg = self.formula_function.calculate_gate_area("INV", 1, widthTgN, widthTgP,
                                                                      minCellHeight)  # Pass gate with folding
                 self.Switchmatrix_height = hTg * self.shape[0]
+                self.Switchmatrix_height_total = max(hTg * self.shape[0], self.Dff_weight)
                 numDff = self.shape[0]
                 self.DFF_area_calculation(self.Switchmatrix_height, None,
                                           numDff)  # Need to give the height information, otherwise by default the area calculation of DFF is in column mode
-                self.Switchmatrix_width = (wTg * 2) + self.Dff_width
+                self.Switchmatrix_width = (wTg * 2)
+                self.Switchmatrix_width_total = (wTg * 2) + self.Dff_width
 
         else:  # Connect to columns
             resTg = resMemCellOnAtVw / self.shape[0] / 2
@@ -128,9 +142,15 @@ class DAC_Module_Area(torch.nn.Module):
             widthTgP = self.formula_function.calculate_on_resistance(self.CMOS_technode_meter,
                                                                      "PMOS") * self.CMOS_technode_meter / (resTg * 2)
             if newWidth:
+                # DFF
+                numDff = self.shape[0]
+                self.DFF_area_calculation(None, newWidth, numDff)
+
                 minCellWidth = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter  # min standard cell width for 1 Tg
-                if minCellWidth > newWidth:
-                    print("[SwitchMatrix] Error: pass gate width is even larger than the array width")
+                if 2 * minCellWidth > newWidth:
+                    print("[Warning-Switch_matrix] Pass gate width is larger than the array width, which may cause problems in module matching!\
+                          \nIt is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
+                    newWidth = 2 * minCellWidth
                 numTgPairPerRow = int(newWidth / (minCellWidth * 2))  # Get max # Tg pair per row (this is not the final # Tg pair per row because the last row may have less # Tg)
                 numRowTgPair = int(math.ceil(self.shape[1] / numTgPairPerRow))  # Get min # rows based on this max # Tg pair per row
                 numTgPairPerRow = int(math.ceil(self.shape[1] / numRowTgPair))  # Get # Tg pair per row based on this min # rows
@@ -140,34 +160,35 @@ class DAC_Module_Area(torch.nn.Module):
                 # widthTgN, widthTgP and numFold can determine the height and width of each pass gate
                 wTg, hTg = self.formula_function.calculate_pass_gate_area(widthTgN, widthTgP, numFold)
 
-                # DFF
-                numDff = self.shape[0]
-                self.DFF_area_calculation(None, newWidth, numDff)
-
                 self.Switchmatrix_width = newWidth
-                self.Switchmatrix_height = hTg * numRowTgPair + self.Dff_height
+                self.Switchmatrix_width_total = max(newWidth, self.Dff_width)
+                self.Switchmatrix_height = hTg * numRowTgPair
+                self.Switchmatrix_height_total = hTg * numRowTgPair + self.Dff_height
 
             else:
                 # Default (pass gate with folding=1)
                 wTg, hTg = self.formula_function.calculate_pass_gate_area(widthTgN, widthTgP, 1)
                 self.Switchmatrix_width = wTg * 2 * self.shape[0]
+                self.Switchmatrix_width_total = max(wTg * 2 * self.shape[0], self.Dff_width)
                 numDff = self.shape[0]
                 self.DFF_area_calculation(None, self.Switchmatrix_width, numDff)
-                self.Switchmatrix_height = hTg + self.Dff_height
+                self.Switchmatrix_height = hTg
+                self.Switchmatrix_height_total = hTg + self.Dff_height
 
-        self.Switchmatrix_area = self.Switchmatrix_height * self.Switchmatrix_width
+        self.Switchmatrix_area = self.Switchmatrix_height * self.Switchmatrix_width + self.Dff_area
 
-        return self.Switchmatrix_area
+        return self.Switchmatrix_height_total, self.Switchmatrix_width_total, self.Switchmatrix_area
 
 
     def DAC_module_cal_area(self) -> None:
-        relax_ratio = self.memristor_info_dict[self.device_name]['relax_ratio']  # Leave space for adjacent memristors
-        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
-        length_row = self.shape[1] * relax_ratio * mem_size
-        length_col = self.shape[0] * relax_ratio * mem_size
-        Switchmatrix_Area_Row = self.Switchmatrix_area_calculation(length_col, 0, "ROW_MODE")
-        Switchmatrix_Area_Col = self.Switchmatrix_area_calculation(0, length_row, "COL_MODE")
-        return Switchmatrix_Area_Row, Switchmatrix_Area_Col
+        relax_ratio_col = self.memristor_info_dict[self.device_name]['relax_ratio_col']  # Leave space for adjacent memristors
+        relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_row']  # Leave space for adjacent memristors
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
+        length_row = self.shape[1] * relax_ratio_row * mem_size
+        length_col = self.shape[0] * relax_ratio_col * mem_size
+        DAC_Height_Row, DAC_Width_Row, Switchmatrix_Area_Row = self.Switchmatrix_area_calculation(length_col, 0, "ROW_MODE")
+        DAC_Height_Col, DAC_Width_Col, Switchmatrix_Area_Col = self.Switchmatrix_area_calculation(0, length_row, "COL_MODE")
+        return DAC_Height_Row, DAC_Width_Row, DAC_Height_Col, DAC_Width_Col, Switchmatrix_Area_Row, Switchmatrix_Area_Col
 
 
 class ADC_Module_Area(torch.nn.Module):
@@ -212,69 +233,50 @@ class ADC_Module_Area(torch.nn.Module):
                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict)
 
 
-    def Adder_area_calculation(self, newHeight, newWidth):
+    def Adder_area_calculation(self, newWidth):
         widthNandN = 2 * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         widthNandP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         wNand, hNand = self.formula_function.calculate_gate_area("NAND", 2, widthNandN, widthNandP,
                                                                  self.CMOS_technode_meter * self.MAX_TRANSISTOR_HEIGHT)
         numAdder = self.shape[1]
-        if newHeight:
-            # Adder in multiple columns given the total height
-            self.hAdder = hNand
-            self.wAdder = wNand * 9 * self.ADC_precision
 
-            # Calculate the number of adder per column
-            numAdderPerCol = int(newHeight / self.hAdder)
-            if numAdderPerCol > numAdder:
-                numAdderPerCol = numAdder
-            numColAdder = int(math.ceil(numAdder / numAdderPerCol))
-            self.adder_height = newHeight
-            self.adder_width = self.wAdder * numColAdder
+        # Adder in multiple rows given the total width
+        self.hAdder = hNand * self.ADC_precision
+        self.wAdder = wNand * 9
 
-        elif newWidth:
-            # Adder in multiple rows given the total width
-            self.hAdder = hNand * self.ADC_precision
-            self.wAdder = wNand * 9
+        # Calculate the number of adder per row
+        if newWidth < self.wAdder:
+            print("[Warning-Adder] Pass gate width is larger than the array width, which may cause problems in module matching!\
+                  \nIt is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
+            newWidth = self.wAdder
+        numAdderPerRow = int(newWidth / self.wAdder)
+        if numAdderPerRow > numAdder:
+            numAdderPerRow = numAdder
+        numRowAdder = int(math.ceil(numAdder / numAdderPerRow))
+        self.Adder_width = newWidth
+        self.Adder_height = self.hAdder * numRowAdder
 
-            # Calculate the number of adder per row
-            numAdderPerRow = int(newWidth / self.wAdder)
-            if numAdderPerRow > numAdder:
-                numAdderPerRow = numAdder
-            numRowAdder = int(math.ceil(numAdder / numAdderPerRow))
-            self.adder_width = newWidth
-            self.adder_height = self.hAdder * numRowAdder
+        self.Adder_area = self.Adder_height * self.Adder_width
 
-        else:
-            # Assume one row of adder by default
-            self.hAdder = hNand
-            self.wAdder = wNand * 9 * self.ADC_precision
-            self.adder_width = self.wAdder * numAdder
-            self.adder_height = self.hAdder
-
-        self.adder_area = self.adder_height * self.adder_width
-
-        return self.adder_area
+        return self.Adder_height, self.Adder_width, self.Adder_area
 
 
-    def ShiftAdder_area_calculation(self, newHeight, newWidth):
+    def ShiftAdder_area_calculation(self, newWidth):
         numDff = (self.ADC_precision + self.input_bit) * self.shape[1]
-        if newWidth:
-            self.Adder_area_calculation(None, newWidth)
-            self.DFF_area_calculation(None, newWidth, numDff)
 
-        else:
-            print("[ShiftAdd] Error: No width assigned for the shift-and-add circuit")
-            exit(-1)
+        self.Adder_area_calculation(newWidth)
+        self.DFF_area_calculation(newWidth, numDff)
 
-        self.ShiftAdder_height = self.adder_height + self.CMOS_technode_meter * self.MAX_TRANSISTOR_HEIGHT + self.Dff_height
-        self.ShiftAdder_width = newWidth
+        self.ShiftAdder_height = self.Adder_height + self.CMOS_technode_meter * self.MAX_TRANSISTOR_HEIGHT + self.Dff_height
+        self.ShiftAdder_width = max(self.Adder_width, self.Dff_width)
 
-        self.ShiftAdder_area = self.ShiftAdder_height * self.ShiftAdder_width
+        self.INV_NAND_area = self.CMOS_technode_meter * self.MAX_TRANSISTOR_HEIGHT * newWidth
+        self.ShiftAdder_area = self.Adder_area + self.Dff_area + self.INV_NAND_area
 
-        return self.ShiftAdder_area
+        return self.ShiftAdder_height, self.ShiftAdder_width, self.ShiftAdder_area
 
 
-    def DFF_area_calculation(self, newHeight, newWidth, numDff):
+    def DFF_area_calculation(self, newWidth, numDff):
         # Assume DFF size is 12 minimum-size standard cells put together
         # widthTgN = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         # widthTgP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
@@ -285,34 +287,24 @@ class ADC_Module_Area(torch.nn.Module):
         hDff = hDffInv
         wDff = wDffInv * 12
 
-        if newHeight:  # DFF in multiple columns given the total height
-            # Calculate the number of DFF per column
-            numDFFPerCol = int(newHeight / hDff)
-            if numDFFPerCol > numDff:
-                numDFFPerCol = numDff
-            numColDFF = int(math.ceil(numDff / numDFFPerCol))
-            self.Dff_height = newHeight
-            self.Dff_width = wDff * numColDFF
-
-        elif newWidth:  # DFF in multiple rows given the total width
-            # Calculate the number of DFF per row
-            numDFFPerRow = int(newWidth / wDff)
-            if numDFFPerRow > numDff:
-                numDFFPerRow = numDff
-            numRowDFF = int(math.ceil(numDff / numDFFPerRow))
-            self.Dff_width = newWidth
-            self.Dff_height = hDff * numRowDFF
-
-        else:  # Assume one row of DFF by default
-            self.Dff_width = wDff * numDff
-            self.Dff_height = hDff
+        # Calculate the number of DFF per row
+        if newWidth < wDff:
+            print("[Warning-DFF] Pass gate width is larger than the array width, which may cause problems in module matching!\
+                  \nIt is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
+            newWidth = wDff
+        numDFFPerRow = int(newWidth / wDff)
+        if numDFFPerRow > numDff:
+            numDFFPerRow = numDff
+        numRowDFF = int(math.ceil(numDff / numDFFPerRow))
+        self.Dff_width = newWidth
+        self.Dff_height = hDff * numRowDFF
 
         self.Dff_area = self.Dff_height * self.Dff_width
 
-        return self.Dff_area
+        return self.Dff_height, self.Dff_width, self.Dff_area
 
 
-    def SarADC_area_calculation(self, heightArray, widthArray):
+    def SarADC_area_calculation(self, widthArray):
         widthNmos = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         widthPmos = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         wNmos, hNmos = self.formula_function.calculate_gate_area("INV", 1, widthNmos, 0,
@@ -321,33 +313,26 @@ class ADC_Module_Area(torch.nn.Module):
                                                                  self.CMOS_technode_meter * self.MAX_TRANSISTOR_HEIGHT)
         levelOutput = 2 ^ self.ADC_precision
 
-        self.areaUnit = (hNmos * wNmos) * (269 + (math.log2(levelOutput) - 1) * 109) + (hPmos * wPmos) * (
+        self.areaUnit = (hNmos * wNmos) * (269 + (self.ADC_precision - 1) * 109) + (hPmos * wPmos) * (
                     209 + (math.log2(levelOutput) - 1) * 73)
 
-        area = 0
-        if widthArray:
-            self.SarADC_area = self.areaUnit * self.shape[1]
-            self.width = widthArray
-            self.height = area / widthArray
-        elif heightArray:
-            self.SarADC_area = self.areaUnit * self.shape[1]
-            self.height = heightArray
-            self.width = area / heightArray
-        else:
-            print("[MultilevelSenseAmp] Error: No width or height assigned for the multiSenseAmp circuit")
-            exit(-1)
+        self.SarADC_area = self.areaUnit * self.shape[1]
+        self.SarADC_width = widthArray
+        self.SarADC_height = self.SarADC_area / widthArray
 
             # Assume the Current Mirrors are on the same row and the total width of them is smaller than the adder or DFF
 
-        return self.SarADC_area
+        return self.SarADC_height, self.SarADC_width,self.SarADC_area
 
 
     def ADC_module_cal_area(self) -> None:
-        relax_ratio = self.memristor_info_dict[self.device_name]['relax_ratio'] # Leave space for adjacent memristors
-        mem_size = self.memristor_info_dict[self.device_name]['mem_size']
-        length_row = self.shape[1] * relax_ratio * mem_size
-        ShiftAdder_Area = self.ShiftAdder_area_calculation(0, length_row)
-        SarADC_Area = self.SarADC_area_calculation(0, length_row)
-        return ShiftAdder_Area, SarADC_Area
+        relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_row']  # Leave space for adjacent memristors
+        mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
+        length_row = self.shape[1] * relax_ratio_row * mem_size
+        ShiftAdder_Height, ShiftAdder_Width, ShiftAdder_Area = self.ShiftAdder_area_calculation(length_row)
+        SarADC_Height, SarADC_Width, SarADC_Area = self.SarADC_area_calculation(length_row)
+        ADC_total_height = ShiftAdder_Height + SarADC_Height
+        ADC_total_width = max(ShiftAdder_Width,SarADC_Width)
+        return ADC_total_height, ADC_total_width, ShiftAdder_Area, SarADC_Area
 
 

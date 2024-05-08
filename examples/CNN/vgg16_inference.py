@@ -22,7 +22,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--rep", type=int, default=10)
-parser.add_argument("--batch_size", type=int, default=50)
+parser.add_argument("--batch_size", type=int, default=25)
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
 parser.add_argument("--memristor_device", type=str, default='new_ferro') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=False)
@@ -38,11 +38,11 @@ parser.add_argument("--wire_width", type=int, default=200) # In practice, proces
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--hardware_estimation", type=int, default=False)
+parser.add_argument("--hardware_estimation", type=int, default=True)
 args = parser.parse_args()
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,12 +90,12 @@ if sim_params['hardware_estimation']:
         if isinstance(layer, Mem_Conv2d):
             layer.crossbar.total_area_calculation()
             sim_area = layer.crossbar.sim_area
-            total_area += sim_area['mem_area']
+            total_area += sim_area['sim_total_area']
     if isinstance(net.classifier, Mem_Linear):
         layer = net.classifier
         layer.crossbar.total_area_calculation()
         sim_area = layer.crossbar.sim_area
-        total_area += sim_area['mem_area']
+        total_area += sim_area['sim_total_area']
     print("total_area=" + str(total_area))
 
 # Load Pre-trained Model
@@ -126,9 +126,14 @@ for test_cnt in range(args.rep):
     # Memristor write
     for layer in net.features.children():
         if isinstance(layer, Mem_Conv2d):
+            if args.stuck_at_fault == True:
+                layer.crossbar.update_SAF_mask()
             layer.mem_update()
     if isinstance(net.classifier, Mem_Linear):
+        if args.stuck_at_fault == True:
+            net.classifier.crossbar.update_SAF_mask()
         net.classifier.mem_update()
+
 
     net = net.to(device)
 
