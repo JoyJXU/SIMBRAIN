@@ -75,7 +75,7 @@
         "v_off":2,
         "k_on":-3.36,
         "k_off":19.52,
-        "retention_loss_tau": 0.012478,
+        "retention_loss_tau": 6200,
         "retention_loss_beta": 1.066,
         "sigma_relative":0.02438171519582677,
         "sigma_absolute":0.005490197724238527,

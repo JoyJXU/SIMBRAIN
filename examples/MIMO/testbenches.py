@@ -505,6 +505,8 @@ def run_c2c_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device,
                     vector_batch = vector[(step * _batch_size):(step * _batch_size + _batch_size)]
 
                     # Memristor-based results simulation
+                    if sim_params['stuck_at_fault'] == True:
+                        _crossbar.update_SAF_mask()
                     # Memristor crossbar program
                     _crossbar.mapping_write_mimo(target_x=matrix_batch)
                     # Memristor crossbar perform matrix vector multiplication
@@ -655,6 +657,8 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
             vector_batch = vector[(step * _batch_size):(step * _batch_size + _batch_size)]
 
             # Memristor-based results simulation
+            if sim_params['stuck_at_fault'] == True:
+                _crossbar.update_SAF_mask()
             # Memristor crossbar program
             _crossbar.mapping_write_mimo(target_x=matrix_batch)
             # Memristor crossbar perform matrix vector multiplication

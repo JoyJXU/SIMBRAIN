@@ -64,6 +64,10 @@ class Mapping(torch.nn.Module):
         assert self.device_roadmap in self.CMOS_tech_info_dict.keys(), "Invalid Memristor Device!"
         assert str(self.CMOS_technode) in self.CMOS_tech_info_dict[self.device_roadmap].keys(), "Invalid Memristor Device!"
 
+        with open('../../memristor_lut.pkl', 'rb') as f:
+            self.memristor_luts = pickle.load(f)
+        assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
+
         self.trans_ratio = 1 / (self.Goff - self.Gon)
 
         self.batch_size = None
@@ -302,7 +306,8 @@ class STDPMapping(Mapping):
         """
         Abstract base class method for resetting state variables.
         """
-        self.mem_v.fill_(-self.vpos)
+        v_reset = self.memristor_luts[self.device_name]['V_reset']
+        self.mem_v.fill_(v_reset)
         
         # Adopt large negative pulses to reset the memristor array
         self.mem_array.memristor_write(mem_v=self.mem_v)
@@ -363,10 +368,6 @@ class MimoMapping(Mapping):
         )
 
         self.register_buffer("write_pulse_no", torch.Tensor())
-
-        with open('../../memristor_lut.pkl', 'rb') as f:
-            self.memristor_luts = pickle.load(f)
-        assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
         # Corssbar for positive input and positive weight
         self.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
@@ -441,7 +442,8 @@ class MimoMapping(Mapping):
 
     def mapping_write_mimo(self, target_x):
         # Memristor reset first
-        self.mem_v.fill_(-100)  # TODO: check the reset voltage
+        v_reset = self.memristor_luts[self.device_name]['V_reset']
+        self.mem_v.fill_(v_reset)
         # Adopt large negative pulses to reset the memristor array
         # self.mem_array.memristor_reset(mem_v=self.mem_v)
         self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
@@ -677,10 +679,6 @@ class MLPMapping(Mapping):
         self.register_buffer("norm_ratio", torch.Tensor())
         self.register_buffer("write_pulse_no", torch.Tensor())
 
-        with open('../../memristor_lut.pkl', 'rb') as f:
-            self.memristor_luts = pickle.load(f)
-        assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
-
         # Corssbar for positive input and positive weight
         self.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
                                         memristor_info_dict=self.memristor_info_dict)
@@ -755,7 +753,8 @@ class MLPMapping(Mapping):
 
     def mapping_write_mlp(self, target_x):
         # Memristor reset first
-        self.mem_v.fill_(-100)  # TODO: check the reset voltage
+        v_reset = self.memristor_luts[self.device_name]['V_reset']
+        self.mem_v.fill_(v_reset)
         # Adopt large negative pulses to reset the memristor array
         self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
         self.DAC_module_neg.DAC_reset(mem_v=self.mem_v)
@@ -996,10 +995,6 @@ class CNNMapping(Mapping):
         self.register_buffer("norm_ratio", torch.Tensor())
         # self.register_buffer("write_pulse_no", torch.Tensor())
 
-        with open('../../memristor_lut.pkl', 'rb') as f:
-            self.memristor_luts = pickle.load(f)
-        assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
-
         # Corssbar for positive input and positive weight
         self.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
                                           memristor_info_dict=self.memristor_info_dict)
@@ -1064,7 +1059,8 @@ class CNNMapping(Mapping):
 
     def mapping_write_cnn(self, target_x):
         # Memristor reset first
-        self.mem_v.fill_(-100)  # TODO: check the reset voltage
+        v_reset = self.memristor_luts[self.device_name]['V_reset']
+        self.mem_v.fill_(v_reset)
         # Adopt large negative pulses to reset the memristor array
         self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
         self.DAC_module_neg.DAC_reset(mem_v=self.mem_v)
