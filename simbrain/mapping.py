@@ -442,7 +442,7 @@ class MimoMapping(Mapping):
 
     def mapping_write_mimo(self, target_x):
         # Memristor reset first
-        self.mem_v.fill_(-100)  # TODO: check the reset voltage
+        self.mem_v.fill_(-5)  # TODO: check the reset voltage
         # Adopt large negative pulses to reset the memristor array
         # self.mem_array.memristor_reset(mem_v=self.mem_v)
         self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)

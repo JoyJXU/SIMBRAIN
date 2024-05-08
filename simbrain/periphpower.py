@@ -184,6 +184,7 @@ class DAC_Module_Power(torch.nn.Module):
         self.switch_matrix_row_write_energy += self.DFF_energy_calculation(self.shape[0], self.shape[0]*self.batch_size)
 
 
+
     def switch_matrix_reset_energy_calculation(self, mem_v) -> None:
         mem_v_amp = torch.min(mem_v)
         self.switch_matrix_reset_energy += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[1]
@@ -223,7 +224,6 @@ class DAC_Module_Power(torch.nn.Module):
                           'switch_matrix_read_energy': self.switch_matrix_read_energy,
                           'DAC_total_energy': self.DAC_total_energy,
                           'DAC_average_power': self.DAC_average_power}
-
 
 class ADC_Module_Power(torch.nn.Module):
     # language=rst
