@@ -420,7 +420,7 @@ class MemristorFitting(object):
         max_states_num = 500
         cut_sign = 0
         V_write = np.full(max_states_num, setting_step * 2 * v_off)
-        V_reset = [0, v_on]
+        max_V_reset = 0
 
         while V_write[0] > v_off:
             cut_sign += 1
@@ -436,13 +436,18 @@ class MemristorFitting(object):
                 break
             else:
                 break
-            
-        while True:
-            reset_state, _ = self.lut_state_generate(V_reset, mem_info, 1)
-            if reset_state[1] == 0:
-                break
-            else:
-                V_reset[1] = V_reset[1] / setting_step
+        
+        for init_state in range(10,0,-1):
+            V_reset = [0, v_on]
+            init_state *= 0.1
+            while True:
+                reset_state, _ = self.lut_state_generate(V_reset, mem_info, init_state)
+                if reset_state[1] == 0:
+                    break
+                else:
+                    V_reset[1] = V_reset[1] / setting_step
+            if np.abs(V_reset[1]) > np.abs(max_V_reset):
+                max_V_reset = V_reset[1]
         
         if cut_sign == 1:
             mine_lut = {
@@ -450,7 +455,7 @@ class MemristorFitting(object):
                 'voltage': setting_step * 2 * v_off,
                 'cycle:': mem_info['delta_t'],
                 'duty ratio': mem_info['duty_ratio'],
-                'V_reset': V_reset[1],
+                'V_reset': max_V_reset,
                 'conductance': lut_conductance[0:cut_num + 1]
             }
         else:
@@ -461,7 +466,7 @@ class MemristorFitting(object):
                 'voltage': V_write[0],
                 'cycle:': mem_info['delta_t'],
                 'duty ratio': mem_info['duty_ratio'],
-                'V_reset': V_reset[1],
+                'V_reset': max_V_reset,
                 'conductance': lut_conductance[0:best_states_num + 1]
             }
         # with open('../../simbrain/Parameter_files/memristor_lut.pkl', 'rb') as f:
