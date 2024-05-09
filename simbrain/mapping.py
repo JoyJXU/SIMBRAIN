@@ -64,6 +64,10 @@ class Mapping(torch.nn.Module):
         assert self.device_roadmap in self.CMOS_tech_info_dict.keys(), "Invalid Memristor Device!"
         assert str(self.CMOS_technode) in self.CMOS_tech_info_dict[self.device_roadmap].keys(), "Invalid Memristor Device!"
 
+        with open('../../memristor_lut.pkl', 'rb') as f:
+            self.memristor_luts = pickle.load(f)
+        assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
+
         self.trans_ratio = 1 / (self.Goff - self.Gon)
 
         self.batch_size = None
@@ -85,7 +89,6 @@ class Mapping(torch.nn.Module):
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.mem_x_read = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_x_read.device)
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
-      
 
 
 class STDPMapping(Mapping):
@@ -303,7 +306,8 @@ class STDPMapping(Mapping):
         """
         Abstract base class method for resetting state variables.
         """
-        self.mem_v.fill_(-self.vpos)
+        v_reset = self.memristor_luts[self.device_name]['V_reset']
+        self.mem_v.fill_(v_reset)
         
         # Adopt large negative pulses to reset the memristor array
         self.mem_array.memristor_write(mem_v=self.mem_v)
@@ -311,10 +315,10 @@ class STDPMapping(Mapping):
 
     def mem_t_update(self) -> None:
         self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
-        
+
     def update_SAF_mask(self) -> None:
         self.mem_array.update_SAF_mask()
-        
+
     def total_area_calculation(self) -> None:
         # language=rst
         """
@@ -329,11 +333,11 @@ class STDPMapping(Mapping):
                              'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
                              'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
                              'sim_total_periph_area': periph_total_area}
-    
+
         total_height = max(self.mem_array.length_col + ADC_height + DAC_height_col, DAC_height_row)
         total_width = DAC_width_row + max(self.mem_array.length_row, DAC_width_col, ADC_width)
         self.sim_total_area = total_height * total_width
-        
+
         self.sim_area = {'sim_mem_area':self.sim_mem_area,
                          'sim_periph_area':periph_total_area,
                          'sim_total_area':self.sim_total_area,
@@ -364,10 +368,6 @@ class MimoMapping(Mapping):
         )
 
         self.register_buffer("write_pulse_no", torch.Tensor())
-
-        with open('../../memristor_lut.pkl', 'rb') as f:
-            self.memristor_luts = pickle.load(f)
-        assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
         # Corssbar for positive input and positive weight
         self.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
@@ -442,7 +442,8 @@ class MimoMapping(Mapping):
 
     def mapping_write_mimo(self, target_x):
         # Memristor reset first
-        self.mem_v.fill_(-5)  # TODO: check the reset voltage
+        v_reset = self.memristor_luts[self.device_name]['V_reset']
+        self.mem_v.fill_(v_reset)
         # Adopt large negative pulses to reset the memristor array
         # self.mem_array.memristor_reset(mem_v=self.mem_v)
         self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
@@ -538,7 +539,7 @@ class MimoMapping(Mapping):
         self.mem_neg_pos.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_pos_neg.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_neg_neg.mem_t += self.batch_interval * (self.batch_size - 1)
-        
+
     def update_SAF_mask(self) -> None:
         self.mem_pos_pos.update_SAF_mask()
         self.mem_pos_neg.update_SAF_mask()
@@ -621,7 +622,7 @@ class MimoMapping(Mapping):
                              'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
                              'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
                              'sim_total_periph_area': periph_total_area}
-        
+
         if self.ADC_setting == 4:
             total_height_pos_pos = max(self.mem_pos_pos.length_col + ADC_height_pos_pos + DAC_height_col_pos, DAC_height_row_pos)
             total_width_pos_pos = DAC_width_row_pos + max(self.mem_pos_pos.length_row, DAC_width_col_pos, ADC_width_pos_pos)
@@ -642,15 +643,14 @@ class MimoMapping(Mapping):
             total_width_neg_neg = self.mem_neg_neg.length_row
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
-            
+
         self.sim_total_area = total_height_pos_pos * total_width_pos_pos + total_height_pos_neg * total_width_pos_neg \
                     + total_height_neg_pos * total_width_neg_pos + total_height_neg_neg * total_width_neg_neg
-        
+
         self.sim_area = {'sim_mem_area':self.sim_mem_area,
                          'sim_periph_area':periph_total_area,
                          'sim_total_area':self.sim_total_area,
                          'sim_used_area_ratio':(self.sim_mem_area+periph_total_area)/self.sim_total_area}
-            
 
 
 class MLPMapping(Mapping):
@@ -678,10 +678,6 @@ class MLPMapping(Mapping):
 
         self.register_buffer("norm_ratio", torch.Tensor())
         self.register_buffer("write_pulse_no", torch.Tensor())
-
-        with open('../../memristor_lut.pkl', 'rb') as f:
-            self.memristor_luts = pickle.load(f)
-        assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
         # Corssbar for positive input and positive weight
         self.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
@@ -757,7 +753,8 @@ class MLPMapping(Mapping):
 
     def mapping_write_mlp(self, target_x):
         # Memristor reset first
-        self.mem_v.fill_(-100)  # TODO: check the reset voltage
+        v_reset = self.memristor_luts[self.device_name]['V_reset']
+        self.mem_v.fill_(v_reset)
         # Adopt large negative pulses to reset the memristor array
         self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
         self.DAC_module_neg.DAC_reset(mem_v=self.mem_v)
@@ -864,7 +861,7 @@ class MLPMapping(Mapping):
         self.mem_pos_neg.update_SAF_mask()
         self.mem_neg_pos.update_SAF_mask()
         self.mem_neg_neg.update_SAF_mask()
-        
+
     def total_energy_calculation(self) -> None:
         # language=rst
         """
@@ -941,7 +938,7 @@ class MLPMapping(Mapping):
                              'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
                              'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
                              'sim_total_periph_area': periph_total_area}
-        
+
         if self.ADC_setting == 4:
             total_height_pos_pos = max(self.mem_pos_pos.length_col + ADC_height_pos_pos + DAC_height_col_pos, DAC_height_row_pos)
             total_width_pos_pos = DAC_width_row_pos + max(self.mem_pos_pos.length_row, DAC_width_col_pos, ADC_width_pos_pos)
@@ -962,10 +959,10 @@ class MLPMapping(Mapping):
             total_width_neg_neg = self.mem_neg_neg.length_row
         else:
             raise Exception("Only 2-set and 4-set ADC are supported!")
-            
+
         self.sim_total_area = total_height_pos_pos * total_width_pos_pos + total_height_pos_neg * total_width_pos_neg \
                     + total_height_neg_pos * total_width_neg_pos + total_height_neg_neg * total_width_neg_neg
-        
+
         self.sim_area = {'sim_mem_area':self.sim_mem_area,
                          'sim_periph_area':periph_total_area,
                          'sim_total_area':self.sim_total_area,
@@ -997,10 +994,6 @@ class CNNMapping(Mapping):
 
         self.register_buffer("norm_ratio", torch.Tensor())
         # self.register_buffer("write_pulse_no", torch.Tensor())
-
-        with open('../../memristor_lut.pkl', 'rb') as f:
-            self.memristor_luts = pickle.load(f)
-        assert self.device_name in self.memristor_luts.keys(), "No Look-Up-Table Data Available for the Target Memristor Type!"
 
         # Corssbar for positive input and positive weight
         self.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=self.shape,
@@ -1066,7 +1059,8 @@ class CNNMapping(Mapping):
 
     def mapping_write_cnn(self, target_x):
         # Memristor reset first
-        self.mem_v.fill_(-100)  # TODO: check the reset voltage
+        v_reset = self.memristor_luts[self.device_name]['V_reset']
+        self.mem_v.fill_(v_reset)
         # Adopt large negative pulses to reset the memristor array
         self.DAC_module_pos.DAC_reset(mem_v=self.mem_v)
         self.DAC_module_neg.DAC_reset(mem_v=self.mem_v)
@@ -1251,7 +1245,7 @@ class CNNMapping(Mapping):
                              'sim_switch_matrix_col_area': sim_switch_matrix_col_area,
                              'sim_shiftadd_area': sim_shiftadd_area, 'sim_SarADC_area': sim_SarADC_area,
                              'sim_total_periph_area': periph_total_area}
-        
+
         if self.ADC_setting == 4:
             total_height_pos_pos = max(self.mem_pos_pos.length_col + ADC_height_pos_pos + DAC_height_col_pos, DAC_height_row_pos)
             total_width_pos_pos = DAC_width_row_pos + max(self.mem_pos_pos.length_row, DAC_width_col_pos, ADC_width_pos_pos)
@@ -1263,10 +1257,10 @@ class CNNMapping(Mapping):
             total_width_neg_neg = max(self.mem_neg_neg.length_row, ADC_width_neg_neg)
         else:
             raise Exception("Only 4-set ADC are supported!")
-            
+
         self.sim_total_area = total_height_pos_pos * total_width_pos_pos + total_height_pos_neg * total_width_pos_neg \
                     + total_height_neg_pos * total_width_neg_pos + total_height_neg_neg * total_width_neg_neg
-        
+
         self.sim_area = {'sim_mem_area':self.sim_mem_area,
                          'sim_periph_area':periph_total_area,
                          'sim_total_area':self.sim_total_area,

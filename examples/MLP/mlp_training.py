@@ -35,7 +35,7 @@ parser.add_argument("--input_bit", type=int, default=8)
 parser.add_argument("--ADC_precision", type=int, default=8)
 parser.add_argument("--ADC_setting", type=int, default=4)  # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
 parser.add_argument("--ADC_rounding_function", type=str, default='floor')  # floor or round
-parser.add_argument("--wire_width", type=int, default=200) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
+parser.add_argument("--wire_width", type=int, default=200) # In practice, wire_width shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
@@ -64,7 +64,7 @@ for k, v in args.__dict__.items():
 print("========================================")
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -127,7 +127,7 @@ try:
             for layer_name, layer in model.layers.items():
                 if isinstance(layer, Mem_Linear):
                     if args.stuck_at_fault == True:
-                        layer.crossbar.update_SAF_mask()                    
+                        layer.crossbar.update_SAF_mask()
                     layer.mem_update()
                     # mem_t update
                     layer.crossbar.mem_t_update()

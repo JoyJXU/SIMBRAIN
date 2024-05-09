@@ -43,7 +43,7 @@ parser.add_argument("--intensity", type=float, default=64)
 parser.add_argument("--progress_interval", type=int, default=10)
 parser.add_argument("--update_interval", type=int, default=250)
 parser.add_argument("--update_inhibation_weights", type=int, default=500)
-parser.add_argument("--plot_interval", type=int, default=250) 
+parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
@@ -57,11 +57,11 @@ parser.add_argument("--input_bit", type=int, default=1)
 parser.add_argument("--ADC_precision", type=int, default=8)
 parser.add_argument("--ADC_setting", type=int, default=4)  # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
 parser.add_argument("--ADC_rounding_function", type=str, default='floor')  # floor or round
-parser.add_argument("--wire_width", type=int, default=200) # In practice, process_node shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
-parser.add_argument("--CMOS_technode", type=int, default=14)
+parser.add_argument("--wire_width", type=int, default=200) # In practice, wire_width shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
+parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--hardware_estimation", type=int, default=True)
+parser.add_argument("--hardware_estimation", type=int, default=False)
 
 parser.set_defaults(plot=False, gpu=True)
 

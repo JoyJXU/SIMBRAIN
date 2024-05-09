@@ -92,7 +92,7 @@ class MemristorArray(torch.nn.Module):
         AR = self.tech_info_dict[str(self.wire_width)]['AR']
         Rho = self.tech_info_dict[str(self.wire_width)]['Rho']
         wire_resistance_unit_col = relax_ratio_col * mem_size * Rho / (AR * self.wire_width * self.wire_width * 1e-18)
-        wire_resistance_unit_row = relax_ratio_col * mem_size * Rho / (AR * self.wire_width * self.wire_width * 1e-18)        
+        wire_resistance_unit_row = relax_ratio_col * mem_size * Rho / (AR * self.wire_width * self.wire_width * 1e-18)
         self.register_buffer("total_wire_resistance", torch.Tensor())
         self.total_wire_resistance = wire_resistance_unit_col * torch.arange(1, self.shape[1] + 1, device=self.total_wire_resistance.device) + \
             wire_resistance_unit_row * torch.arange(self.shape[0], 0, -1, device=self.total_wire_resistance.device)[:, None]
@@ -135,8 +135,8 @@ class MemristorArray(torch.nn.Module):
             self.Gon_d2d = torch.zeros(*self.shape, device=self.Gon_d2d.device)
             self.Goff_d2d = torch.zeros(*self.shape, device=self.Goff_d2d.device)
             # Add d2d variation
-            self.Gon_d2d.normal_(mean=G_on, std=Gon_sigma*G_on)
-            self.Goff_d2d.normal_(mean=G_off, std=Goff_sigma*G_off)
+            self.Gon_d2d.normal_(mean=G_on, std=Gon_sigma * G_on)
+            self.Goff_d2d.normal_(mean=G_off, std=Goff_sigma * G_off)
             # Clipping
             self.Gon_d2d = torch.clamp(self.Gon_d2d, min=0)
             self.Goff_d2d = torch.clamp(self.Goff_d2d, min=0)
@@ -155,8 +155,8 @@ class MemristorArray(torch.nn.Module):
             self.Pon_d2d = torch.zeros(*self.shape, device=self.Pon_d2d.device)
             self.Poff_d2d = torch.zeros(*self.shape, device=self.Poff_d2d.device)
             # Add d2d variation
-            self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma*P_on)
-            self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma*P_off)
+            self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma * P_on)
+            self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma * P_off)
             # Clipping
             self.Pon_d2d = torch.clamp(self.Pon_d2d, min=0)
             self.Poff_d2d = torch.clamp(self.Poff_d2d, min=0)
@@ -300,7 +300,7 @@ class MemristorArray(torch.nn.Module):
         return self.mem_c
 
 
-    def memristor_read(self, mem_v: torch.Tensor): # TODO: Add Non-idealities
+    def memristor_read(self, mem_v: torch.Tensor):
         # language=rst
         """
         Memristor read operation for a single simulation step.

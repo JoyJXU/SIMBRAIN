@@ -661,7 +661,6 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
                 _crossbar.update_SAF_mask()
             # Memristor crossbar program
             _crossbar.mapping_write_mimo(target_x=matrix_batch)
-            
             # Memristor crossbar perform matrix vector multiplication
             cross[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
                 target_v=vector_batch)

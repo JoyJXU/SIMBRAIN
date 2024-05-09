@@ -108,7 +108,7 @@ class DAC_Module_Area(torch.nn.Module):
                 # DFF
                 numDff = self.shape[0]
                 self.DFF_area_calculation(newHeight, None, numDff)
-                
+
                 if newHeight < minCellHeight:
                     print("[Warning-Switch_matrix] Pass gate length is larger than the array height, which may cause problems in module matching!\
                           \nIt is recommended to choose a smaller technode or increase the relax_ratio_col and shape_col.")
@@ -145,7 +145,7 @@ class DAC_Module_Area(torch.nn.Module):
                 # DFF
                 numDff = self.shape[0]
                 self.DFF_area_calculation(None, newWidth, numDff)
-                
+
                 minCellWidth = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter  # min standard cell width for 1 Tg
                 if 2 * minCellWidth > newWidth:
                     print("[Warning-Switch_matrix] Pass gate width is larger than the array width, which may cause problems in module matching!\
@@ -239,7 +239,7 @@ class ADC_Module_Area(torch.nn.Module):
         wNand, hNand = self.formula_function.calculate_gate_area("NAND", 2, widthNandN, widthNandP,
                                                                  self.CMOS_technode_meter * self.MAX_TRANSISTOR_HEIGHT)
         numAdder = self.shape[1]
-        
+
         # Adder in multiple rows given the total width
         self.hAdder = hNand * self.ADC_precision
         self.wAdder = wNand * 9
@@ -248,7 +248,7 @@ class ADC_Module_Area(torch.nn.Module):
         if newWidth < self.wAdder:
             print("[Warning-Adder] Pass gate width is larger than the array width, which may cause problems in module matching!\
                   \nIt is recommended to choose a smaller technode or increase the relax_ratio_row and shape_row.")
-            newWidth = self.wAdder              
+            newWidth = self.wAdder
         numAdderPerRow = int(newWidth / self.wAdder)
         if numAdderPerRow > numAdder:
             numAdderPerRow = numAdder

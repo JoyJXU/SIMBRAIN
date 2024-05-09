@@ -63,7 +63,7 @@ class DAC_Module(torch.nn.Module):
         if self.device_structure == 'trace':
             activity_read = torch.nonzero(mem_v).size(0) / mem_v.numel()
             if self.sim_params['hardware_estimation']:
-                self.DAC_module_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v=mem_v)
+                self.DAC_module_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v_shape=mem_v.shape)
             return mem_v
 
         else:
@@ -77,6 +77,7 @@ class DAC_Module(torch.nn.Module):
             elif sgn == 'neg':
                 v_read = torch.relu(mem_v * -1)
 
+            mem_v = None
             v_read = torch.round(v_read * (2 ** self.input_bit - 1))
             v_read = torch.clamp(v_read, 0, 2 ** self.input_bit - 1)
 
@@ -88,15 +89,14 @@ class DAC_Module(torch.nn.Module):
             for i in range(self.input_bit):
                 bit = torch.bitwise_and(v_read, 2 ** i).bool()
                 read_sequence[i] = bit
-            v_read = read_sequence.clone()
-            read_sequence = None
+            v_read = None
             bit = None
 
-            activity_read = v_read.sum().item() / v_read.numel()
+            activity_read = read_sequence.sum().item() / read_sequence.numel()
             if self.sim_params['hardware_estimation']:
-                self.DAC_module_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v=v_read)
+                self.DAC_module_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v_shape=read_sequence.shape)
 
-            return v_read
+            return read_sequence
 
     def DAC_write(self, mem_v, mem_v_amp) -> None:
         if self.sim_params['hardware_estimation']:

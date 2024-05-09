@@ -440,15 +440,19 @@ class Network(torch.nn.Module):
             self.periph_average_power = 0
             for l in self.layers:
                 self.layers[l].transform.mem_array.total_energy_calculation()
-                self.layers[l].transform.DAC_module.DAC_energy_calculation(mem_t=self.layers[l].transform.mem_array.mem_t)
-                self.layers[l].transform.ADC_module.ADC_energy_calculation(mem_t=self.layers[l].transform.mem_array.mem_t)
+                self.layers[l].transform.DAC_module.DAC_energy_calculation(
+                    mem_t=self.layers[l].transform.mem_array.mem_t)
+                self.layers[l].transform.ADC_module.ADC_energy_calculation(
+                    mem_t=self.layers[l].transform.mem_array.mem_t)
                 self.sim_power = self.layers[l].transform.mem_array.power.sim_power
                 self.sim_DAC_module_power = self.layers[l].transform.DAC_module.DAC_module_power.sim_power
                 self.sim_ADC_module_power = self.layers[l].transform.ADC_module.ADC_module_power.sim_power
                 self.total_energy += self.sim_power['total_energy']
                 self.average_power += self.sim_power['average_power']
-                self.periph_total_energy += self.sim_DAC_module_power['DAC_total_energy'] + self.sim_ADC_module_power['ADC_total_energy']
-                self.periph_average_power += self.sim_DAC_module_power['DAC_average_power'] + self.sim_ADC_module_power['ADC_average_power']
+                self.periph_total_energy += self.sim_DAC_module_power['DAC_total_energy'] + self.sim_ADC_module_power[
+                    'ADC_total_energy']
+                self.periph_average_power += self.sim_DAC_module_power['DAC_average_power'] + self.sim_ADC_module_power[
+                    'ADC_average_power']
             print("total_energy=", self.total_energy)
             print("average_power=", self.average_power)
             print("periph_total_energy=", self.periph_total_energy)
