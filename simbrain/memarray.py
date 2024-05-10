@@ -328,14 +328,8 @@ class MemristorArray(torch.nn.Module):
 
         # Non-idealities
         mem_info = self.memristor_info_dict[self.device_name]
-        k_off = mem_info['k_off']
-        k_on = mem_info['k_on']
         v_off = mem_info['v_off']
         v_on = mem_info['v_on']
-        alpha_off = mem_info['alpha_off']
-        alpha_on = mem_info['alpha_on']
-        P_off = mem_info['P_off']
-        P_on = mem_info['P_on']
         G_off = mem_info['G_off']
         G_on = mem_info['G_on']
         retention_loss_tau = mem_info['retention_loss_tau']
