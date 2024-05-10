@@ -364,7 +364,12 @@ class MemristorArray(torch.nn.Module):
             self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
             self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
 
-        self.x2 = self.mem_x
+        if self.c2c_variation:
+            device_v = torch.mul(self.mem_x, self.normal_relative) + self.normal_absolute
+            self.x2 = self.mem_x + device_v
+            self.x2 = torch.clamp(self.x2, min=0, max=1)
+        else:
+            self.x2 = self.mem_x
 
         if self.stuck_at_fault:
             self.x2.masked_fill_(self.SAF0_mask, 0)
