@@ -207,4 +207,4 @@ class Conductance(object):
         self.k_on = k_on_list[min_x_d]
         self.P_on = P_on_list[min_y_d]
 
-        return self.P_off, self.P_on, self.k_off, self.k_on
+        return self.P_off, self.P_on, self.k_off, self.k_on, self.V_write[0]

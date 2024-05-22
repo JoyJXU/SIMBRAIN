@@ -58,6 +58,7 @@ class MemristorFitting(object):
         G_on = mem_info['G_on']
         G_off_fit = mem_info['G_off_fit']
         G_on_fit = mem_info['G_on_fit']
+        V_write_pos = mem_info['V_write_pos']
         delta_t = mem_info['delta_t']
         duty_ratio = mem_info['duty_ratio']
 
@@ -248,7 +249,7 @@ class MemristorFitting(object):
             )
 
         # %% Baseline Model(Conductance)
-        if None not in [P_off, P_on, k_off, k_on]:
+        if None not in [P_off, P_on, k_off, k_on, V_write_pos]:
             pass
         elif None in [G_off_fit, G_on_fit]:
             raise Exception("Error! Missing required parameters.\nFailed to update P_off, P_on, k_off, k_on.")
@@ -263,7 +264,7 @@ class MemristorFitting(object):
                 + "/memristordata/conductance.xlsx",
                 mem_info
             ))
-            P_off, P_on, k_off, k_on = conductance_temp.fitting()
+            P_off, P_on, k_off, k_on, V_write_pos = conductance_temp.fitting()
             mem_info.update(
                 {
                     "P_off": P_off,
@@ -272,6 +273,7 @@ class MemristorFitting(object):
                     "k_on": k_on
                 }
             )
+        V_write_lut = V_write_pos
             # TODO: Save V_write if conductance.xlsx and variation.xlsx have been merged?
 
         # %% D2D variation nonlinearity
@@ -390,7 +392,7 @@ class MemristorFitting(object):
         print("\nEnd Memristor Fitting.")
         
         self.mem_info_update(mem_info)
-        self.mem_lut_update(mem_info)
+        self.mem_lut_update(mem_info, V_write_lut)
 
         return self.fitting_record
 
@@ -410,33 +412,33 @@ class MemristorFitting(object):
         with open('../../memristor_device_info.json', 'w') as f:
             json.dump(memristor_info_dict, f, indent=2)
             
-    def mem_lut_update(self, mem_info):
+    def mem_lut_update(self, mem_info, V_write_lut):
         v_off = mem_info['v_off']
         v_on = mem_info['v_on']
-        setting_step = 0.975
-        rise_ending = 0.975
-        best_states_num = 50
-        state_step = 50
-        max_states_num = 500
-        cut_sign = 0
-        V_write = np.full(max_states_num, setting_step * 2 * v_off)
+        rise_ending = 0.97
+        setting_step = 1.2
+        min_states_num = 50
+        states_step = 10
+        max_states_num = 1001
         max_V_reset = 0
-
-        while V_write[0] > v_off:
-            cut_sign += 1
-            lut_state, lut_conductance = self.lut_state_generate(V_write, mem_info, 0)
-            if lut_state[best_states_num] > rise_ending:
-                V_write *= setting_step
-            elif cut_sign == 1:
-                cut_num = max_states_num
-                for m in range(best_states_num, max_states_num, state_step):
-                    if lut_state[m] > rise_ending:
-                        cut_num = m
-                        break
-                break
-            else:
-                break
         
+        if V_write_lut > v_off and V_write_lut < 2 * v_off:
+            V_write_lut = np.full(max_states_num, V_write_lut)
+        elif V_write_lut < v_off:
+            raise Exception("V_write given is smaller than threshold voltage!")
+        else:
+            V_write_lut = np.full(max_states_num, 2 * v_off)
+            print("[Warning] V_write given is bigger than twice threshold voltage!")
+        
+        for states_num in range(min_states_num, max_states_num, states_step):
+            lut_state, lut_conductance = self.lut_state_generate(V_write_lut, mem_info, 0)
+            if lut_state[states_num] > rise_ending:
+                best_states_num = states_num
+                break
+            if states_num == max_states_num - 1:
+                best_states_num = states_num
+                print("[Warning] conductance cannot close to Goff!")
+                
         for init_state in range(10,0,-1):
             V_reset = [0, v_on]
             init_state *= 0.1
@@ -445,30 +447,20 @@ class MemristorFitting(object):
                 if reset_state[1] == 0:
                     break
                 else:
-                    V_reset[1] = V_reset[1] / setting_step
+                    V_reset[1] = V_reset[1] * setting_step
             if np.abs(V_reset[1]) > np.abs(max_V_reset):
                 max_V_reset = V_reset[1]
         
-        if cut_sign == 1:
-            mine_lut = {
-                'total_no': cut_num,
-                'voltage': setting_step * 2 * v_off,
-                'cycle:': mem_info['delta_t'],
-                'duty ratio': mem_info['duty_ratio'],
-                'V_reset': max_V_reset,
-                'conductance': lut_conductance[0:cut_num + 1]
-            }
-        else:
-            V_write = V_write / setting_step
-            lut_state, lut_conductance = self.lut_state_generate(V_write, mem_info,0)
-            mine_lut = {
-                'total_no': best_states_num,
-                'voltage': V_write[0],
-                'cycle:': mem_info['delta_t'],
-                'duty ratio': mem_info['duty_ratio'],
-                'V_reset': max_V_reset,
-                'conductance': lut_conductance[0:best_states_num + 1]
-            }
+
+        mine_lut = {
+            'total_no': best_states_num,
+            'voltage': V_write_lut[0:best_states_num+1],
+            'cycle:': mem_info['delta_t'],
+            'duty ratio': mem_info['duty_ratio'],
+            'V_reset': max_V_reset,
+            'conductance': lut_conductance[0:best_states_num+1]
+        }
+
         # with open('../../simbrain/Parameter_files/memristor_lut.pkl', 'rb') as f:
         #     mem_lut = pickle.load(f)
         # mem_lut['mine'] = mine_lut
