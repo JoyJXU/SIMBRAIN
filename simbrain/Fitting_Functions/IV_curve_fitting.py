@@ -47,13 +47,14 @@ class IVCurve(object):
         self.v_off = dictionary['v_off']
         self.v_on = dictionary['v_on']
 
-        self.G_off = dictionary['G_off_fit']
-        self.G_on = dictionary['G_on_fit']
+        self.G_off = dictionary['G_off']
+        self.G_on = dictionary['G_on']
 
         self.k_off = dictionary['k_off']
         self.k_on = dictionary['k_on']
         self.P_off = dictionary['P_off']
         self.P_on = dictionary['P_on']
+        self.duty_ratio = dictionary['duty_ratio']
 
         # Default parameters
         if None in [self.P_off, self.P_on]:
@@ -85,12 +86,12 @@ class IVCurve(object):
             if V_write[i + 1] > self.v_off and V_write[i + 1] > 0:
                 delta_x = self.k_off * ((V_write[i + 1] / self.v_off - 1) ** alpha_off) * J1 * (
                         (1 - internal_state[i]) ** self.P_off)
-                internal_state[i + 1] = internal_state[i] + self.delta_t * delta_x
+                internal_state[i + 1] = internal_state[i] + self.delta_t * self.duty_ratio * delta_x
 
             elif V_write[i + 1] < 0 and V_write[i + 1] < self.v_on:
                 delta_x = self.k_on * ((V_write[i + 1] / self.v_on - 1) ** alpha_on) * J1 * (
                         internal_state[i] ** self.P_on)
-                internal_state[i + 1] = internal_state[i] + self.delta_t * delta_x
+                internal_state[i + 1] = internal_state[i] + self.delta_t * self.duty_ratio * delta_x
 
             else:
                 delta_x = 0

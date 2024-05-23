@@ -1,6 +1,6 @@
 import json
 import sys
-sys.path.append('../../')
+sys.path.append('../../../')
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -45,7 +45,7 @@ def main():
 
     file = "../../../memristordata/conductance.xlsx"
     exp_2 = Conductance(file, dict)
-    P_off, P_on, k_off, k_on = exp_2.fitting()
+    P_off, P_on, k_off, k_on, _= exp_2.fitting()
     dict.update(
         {
             "P_off": P_off,

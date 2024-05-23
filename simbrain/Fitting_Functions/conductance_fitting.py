@@ -41,13 +41,14 @@ class Conductance(object):
         # Read parameters
         self.v_off = dictionary['v_off']
         self.v_on = dictionary['v_on']
-        self.G_off = dictionary['G_off_fit']
-        self.G_on = dictionary['G_on_fit']
+        self.G_off = dictionary['G_off']
+        self.G_on = dictionary['G_on']
         self.alpha_off = dictionary['alpha_off']
         self.alpha_on = dictionary['alpha_on']
 
         # Read data
         self.delta_t = dictionary['delta_t']
+        self.duty_ratio = dictionary['duty_ratio']
         self.V_write = np.array(data['Pulse Voltage(V)'])
         self.read_voltage = np.array(data['Read Voltage(V)'][0])
 
@@ -113,12 +114,12 @@ class Conductance(object):
             if V_write[i + 1] > self.v_off and V_write[i + 1] > 0:
                 delta_x = k_off * ((V_write[i + 1] / self.v_off - 1) ** self.alpha_off) * J1 * (
                         (1 - internal_state[i]) ** P_off)
-                internal_state[i + 1] = internal_state[i] + self.delta_t * delta_x
+                internal_state[i + 1] = internal_state[i] + self.delta_t * self.duty_ratio * delta_x
 
             elif V_write[i + 1] < 0 and V_write[i + 1] < self.v_on:
                 delta_x = k_on * ((V_write[i + 1] / self.v_on - 1) ** self.alpha_on) * J1 * (
                         internal_state[i] ** P_on)
-                internal_state[i + 1] = internal_state[i] + self.delta_t * delta_x
+                internal_state[i + 1] = internal_state[i] + self.delta_t * self.duty_ratio * delta_x
 
             else:
                 delta_x = 0

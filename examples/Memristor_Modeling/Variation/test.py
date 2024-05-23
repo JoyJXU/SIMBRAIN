@@ -1,6 +1,6 @@
 import json
 import sys
-sys.path.append('../../')
+sys.path.append('../../../')
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -67,7 +67,7 @@ def main():
             "alpha_on": alpha_on
         }
     )
-    P_off, P_on, k_off, k_on = Conductance(file, dict).fitting()
+    P_off, P_on, k_off, k_on, _ = Conductance(file, dict).fitting()
     dict.update(
         {
             'k_off': k_off,

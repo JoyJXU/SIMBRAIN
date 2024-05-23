@@ -490,11 +490,11 @@ class MemristorFitting(object):
                 delta_x = mem_info['k_off'] * (
                         (V_write[i + 1] / mem_info['v_off'] - 1) ** mem_info['alpha_off']) * J1 * (
                                   (1 - internal_state[i]) ** mem_info['P_off'])
-                internal_state[i + 1] = internal_state[i] + mem_info['delta_t'] * delta_x
+                internal_state[i + 1] = internal_state[i] + mem_info['delta_t'] * mem_info['duty_ratio'] * delta_x
             elif V_write[i + 1] < mem_info['v_on'] and V_write[i + 1] < 0:
                 delta_x = mem_info['k_on'] * ((V_write[i + 1] / mem_info['v_on'] - 1) ** mem_info['alpha_on']) * J1 * (
                         internal_state[i] ** mem_info['P_on'])
-                internal_state[i + 1] = internal_state[i] + mem_info['delta_t'] * delta_x
+                internal_state[i + 1] = internal_state[i] + mem_info['delta_t'] * mem_info['duty_ratio'] * delta_x
             else:
                 delta_x = 0
                 internal_state[i + 1] = internal_state[i]
