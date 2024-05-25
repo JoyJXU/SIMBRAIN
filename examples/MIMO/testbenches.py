@@ -578,19 +578,19 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
         batch_interval = 1 + _crossbar.memristor_luts[device_name]['total_no'] * _rows + read_batch * input_bit  # reset + write + read
         _crossbar.batch_interval = batch_interval
 
-        _var_g = 0 #0.055210197891837
-        _var_linearity = 0 #0.1
+        #_var_g = 0.055210197891837
+       # _var_linearity = 0.1
         sim_params['d2d_variation'] = 1
         memristor_info_dict = _crossbar.memristor_info_dict
         G_off = memristor_info_dict[device_name]['G_off']
         G_on = memristor_info_dict[device_name]['G_on']
-        memristor_info_dict[device_name]['Gon_sigma'] = G_on * _var_g
-        memristor_info_dict[device_name]['Goff_sigma'] = G_off * _var_g
+        memristor_info_dict[device_name]['Gon_sigma'] = 0.094985
+        memristor_info_dict[device_name]['Goff_sigma'] = 0.025782
 
         P_off = memristor_info_dict[device_name]['P_off']
         P_on = memristor_info_dict[device_name]['P_on']
-        memristor_info_dict[device_name]['Pon_sigma'] = P_on * _var_linearity
-        memristor_info_dict[device_name]['Poff_sigma'] = P_off * _var_linearity
+        memristor_info_dict[device_name]['Pon_sigma'] = 0.006006
+        memristor_info_dict[device_name]['Poff_sigma'] = 0.468286
 
         _crossbar.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=_crossbar.shape,
                                                memristor_info_dict=memristor_info_dict)
