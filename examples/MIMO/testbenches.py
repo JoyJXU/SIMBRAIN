@@ -580,17 +580,17 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
 
         #_var_g = 0.055210197891837
        # _var_linearity = 0.1
-        sim_params['d2d_variation'] = 1
+        sim_params['d2d_variation'] = 0
         memristor_info_dict = _crossbar.memristor_info_dict
         G_off = memristor_info_dict[device_name]['G_off']
         G_on = memristor_info_dict[device_name]['G_on']
-        memristor_info_dict[device_name]['Gon_sigma'] = 0.094985
-        memristor_info_dict[device_name]['Goff_sigma'] = 0.025782
+        memristor_info_dict[device_name]['Gon_sigma'] = 0#0.094985
+        memristor_info_dict[device_name]['Goff_sigma'] =0# 0.025782
 
         P_off = memristor_info_dict[device_name]['P_off']
         P_on = memristor_info_dict[device_name]['P_on']
-        memristor_info_dict[device_name]['Pon_sigma'] = 0.006006
-        memristor_info_dict[device_name]['Poff_sigma'] = 0.468286
+        memristor_info_dict[device_name]['Pon_sigma'] = 0#0.006006
+        memristor_info_dict[device_name]['Poff_sigma'] =0# 0.468286
 
         _crossbar.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=_crossbar.shape,
                                                memristor_info_dict=memristor_info_dict)
@@ -606,23 +606,32 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
 
         # matrix and vector random generation
         # matrix = torch.rand(_rep, _rows, _cols, device=device)
-        matrix = -1 + 2 * torch.rand(_rep, _rows, _cols, device=device)
+        matrix_r = -1 + 2 * torch.rand(_rep, _rows, _cols, device=device)
+        matrix_i = -1 + 2 * torch.rand(_rep, _rows, _cols, device=device)
         # matrix = torch.ones(_rep, _rows, _cols, device=device)
         # vector = torch.rand(_rep, 1, _rows, device=device)
-        vector = -1 + 2 * torch.rand(_rep, read_batch, _rows, device=device)
+        vector_r = -1 + 2 * torch.rand(_rep, read_batch, _rows, device=device)
+        vector_i = -1 + 2 * torch.rand(_rep, read_batch, _rows, device=device)        
         # vector = torch.ones(_rep, 1, _rows, device=device)
         # print("Randomized input")
 
         # Golden results calculation
-        golden_model = torch.matmul(vector, matrix)
-
+        golden_model_1 = torch.matmul(vector_r, matrix_r)
+        golden_model_2 = torch.matmul(vector_r, matrix_i)        
+        golden_model_3 = torch.matmul(vector_i, matrix_r)
+        golden_model_4 = torch.matmul(vector_i, matrix_i)
+        golden_r = golden_model_1 - golden_model_4
+        golden_i = golden_model_2 + golden_model_3
         n_step = int(_rep / _batch_size)
-        cross = torch.zeros_like(golden_model, device=device)
+        
+        
+
+        cross_1 = torch.zeros_like(golden_model_1, device=device)
 
         for step in range(n_step):
             # print(step)
-            matrix_batch = matrix[(step * _batch_size):(step * _batch_size + _batch_size)]
-            vector_batch = vector[(step * _batch_size):(step * _batch_size + _batch_size)]
+            matrix_batch = matrix_r[(step * _batch_size):(step * _batch_size + _batch_size)]
+            vector_batch = vector_r[(step * _batch_size):(step * _batch_size + _batch_size)]
 
             # Memristor-based results simulation
             if sim_params['stuck_at_fault'] == True:
@@ -630,7 +639,7 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
             # Memristor crossbar program
             _crossbar.mapping_write_mimo(target_x=matrix_batch)
             # Memristor crossbar perform matrix vector multiplication
-            cross[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
+            cross_1[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
                 target_v=vector_batch)
 
             if sim_params['hardware_estimation']:
@@ -646,49 +655,147 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
             if not step == n_step - 1:
                 _crossbar.mem_t_update()
 
-        # Error calculation
-        error = utility.cal_error(golden_model, cross)
-        relative_error = error / golden_model
-        rpd1_error = 2 * abs(error / (torch.abs(golden_model) + torch.abs(cross)))
-        rpd2_error = abs(error / torch.max(torch.abs(golden_model), torch.abs(cross)))
-        rpd3_error = error / (torch.abs(golden_model) + 0.001)
-        rpd4_error = error / (torch.abs(golden_model) + 1)
 
-        error = error.flatten(0, 2)
-        relative_error = relative_error.flatten(0, 2)
-        rpd1_error = rpd1_error.flatten(0, 2)
-        rpd2_error = rpd2_error.flatten(0, 2)
-        rpd3_error = rpd3_error.flatten(0, 2)
-        rpd4_error = rpd4_error.flatten(0, 2)
-        print('Error Calculation Done')
-        print("<==============>")
 
-        utility.plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error, rpd1_error, rpd2_error, rpd3_error, rpd4_error)
-        print('Visualization Done')
-        print("<==============>")
+        cross_2 = torch.zeros_like(golden_model_2, device=device)
 
-        # data = [str(_var_abs), str(_var_rel)]
-        # [data.append(str(e.item())) for e in error]
+        for step in range(n_step):
+            # print(step)
+            matrix_batch = matrix_i[(step * _batch_size):(step * _batch_size + _batch_size)]
+            vector_batch = vector_r[(step * _batch_size):(step * _batch_size + _batch_size)]
+
+            # Memristor-based results simulation
+            if sim_params['stuck_at_fault'] == True:
+                _crossbar.update_SAF_mask()
+            # Memristor crossbar program
+            _crossbar.mapping_write_mimo(target_x=matrix_batch)
+            # Memristor crossbar perform matrix vector multiplication
+            cross_2[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
+                target_v=vector_batch)
+
+            if sim_params['hardware_estimation']:
+                # print power results
+                _crossbar.total_energy_calculation()
+                sim_power = _crossbar.sim_power
+                total_energy = sim_power['total_energy']
+                average_power = sim_power['average_power']
+                print("total_energy=", total_energy)
+                print("average_power=", average_power)
+
+            # mem_t update # Avoid mem_t at the last batch
+            if not step == n_step - 1:
+                _crossbar.mem_t_update()
+                
+
+        cross_3 = torch.zeros_like(golden_model_3, device=device)
+
+        for step in range(n_step):
+            # print(step)
+            matrix_batch = matrix_r[(step * _batch_size):(step * _batch_size + _batch_size)]
+            vector_batch = vector_i[(step * _batch_size):(step * _batch_size + _batch_size)]
+
+            # Memristor-based results simulation
+            if sim_params['stuck_at_fault'] == True:
+                _crossbar.update_SAF_mask()
+            # Memristor crossbar program
+            _crossbar.mapping_write_mimo(target_x=matrix_batch)
+            # Memristor crossbar perform matrix vector multiplication
+            cross_3[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
+                target_v=vector_batch)
+
+            if sim_params['hardware_estimation']:
+                # print power results
+                _crossbar.total_energy_calculation()
+                sim_power = _crossbar.sim_power
+                total_energy = sim_power['total_energy']
+                average_power = sim_power['average_power']
+                print("total_energy=", total_energy)
+                print("average_power=", average_power)
+
+            # mem_t update # Avoid mem_t at the last batch
+            if not step == n_step - 1:
+                _crossbar.mem_t_update()
+
+
+
+        cross_4 = torch.zeros_like(golden_model_4, device=device)
+
+        for step in range(n_step):
+            # print(step)
+            matrix_batch = matrix_i[(step * _batch_size):(step * _batch_size + _batch_size)]
+            vector_batch = vector_i[(step * _batch_size):(step * _batch_size + _batch_size)]
+
+            # Memristor-based results simulation
+            if sim_params['stuck_at_fault'] == True:
+                _crossbar.update_SAF_mask()
+            # Memristor crossbar program
+            _crossbar.mapping_write_mimo(target_x=matrix_batch)
+            # Memristor crossbar perform matrix vector multiplication
+            cross_4[(step * _batch_size):(step * _batch_size + _batch_size)] = _crossbar.mapping_read_mimo(
+                target_v=vector_batch)
+
+            if sim_params['hardware_estimation']:
+                # print power results
+                _crossbar.total_energy_calculation()
+                sim_power = _crossbar.sim_power
+                total_energy = sim_power['total_energy']
+                average_power = sim_power['average_power']
+                print("total_energy=", total_energy)
+                print("average_power=", average_power)
+
+            # mem_t update # Avoid mem_t at the last batch
+            if not step == n_step - 1:
+                _crossbar.mem_t_update()
+                
+                
+        delta_cross_r = cross_1 - cross_4 - golden_r
+        delta_cross_i = cross_2 + cross_3 - golden_i
+        
+        error = torch.sqrt(torch.sum(torch.square(delta_cross_r)) + torch.sum(torch.square(delta_cross_i)))/ torch.sqrt(torch.sum(torch.square(golden_r)) + torch.sum(torch.square(golden_i)))
+
+        # # Error calculation
+        # error = utility.cal_error(golden_model, cross)
+        # relative_error = error / golden_model
+        # rpd1_error = 2 * abs(error / (torch.abs(golden_model) + torch.abs(cross)))
+        # rpd2_error = abs(error / torch.max(torch.abs(golden_model), torch.abs(cross)))
+        # rpd3_error = error / (torch.abs(golden_model) + 0.001)
+        # rpd4_error = error / (torch.abs(golden_model) + 1)
+
+        # error = error.flatten(0, 2)
+        # relative_error = relative_error.flatten(0, 2)
+        # rpd1_error = rpd1_error.flatten(0, 2)
+        # rpd2_error = rpd2_error.flatten(0, 2)
+        # rpd3_error = rpd3_error.flatten(0, 2)
+        # rpd4_error = rpd4_error.flatten(0, 2)
+        # print('Error Calculation Done')
+        # print("<==============>")
+
+        # utility.plot_distribution(figs, vector, matrix, golden_model, cross, error, relative_error, rpd1_error, rpd2_error, rpd3_error, rpd4_error)
+        # print('Visualization Done')
+        # print("<==============>")
+
+        # # data = [str(_var_abs), str(_var_rel)]
+        # # [data.append(str(e.item())) for e in error]
+        # # utility.write_to_csv(file_path, file_name, data)
+
+        # me = torch.mean(error)
+        # mae = torch.mean(abs(error))
+        # rmse = torch.sqrt(torch.mean(error**2))
+        # rmae = torch.mean(abs(relative_error))
+        # rrmse1 = torch.sqrt(torch.mean(relative_error**2))
+        # rrmse2 = torch.sqrt(torch.sum(error ** 2) / torch.sum(golden_model.flatten(0, 2) ** 2))
+        # rpd1 = torch.mean(rpd1_error)
+        # rpd2 = torch.mean(rpd2_error)
+        # rpd3 = torch.mean(abs(rpd3_error))
+        # rpd4 = torch.mean(abs(rpd4_error))
+        # metrics = [me, mae, rmse, rmae, rrmse1, rrmse2, rpd1, rpd2, rpd3, rpd4]
+        # metrics = [error]
+
+        # data = [str(_rows), str(_var_abs), str(_var_rel)]
+        # [data.append(str(e.item())) for e in metrics]
         # utility.write_to_csv(file_path, file_name, data)
-
-        me = torch.mean(error)
-        mae = torch.mean(abs(error))
-        rmse = torch.sqrt(torch.mean(error**2))
-        rmae = torch.mean(abs(relative_error))
-        rrmse1 = torch.sqrt(torch.mean(relative_error**2))
-        rrmse2 = torch.sqrt(torch.sum(error ** 2) / torch.sum(golden_model.flatten(0, 2) ** 2))
-        rpd1 = torch.mean(rpd1_error)
-        rpd2 = torch.mean(rpd2_error)
-        rpd3 = torch.mean(abs(rpd3_error))
-        rpd4 = torch.mean(abs(rpd4_error))
-        metrics = [me, mae, rmse, rmae, rrmse1, rrmse2, rpd1, rpd2, rpd3, rpd4]
-
-
-        data = [str(_rows), str(_var_abs), str(_var_rel)]
-        [data.append(str(e.item())) for e in metrics]
-        utility.write_to_csv(file_path, file_name, data)
-
-        print("Absolute Sigma: ", _var_abs, ", Relative Sigma: ", _var_rel, ", Mean Error: ", me.item())
+        print(error)
+        #print("Absolute Sigma: ", _var_abs, ", Relative Sigma: ", _var_rel, ", Mean Error: ", me.item())
 
     end_time = time.time()
     exe_time = end_time - start_time

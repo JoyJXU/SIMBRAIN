@@ -98,7 +98,7 @@ class DAC_Module(torch.nn.Module):
             if self.sim_params['hardware_estimation']:
                 self.DAC_module_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v_shape=read_sequence.shape)
 
-            return read_sequence
+            return v_read_1
 
     def DAC_write(self, mem_v, mem_v_amp) -> None:
         if self.sim_params['hardware_estimation']:
@@ -198,7 +198,7 @@ class ADC_Module(torch.nn.Module):
 
         # Shift add to get the output current
         for i in range(self.input_bit):
-            mem_i += mem_i_sequence_quantized[i, :, :, :] * 2 ** i
+            mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
 
         if self.sim_params['hardware_estimation']:
             self.ADC_module_power.SarADC_energy_calculation(mem_i_sequence=mem_i_sequence)
