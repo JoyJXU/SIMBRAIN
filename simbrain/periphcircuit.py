@@ -98,7 +98,7 @@ class DAC_Module(torch.nn.Module):
             if self.sim_params['hardware_estimation']:
                 self.DAC_module_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v_shape=read_sequence.shape)
 
-            return v_read_1
+            return read_sequence
 
     def DAC_write(self, mem_v, mem_v_amp) -> None:
         if self.sim_params['hardware_estimation']:
