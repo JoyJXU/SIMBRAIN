@@ -580,7 +580,7 @@ def run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params
 
         _var_g = 0 #0.055210197891837
         _var_linearity = 0 #0.1
-        sim_params['d2d_variation'] = 0
+        sim_params['d2d_variation'] = 1
         memristor_info_dict = _crossbar.memristor_info_dict
         G_off = memristor_info_dict[device_name]['G_off']
         G_on = memristor_info_dict[device_name]['G_on']
