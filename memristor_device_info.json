@@ -34,7 +34,7 @@
     "ferro":
     {
         "P_on":1.8,
-        "P_off":0.9,
+        "P_off":0,
         "G_on":7.0e-8,
         "G_off":9.0e-6,
         "alpha_on":5,
