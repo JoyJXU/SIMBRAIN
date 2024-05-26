@@ -15,7 +15,7 @@ parser.add_argument("--rows", type=int, default=32)
 parser.add_argument("--cols", type=int, default=32)
 parser.add_argument("--rep", type=int, default=10000)
 parser.add_argument("--batch_size", type=int, default=1000)
-parser.add_argument("--memristor_structure", type=str, default='mimo') # trace, mimo or crossbar 
+parser.add_argument("--memristor_structure", type=str, default='mimo') # trace, mimo or crossbar
 parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=True)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
@@ -73,8 +73,14 @@ def main():
     size_list = [_rows]
     # size_list = [2048, 256]
     for _rows in size_list:
-        _crossbar = MimoMapping(sim_params=sim_params, shape=(_rows, _cols))
-        _crossbar.to(device)
+        _crossbar_1 = MimoMapping(sim_params=sim_params, shape=(_rows, _cols))
+        _crossbar_1.to(device)
+        _crossbar_2 = MimoMapping(sim_params=sim_params, shape=(_rows, _cols))
+        _crossbar_2.to(device)
+        _crossbar_3 = MimoMapping(sim_params=sim_params, shape=(_rows, _cols))
+        _crossbar_3.to(device)
+        _crossbar_4 = MimoMapping(sim_params=sim_params, shape=(_rows, _cols))
+        _crossbar_4.to(device)
 
         # Area print
         if sim_params['hardware_estimation']:
@@ -82,7 +88,7 @@ def main():
             print("total area=", _crossbar.sim_area['sim_total_area'], " m2")
 
         # run_d2d_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, _logs)
-        run_crossbar_size_sim(_crossbar, _rep, _batch_size, _rows, _cols, sim_params, device, _logs)
+        run_crossbar_size_sim(_crossbar_1, _crossbar_2, _crossbar_3, _crossbar_4, _rep, _batch_size, _rows, _cols, sim_params, device, _logs)
 
     # # plot
     # plt.figure(figsize=(13, 4.5))
