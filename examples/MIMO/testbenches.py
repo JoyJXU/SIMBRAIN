@@ -675,49 +675,59 @@ def run_crossbar_size_sim(_crossbar_1, _crossbar_2, _crossbar_3, _crossbar_4, _r
         golden_r = golden_model_1 - golden_model_4
         golden_i = golden_model_2 + golden_model_3
         
-        with open('../../memristor_lut.pkl', 'rb') as f:
-            memristor_luts = pickle.load(f)
-        luts = memristor_luts['ferro']['conductance']
-        luts = torch.tensor(luts, device=matrix_r.device)
-        luts = (luts - 7e-8)/(9e-6 - 7e-8)
-        luts_1 = luts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-        sign_matrix_r = torch.sign(matrix_r)
-        abs_matrix_r = torch.abs(matrix_r)
-        batch_matrix_r = torch.split(abs_matrix_r, split_size_or_sections=100, dim=0)
-        quantized_matrix_r = torch.zeros_like(matrix_r, device=matrix_r.device)
-        for i in range(len(batch_matrix_r)):
-            diff = torch.abs(batch_matrix_r[i].unsqueeze(0)-luts_1)
-            _, sequence_matrix_r = torch.min(diff, dim=0)
-            batch_quantized_matrix_r = luts[sequence_matrix_r]
-            quantized_matrix_r[100*i:100*(i+1),:,:] = batch_quantized_matrix_r
-        quantized_matrix_r = quantized_matrix_r * sign_matrix_r
+        # with open('../../memristor_lut.pkl', 'rb') as f:
+        #     memristor_luts = pickle.load(f)
+        # luts = memristor_luts['ferro']['conductance']
+        # luts = torch.tensor(luts, device=matrix_r.device)
+        # luts = (luts - 7e-8)/(9e-6 - 7e-8)
+        # luts_1 = luts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        # sign_matrix_r = torch.sign(matrix_r)
+        # abs_matrix_r = torch.abs(matrix_r)
+        # batch_matrix_r = torch.split(abs_matrix_r, split_size_or_sections=100, dim=0)
+        # quantized_matrix_r = torch.zeros_like(matrix_r, device=matrix_r.device)
+        # for i in range(len(batch_matrix_r)):
+        #     diff = torch.abs(batch_matrix_r[i].unsqueeze(0)-luts_1)
+        #     _, sequence_matrix_r = torch.min(diff, dim=0)
+        #     batch_quantized_matrix_r = luts[sequence_matrix_r]
+        #     quantized_matrix_r[100*i:100*(i+1),:,:] = batch_quantized_matrix_r
+        # quantized_matrix_r = quantized_matrix_r * sign_matrix_r
         
-        sign_matrix_i = torch.sign(matrix_i)
-        abs_matrix_i = torch.abs(matrix_i)
-        batch_matrix_i = torch.split(abs_matrix_i, split_size_or_sections=100, dim=0)
-        quantized_matrix_i = torch.zeros_like(matrix_i, device=matrix_i.device)
-        for i in range(len(batch_matrix_i)):
-            diff = torch.abs(batch_matrix_i[i].unsqueeze(0)-luts_1)
-            _, sequence_matrix_i = torch.min(diff, dim=0)
-            batch_quantized_matrix_i = luts[sequence_matrix_i]
-            quantized_matrix_i[100*i:100*(i+1),:,:] = batch_quantized_matrix_i
-        quantized_matrix_i = quantized_matrix_i * sign_matrix_i
+        # sign_matrix_i = torch.sign(matrix_i)
+        # abs_matrix_i = torch.abs(matrix_i)
+        # batch_matrix_i = torch.split(abs_matrix_i, split_size_or_sections=100, dim=0)
+        # quantized_matrix_i = torch.zeros_like(matrix_i, device=matrix_i.device)
+        # for i in range(len(batch_matrix_i)):
+        #     diff = torch.abs(batch_matrix_i[i].unsqueeze(0)-luts_1)
+        #     _, sequence_matrix_i = torch.min(diff, dim=0)
+        #     batch_quantized_matrix_i = luts[sequence_matrix_i]
+        #     quantized_matrix_i[100*i:100*(i+1),:,:] = batch_quantized_matrix_i 
+        # quantized_matrix_i = quantized_matrix_i * sign_matrix_i
         
-        if sim_params['c2c_variation'] == True:
-            normal_relative_r = torch.zeros_like(quantized_matrix_r)
-            normal_absolute_r = torch.zeros_like(quantized_matrix_r)
-            normal_relative_r.normal_(mean=0., std=0.1032073708277878)
-            normal_absolute_r.normal_(mean=0., std=0.005783083695110348)
+        # if sim_params['c2c_variation'] == True:
+        #     normal_relative_r_pos = torch.zeros_like(quantized_matrix_r)
+        #     normal_absolute_r_pos = torch.zeros_like(quantized_matrix_r)
+        #     normal_relative_r_pos.normal_(mean=0., std=0.1032073708277878)
+        #     normal_absolute_r_pos.normal_(mean=0., std=0.005783083695110348)
             
-            normal_relative_i = torch.zeros_like(quantized_matrix_i)
-            normal_absolute_i = torch.zeros_like(quantized_matrix_i)
-            normal_relative_i.normal_(mean=0., std=0.1032073708277878)
-            normal_absolute_i.normal_(mean=0., std=0.005783083695110348)
+        #     normal_relative_r_neg = torch.zeros_like(quantized_matrix_r)
+        #     normal_absolute_r_neg = torch.zeros_like(quantized_matrix_r)
+        #     normal_relative_r_neg.normal_(mean=0., std=0.1032073708277878)
+        #     normal_absolute_r_neg.normal_(mean=0., std=0.005783083695110348)
+            
+        #     normal_relative_i_pos = torch.zeros_like(quantized_matrix_i)
+        #     normal_absolute_i_pos = torch.zeros_like(quantized_matrix_i)
+        #     normal_relative_i_pos.normal_(mean=0., std=0.1032073708277878)
+        #     normal_absolute_i_pos.normal_(mean=0., std=0.005783083695110348)            
+            
+        #     normal_relative_i_neg = torch.zeros_like(quantized_matrix_i)
+        #     normal_absolute_i_neg = torch.zeros_like(quantized_matrix_i)
+        #     normal_relative_i_neg.normal_(mean=0., std=0.1032073708277878)
+        #     normal_absolute_i_neg.normal_(mean=0., std=0.005783083695110348)  
         
-            quantized_matrix_r += torch.mul(quantized_matrix_r, normal_relative_r) + normal_absolute_r
-            quantized_matrix_i += torch.mul(quantized_matrix_i, normal_relative_i) + normal_absolute_i
-            quantized_matrix_r = torch.clamp(quantized_matrix_r, min=0, max=1)
-            quantized_matrix_i = torch.clamp(quantized_matrix_i, min=0, max=1)            
+        #     quantized_matrix_r = torch.where(quantized_matrix_r>=0, quantized_matrix_r*(1+normal_relative_r_pos)+normal_absolute_r_pos,-(quantized_matrix_r*(-1+normal_relative_r_neg)+normal_absolute_r_neg))
+        #     quantized_matrix_i = torch.where(quantized_matrix_i>=0, quantized_matrix_i*(1+normal_relative_i_pos)+normal_absolute_i_pos,-(quantized_matrix_i*(-1+normal_relative_i_neg)+normal_absolute_i_neg))
+        #     quantized_matrix_r = torch.where(matrix_r>=0, torch.clamp(quantized_matrix_r, min=0, max=1),torch.clamp(quantized_matrix_r, min=-1, max=0))
+        #     quantized_matrix_i = torch.where(matrix_i>=0, torch.clamp(quantized_matrix_i, min=0, max=1),torch.clamp(quantized_matrix_i, min=-1, max=0))           
             
             
         n_step = int(_rep / _batch_size)
@@ -836,16 +846,16 @@ def run_crossbar_size_sim(_crossbar_1, _crossbar_2, _crossbar_3, _crossbar_4, _r
         delta_cross_r = cross_1 - cross_4 - golden_r
         delta_cross_i = cross_2 + cross_3 - golden_i
         
-        delta_quantized_r = torch.matmul(vector_r, quantized_matrix_r) - torch.matmul(vector_i, quantized_matrix_i) - golden_r
-        delta_quantized_i = torch.matmul(vector_r, quantized_matrix_i) + torch.matmul(vector_i, quantized_matrix_r) - golden_i
+        # delta_quantized_r = torch.matmul(vector_r, quantized_matrix_r) - torch.matmul(vector_i, quantized_matrix_i) - golden_r
+        # delta_quantized_i = torch.matmul(vector_r, quantized_matrix_i) + torch.matmul(vector_i, quantized_matrix_r) - golden_i
 
         cross_error = torch.sqrt(
             torch.sum(torch.square(delta_cross_r)) + torch.sum(torch.square(delta_cross_i))) / torch.sqrt(
             torch.sum(torch.square(golden_r)) + torch.sum(torch.square(golden_i)))
 
-        quantized_error = torch.sqrt(
-            torch.sum(torch.square(delta_quantized_r)) + torch.sum(torch.square(delta_quantized_i))) / torch.sqrt(
-            torch.sum(torch.square(golden_r)) + torch.sum(torch.square(golden_i)))
+        # quantized_error = torch.sqrt(
+            # torch.sum(torch.square(delta_quantized_r)) + torch.sum(torch.square(delta_quantized_i))) / torch.sqrt(
+            # torch.sum(torch.square(golden_r)) + torch.sum(torch.square(golden_i)))
 
         # # Error calculation
         # error = utility.cal_error(golden_model, cross)
@@ -889,8 +899,8 @@ def run_crossbar_size_sim(_crossbar_1, _crossbar_2, _crossbar_3, _crossbar_4, _r
         # [data.append(str(e.item())) for e in metrics]
         # utility.write_to_csv(file_path, file_name, data)
         torch.set_printoptions(precision=8)
-        print("quantized_error=",quantized_error)
-        print("cross_error",cross_error)
+        # print("quantized_error=",quantized_error)
+        print("cross_error=",cross_error)
         # print("Absolute Sigma: ", _var_abs, ", Relative Sigma: ", _var_rel, ", Mean Error: ", me.item())
 
     end_time = time.time()
