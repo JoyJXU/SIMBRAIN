@@ -888,6 +888,7 @@ def run_crossbar_size_sim(_crossbar_1, _crossbar_2, _crossbar_3, _crossbar_4, _r
         # data = [str(_rows), str(_var_abs), str(_var_rel)]
         # [data.append(str(e.item())) for e in metrics]
         # utility.write_to_csv(file_path, file_name, data)
+        torch.set_printoptions(precision=8)
         print("quantized_error=",quantized_error)
         print("cross_error",cross_error)
         # print("Absolute Sigma: ", _var_abs, ", Relative Sigma: ", _var_rel, ", Mean Error: ", me.item())
