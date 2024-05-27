@@ -597,17 +597,16 @@ def run_crossbar_size_sim(_crossbar_1, _crossbar_2, _crossbar_3, _crossbar_4, _r
 
         # _var_g = 0.055210197891837
         # _var_linearity = 0.1
-        sim_params['d2d_variation'] = 0
         memristor_info_dict = _crossbar_1.memristor_info_dict
         G_off = memristor_info_dict[device_name]['G_off']
         G_on = memristor_info_dict[device_name]['G_on']
-        memristor_info_dict[device_name]['Gon_sigma'] = 0  # 0.094985
-        memristor_info_dict[device_name]['Goff_sigma'] = 0  # 0.025782
+        memristor_info_dict[device_name]['Gon_sigma'] = 0.094985
+        memristor_info_dict[device_name]['Goff_sigma'] = 0.025782
 
         P_off = memristor_info_dict[device_name]['P_off']
         P_on = memristor_info_dict[device_name]['P_on']
-        memristor_info_dict[device_name]['Pon_sigma'] = 0  # 0.006006
-        memristor_info_dict[device_name]['Poff_sigma'] = 0  # 0.468286
+        memristor_info_dict[device_name]['Pon_sigma'] = 0.006006
+        memristor_info_dict[device_name]['Poff_sigma'] = 0.468286
 
         _crossbar_1.mem_pos_pos = MemristorArray(sim_params=sim_params, shape=_crossbar_1.shape,
                                                  memristor_info_dict=memristor_info_dict)
