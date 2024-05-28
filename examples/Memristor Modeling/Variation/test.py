@@ -1,6 +1,6 @@
 import json
 import sys
-sys.path.append('../../')
+sys.path.append('../../../')
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -15,8 +15,8 @@ def main():
         dict = json.load(f)
     dict.update(
         {
-            'v_off': 2,
-            'v_on': -2,
+            'v_off': 1.5,
+            'v_on': -1.5,
             'G_off': None,
             'G_on': None,
             'alpha_off': None,
@@ -25,13 +25,54 @@ def main():
             'k_on': None,
             'P_off': None,
             'P_on': None,
-            'delta_t': 30 * 1e-3,
+            'delta_t': 100 * 1e-3,
         }
     )
-    file = "../../../memristordata/conductance.xlsx"
+    file = "../../../memristordata/conductance_.xlsx"
+
+    data = pd.DataFrame(pd.read_excel(
+        file,
+        sheet_name=0,
+        header=None,
+        index_col=None,
+    ))
+    data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)'] + list(data.columns[2:] - 2)
+
+    V_write = np.array(data['Pulse Voltage(V)'])
+    points_r = np.sum(V_write > 0)
+    points_d = np.sum(V_write < 0)
+    read_voltage = np.array(data['Read Voltage(V)'])[0]
+
+    device_nums = data.shape[1] - 2
+    G_off_list = np.zeros(device_nums)
+    G_on_list = np.zeros(device_nums)
+
+    for i in range(device_nums):
+        G_off_list[i] = np.average(
+            data[i][points_r - 10:points_r] / read_voltage
+        )
+        G_on_list[i] = np.average(
+            data[i][points_r + points_d - 10:] / read_voltage
+        )
+
+    G_off = np.mean(G_off_list)
+    G_on = np.mean(G_on_list)
+    dict.update(
+        {
+            'G_off': G_off,
+            'G_on': G_on
+        }
+    )
+
+    P_off_list = np.zeros(device_nums)
+    P_on_list = np.zeros(device_nums)
 
     _, Goff_sigma, _, Gon_sigma = Variation(
         file,
+        G_off_list,
+        G_on_list,
+        P_off_list,
+        P_on_list,
         dict
     ).d2d_G_fitting()
     dict.update(
@@ -41,25 +82,6 @@ def main():
         }
     )
 
-    data = pd.DataFrame(pd.read_excel(
-        file,
-        sheet_name=0,
-        header=None,
-        index_col=None,
-    ))
-    data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)', 'Current(A)'] + list(data.columns[3:])
-
-    conductance = np.array(data['Current(A)']) / np.array(data['Read Voltage(V)'][0])
-    conductance_r = conductance[:np.sum(np.array(data['Pulse Voltage(V)']) > 0)]
-    conductance_d = conductance[np.sum(np.array(data['Pulse Voltage(V)']) > 0):]
-    G_off = np.average(conductance_r[conductance_r.shape[0] - 10:])
-    G_on = np.average(conductance_d[conductance_d.shape[0] - 10:])
-    dict.update(
-        {
-            'G_off': G_off,
-            'G_on': G_on
-        }
-    )
     alpha_off, alpha_on = 5, 5
     dict.update(
         {
@@ -67,20 +89,25 @@ def main():
             "alpha_on": alpha_on
         }
     )
-    P_off, P_on, k_off, k_on = Conductance(file, dict).fitting()
+    exp_0 = Conductance(file, dict)
+    P_off, P_on, k_off, k_on, _ = exp_0.fitting()
     dict.update(
         {
             'k_off': k_off,
             'k_on': k_on,
             'P_off': P_off,
             'P_on': P_on,
-            'G_off': None,
-            'G_on': None
         }
     )
 
+    P_off_list, P_on_list = exp_0.mult_P_fitting(G_off_list, G_on_list)
+
     exp = Variation(
-        "../../../memristordata/conductance.xlsx",
+        "../../../memristordata/conductance_.xlsx",
+        G_off_list,
+        G_on_list,
+        P_off_list,
+        P_on_list,
         dict
     )
     _, Poff_sigma, _, Pon_sigma = exp.d2d_P_fitting()
@@ -90,7 +117,6 @@ def main():
             "Pon_sigma": Poff_sigma
         }
     )
-    print(exp.P_off, exp.P_on)
     sigma_relative, sigma_absolute = exp.c2c_fitting()
     dict.update(
         {
@@ -104,8 +130,8 @@ def main():
         index=['Goff_sigma', 'Gon_sigma', 'Poff_sigma', 'Pon_sigma', 'sigma_relative', 'sigma_absolute']
     )
     print(df)
-    with open("fitting_record.json", "w") as f:
-        json.dump(dict, f, indent=2)
+    # with open("fitting_record.json", "w") as f:
+    #     json.dump(dict, f, indent=2)
 
     # Plot
     plot_x_1 = np.linspace(exp.G_off * (1 - 3 * Goff_sigma), exp.G_off * (1 + 3 * Goff_sigma))
@@ -120,9 +146,10 @@ def main():
     ax1.set_xlabel('G_off')
     ax1.set_ylabel('Probability Density')
     ax1.set_title('D2D Variation (G_off)')
-    ax2 = fig.add_subplot(322)
+    # ax2 = fig.add_subplot(322)
+    ax2 = ax1.twinx()
     ax2.hist(exp.G_on_variation, bins=10, density=True)
-    ax2.plot(plot_x_2, plot_y_2, c='r')
+    ax2.plot(plot_x_2, plot_y_2, c='orange')
     ax2.set_xlabel('G_on')
     ax2.set_ylabel('Probability Density')
     ax2.set_title('D2D Variation (G_on)')
@@ -134,13 +161,14 @@ def main():
 
     ax3 = fig.add_subplot(323)
     ax3.hist(exp.P_off_variation, bins=10, density=True)
-    ax3.plot(plot_x_1, plot_y_1, c='r')
+    ax3.plot(plot_x_1, plot_y_1, c='green')
     ax3.set_xlabel('P_off')
     ax3.set_ylabel('Probability Density')
     ax3.set_title('D2D Variation (P_off)')
-    ax4 = fig.add_subplot(324)
-    ax4.hist(exp.P_on_variation, bins=10, density=True)
-    ax4.plot(plot_x_2, plot_y_2, c='r')
+    # ax4 = fig.add_subplot(324)
+    ax4 = ax3.twinx()
+    ax4.hist(exp.P_on_variation, bins=10, density=True, color='orange')
+    ax4.plot(plot_x_2, plot_y_2, c='red')
     ax4.set_xlabel('P_on')
     ax4.set_ylabel('Probability Density')
     ax4.set_title('D2D Variation (P_on)')

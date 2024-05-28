@@ -1,6 +1,6 @@
-import math
 import numpy as np
 import pandas as pd
+import torch
 
 
 def timer(func):
@@ -24,187 +24,330 @@ class Conductance(object):
             **kwargs,
     ):
         # Read excel
-        data = pd.DataFrame(pd.read_excel(
+        self.data = pd.DataFrame(pd.read_excel(
             file,
             sheet_name=0,
             header=None,
             index_col=None,
         ))
-        data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)', 'Current(A)'] + list(data.columns[3:])
-
-        # Initialize parameters
-        self.P_off = 1
-        self.P_on = 1
-        self.k_off = 1
-        self.k_on = -1
-
+        self.data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)'] + list(self.data.columns[2:] - 2)
         # Read parameters
         self.v_off = dictionary['v_off']
         self.v_on = dictionary['v_on']
-        self.G_off = dictionary['G_off_fit']
-        self.G_on = dictionary['G_on_fit']
+        self.G_off = dictionary['G_off']
+        self.G_on = dictionary['G_on']
         self.alpha_off = dictionary['alpha_off']
         self.alpha_on = dictionary['alpha_on']
 
         # Read data
         self.delta_t = dictionary['delta_t']
-        self.V_write = np.array(data['Pulse Voltage(V)'])
-        self.read_voltage = np.array(data['Read Voltage(V)'][0])
-
+        self.duty_ratio = dictionary['duty_ratio']
+        self.V_write = np.array(self.data['Pulse Voltage(V)'])
+        self.read_voltage = np.array(self.data['Read Voltage(V)'][0])
         self.start_point_r = 0
         self.points_r = np.sum(self.V_write > 0)
         self.start_point_d = self.start_point_r + np.sum(self.V_write > 0)
         self.points_d = np.sum(self.V_write < 0)
 
-        self.current_r = np.array(data['Current(A)'])[self.start_point_r: self.start_point_r + self.points_r]
-        self.conductance_r = self.current_r / self.read_voltage
-        self.x_r = (self.conductance_r - self.G_on) / (self.G_off - self.G_on)
-        self.current_d = np.array(data['Current(A)'])[self.start_point_d: self.start_point_d + self.points_d]
-        self.conductance_d = self.current_d / self.read_voltage
-        self.x_d = (self.conductance_d - self.G_on) / (self.G_off - self.G_on)
+        # Set batches
+        self.device_nums = self.data.shape[1] - 2
+        self.batch_size = 2
+        self.batch_nums = int(self.device_nums / self.batch_size) + 1
 
-    def RRMSE_MEAN(
-            self,
-            internal_state,
-            x
-    ):
-        points = len(internal_state)
-        x_diff = list(map(lambda x: x[0] - x[1], zip(internal_state, x)))
-        square_sum = np.dot(x_diff, x_diff)
-        mean_square_sum = square_sum / points
-        RMSE = np.sqrt(mean_square_sum)
-        RRMSE_mean = RMSE / np.mean(x)
-        return RRMSE_mean
-
-    def RRMSE_PERCENT(
-            self,
-            conductance_fit,
-            conductance
-    ):
-        c_diff = list(map(lambda x: x[0] - x[1], zip(conductance_fit, conductance)))
-        c_diff_percent = []
-        for i in range(len(c_diff)):
-            c_diff_percent.append(c_diff[i] / conductance[i])
-
-        square_sum = np.dot(c_diff_percent, c_diff_percent)
-        mean_square_sum = square_sum / len(c_diff_percent)
-        RRMSE_percent = np.sqrt(mean_square_sum)
-        return RRMSE_percent
-
-    def Memristor_conductance_model(
-            self,
-            k_off,
-            k_on,
-            P_off,
-            P_on,
-            x_init,
-            V_write
-    ):
-        J1 = 1
-        points = len(V_write)
-
-        # initialization
-        internal_state = [0 for i in range(points)]
-        conductance_fit = [0 for i in range(points)]
-
-        # conductance change
-        internal_state[0] = x_init
-        for i in range(points - 1):
-            if V_write[i + 1] > self.v_off and V_write[i + 1] > 0:
-                delta_x = k_off * ((V_write[i + 1] / self.v_off - 1) ** self.alpha_off) * J1 * (
-                        (1 - internal_state[i]) ** P_off)
-                internal_state[i + 1] = internal_state[i] + self.delta_t * delta_x
-
-            elif V_write[i + 1] < 0 and V_write[i + 1] < self.v_on:
-                delta_x = k_on * ((V_write[i + 1] / self.v_on - 1) ** self.alpha_on) * J1 * (
-                        internal_state[i] ** P_on)
-                internal_state[i + 1] = internal_state[i] + self.delta_t * delta_x
-
-            else:
-                delta_x = 0
-                internal_state[i + 1] = internal_state[i]
-
-            if internal_state[i + 1] < 0:
-                internal_state[i + 1] = 0
-            elif internal_state[i + 1] > 1:
-                internal_state[i + 1] = 1
-
-        # conductance calculation
-        for i in range(points):
-            conductance_fit[i] = self.G_off * internal_state[i] + self.G_on * (1 - internal_state[i])
-
-        return internal_state, conductance_fit
+        # Initialize parameters
+        # self.P_off = torch.ones(self.device_nums)
+        # self.P_on = torch.ones(self.device_nums)
+        # self.k_off = torch.ones(self.device_nums)
+        # self.k_on = -torch.ones(self.device_nums)
+        # self.loss = torch.zeros(self.device_nums)
+        # self.loss_index = torch.zeros(self.device_nums)
 
     @timer
     def fitting(self):
-        P_off_num = 100
-        P_on_num = 100
-        P_off_list = np.logspace(-1, 1, P_off_num, base=10)
-        P_on_list = np.logspace(-1, 1, P_on_num, base=10)
+        """
+        Calculate parameters k and P for the baseline model.
+        """
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
 
+        J1 = 1
         k_off_num = 500
+        k_off_list = torch.logspace(-3, 6, k_off_num, base=10)
+        k_off_list = k_off_list.to(device)
         k_on_num = 500
-        k_off_list = np.logspace(-4, 9, k_off_num, base=10)
-        k_on_list = -np.logspace(-4, 9, k_on_num, base=10)
+        k_on_list = -torch.logspace(-3, 6, k_on_num, base=10)
+        k_on_list = k_on_list.to(device)
+        P_off_num = 1000
+        P_off_list = torch.logspace(-5, 1, P_off_num, base=10)
+        P_off_list = P_off_list.to(device)
+        P_on_num = 1000
+        P_on_list = torch.logspace(-5, 1, P_on_num, base=10)
+        P_on_list = P_on_list.to(device)
+        V_write_r = torch.tensor(self.V_write[self.start_point_r: self.start_point_r + self.points_r])
+        V_write_r = V_write_r.to(device)
+        V_write_d = torch.tensor(self.V_write[self.start_point_d: self.start_point_d + self.points_d])
+        V_write_d = V_write_d.to(device)
 
-        # rise
-        V_write_r = self.V_write[self.start_point_r: self.start_point_r + self.points_r]
-        x_init_r = self.x_r[0]
-        mem_x_r = np.zeros(self.points_r)
-        mem_c_r = np.zeros(self.points_r)
-        INDICATOR_r = np.ones([k_off_num, P_off_num])
-        indicator_temp_r = 90
-        min_x_r = 0
-        min_y_r = 0
+        INDICATOR_r = torch.zeros([k_off_num, P_off_num])
+        INDICATOR_r = INDICATOR_r.to(device)
+        INDICATOR_d = torch.zeros([k_on_num, P_on_num])
+        INDICATOR_d = INDICATOR_d.to(device)
+        self.loss_r = torch.zeros([k_off_num, P_off_num])
+        self.loss_r = self.loss_r.to(device)
+        self.loss_d = torch.zeros([k_on_num, P_on_num])
+        self.loss_d = self.loss_d.to(device)
 
-        for i in range(k_off_num):
-            for j in range(P_off_num):
-                mem_x_r, mem_c_r = self.Memristor_conductance_model(
-                    k_off_list[i],
-                    k_on_list[0],
-                    P_off_list[j],
-                    P_on_list[0],
-                    x_init_r,
-                    V_write_r
+        for batch_index in range(self.batch_nums):
+            start_index = batch_index * self.batch_size
+            if batch_index == self.batch_nums - 1:
+                self.batch_size = self.device_nums % self.batch_size
+            select_columns = np.array([i for i in range(self.batch_size)]) + start_index
+
+            current_r = torch.tensor(
+                np.array(self.data[select_columns])[self.start_point_r: self.start_point_r + self.points_r].T)
+            current_d = torch.tensor(
+                np.array(self.data[select_columns])[self.start_point_d: self.start_point_d + self.points_d].T)
+            conductance_r = current_r / self.read_voltage
+            conductance_d = current_d / self.read_voltage
+            conductance_r = conductance_r.to(device)
+            conductance_d = conductance_d.to(device)
+            x_r = (conductance_r - self.G_on) / (self.G_off - self.G_on)
+            x_d = (conductance_d - self.G_on) / (self.G_off - self.G_on)
+            x_init_r = x_r[:, 0]
+            x_init_d = x_d[:, 0]
+
+            mem_x_r = torch.zeros([self.points_r, self.batch_size, k_off_num, P_off_num])
+            mem_x_r = mem_x_r.to(device)
+            mem_x_r[0] = x_init_r.expand(k_off_num, self.batch_size).expand(P_off_num, k_off_num, self.batch_size).permute(2, 1, 0)
+            for i in range(self.points_r - 1):
+                mem_x_r[i + 1] = torch.where(
+                    V_write_r[i + 1] > self.v_off and V_write_r[i + 1] > 0,
+                    k_off_list.expand(P_off_num, k_off_num).expand(self.batch_size, P_off_num, k_off_num).permute(0, 2, 1)
+                    * ((V_write_r[i + 1] / self.v_off - 1) ** self.alpha_off)
+                    * J1
+                    * (1 - mem_x_r[i]) ** P_off_list
+                    * self.delta_t
+                    * self.duty_ratio
+                    + mem_x_r[i],
+                    mem_x_r[i]
                 )
+                mem_x_r[i + 1] = torch.where(mem_x_r[i + 1] < 0, 0, mem_x_r[i + 1])
+                mem_x_r[i + 1] = torch.where(mem_x_r[i + 1] > 1, 1, mem_x_r[i + 1])
+            mem_x_r_T = mem_x_r.permute(2, 3, 1, 0)
+            mem_c_r = self.G_off * mem_x_r_T + self.G_on * (1 - mem_x_r_T)
+            c_r_diff_percent = (mem_c_r - conductance_r) / conductance_r
+            # INDICATOR_r = torch.sqrt(torch.sum(c_r_diff_percent * c_r_diff_percent, dim=3) / self.points_r).permute(2, 0, 1)
+            # for i in range(self.batch_size):
+            #     min_value = torch.min(INDICATOR_r[i])
+            #     min_index = torch.argmin(INDICATOR_r[i])
+            #     min_x_r = min_index // P_off_num
+            #     min_y_r = min_index % P_off_num
+            #     self.k_off[i + start_index] = k_off_list[min_x_r]
+            #     self.P_off[i + start_index] = P_off_list[min_y_r]
+            #     self.loss[i + start_index] += min_value
+            #     self.loss_index[i + start_index] += min_index
+            INDICATOR_r += torch.sum(torch.sum(c_r_diff_percent * c_r_diff_percent, dim=3) / self.points_r, dim=2)
+            del mem_x_r, mem_x_r_T, mem_c_r, conductance_r, c_r_diff_percent
+            torch.cuda.empty_cache()
 
-                INDICATOR_r[i][j] = self.RRMSE_PERCENT(mem_c_r, self.conductance_r)
-                if INDICATOR_r[i][j] <= indicator_temp_r:
-                    min_x_r = i
-                    min_y_r = j
-                    indicator_temp_r = INDICATOR_r[i][j]
-
-        self.k_off = k_off_list[min_x_r]
-        self.P_off = P_off_list[min_y_r]
-
-        # decline
-        V_write_d = self.V_write[self.start_point_d: self.start_point_d + self.points_d]
-        x_init_d = self.x_d[0]
-        mem_x_d = np.zeros(self.points_d)
-        mem_c_d = np.zeros(self.points_d)
-        INDICATOR_d = np.ones([k_on_num, P_on_num])
-        indicator_temp_d = 90
-        min_x_d = 0
-        min_y_d = 0
-
-        for i in range(k_on_num):
-            for j in range(P_on_num):
-                mem_x_d, mem_c_d = self.Memristor_conductance_model(
-                    k_off_list[0],
-                    k_on_list[i],
-                    P_off_list[0],
-                    P_on_list[j],
-                    x_init_d,
-                    V_write_d
+            mem_x_d = torch.zeros([self.points_d, self.batch_size, k_on_num, P_on_num])
+            mem_x_d[0] = x_init_d.expand(k_on_num, self.batch_size).expand(P_on_num, k_on_num, self.batch_size).permute(2, 1, 0)
+            mem_x_d = mem_x_d.to(device)
+            for i in range(self.points_d - 1):
+                mem_x_d[i + 1] = torch.where(
+                    V_write_d[i + 1] < 0 and V_write_d[i + 1] < self.v_on,
+                    k_on_list.expand(P_on_num, k_on_num).expand(self.batch_size, P_on_num, k_on_num).permute(0, 2, 1)
+                    * ((V_write_d[i + 1] / self.v_on - 1) ** self.alpha_on)
+                    * J1
+                    * mem_x_d[i] ** P_on_list
+                    * self.delta_t
+                    * self.duty_ratio
+                    + mem_x_d[i],
+                    mem_x_d[i]
                 )
+                mem_x_d[i + 1] = torch.where(mem_x_d[i + 1] < 0, 0, mem_x_d[i + 1])
+                mem_x_d[i + 1] = torch.where(mem_x_d[i + 1] > 1, 1, mem_x_d[i + 1])
+            mem_x_d_T = mem_x_d.permute(2, 3, 1, 0)
+            mem_c_d = self.G_off * mem_x_d_T + self.G_on * (1 - mem_x_d_T)
+            c_d_diff_percent = (mem_c_d - conductance_d) / conductance_d
+            # INDICATOR_d = torch.sqrt(torch.sum(c_d_diff_percent * c_d_diff_percent, dim=3) / self.points_d).permute(2, 0, 1)
+            # for i in range(self.batch_size):
+            #     min_value = torch.min(INDICATOR_d[i])
+            #     min_index = torch.argmin(INDICATOR_d[i])
+            #     min_x_d = min_index // P_on_num
+            #     min_y_d = min_index % P_on_num
+            #     self.k_on[i + start_index] = k_on_list[min_x_d]
+            #     self.P_on[i + start_index] = P_on_list[min_y_d]
+            #     self.loss[i + start_index] += min_value
+            #     self.loss_index[i + start_index] += min_index
+            # print(self.loss)
+            INDICATOR_d += torch.sum(torch.sum(c_d_diff_percent * c_d_diff_percent, dim=3) / self.points_d, dim=2)
+            del mem_x_d, mem_x_d_T, mem_c_d, conductance_d, c_d_diff_percent
+            torch.cuda.empty_cache()
 
-                INDICATOR_d[i][j] = self.RRMSE_PERCENT(mem_c_d, self.conductance_d)
-                if INDICATOR_d[i][j] <= indicator_temp_d:
-                    min_x_d = i
-                    min_y_d = j
-                    indicator_temp_d = INDICATOR_d[i][j]
+        self.loss_r += torch.sqrt(INDICATOR_r / self.device_nums)
+        self.loss_d += torch.sqrt(INDICATOR_d / self.device_nums)
+        self.loss = torch.min(torch.sqrt((torch.min(INDICATOR_r) + torch.min(INDICATOR_d)) / 2 / self.device_nums))
+        min_x_r = (torch.argmin(self.loss_r) // P_off_num).item()
+        min_y_r = (torch.argmin(self.loss_r) % P_off_num).item()
+        min_x_d = (torch.argmin(self.loss_d) // P_on_num).item()
+        min_y_d = (torch.argmin(self.loss_d) % P_on_num).item()
+        # print(min_x_r, min_y_r, min_x_d, min_y_d)
+        # print(torch.min(self.loss_r), torch.min(self.loss_d), torch.min(self.loss))
+        self.k_off = k_off_list[min_x_r].item()
+        self.k_on = k_on_list[min_x_d].item()
+        self.P_off = P_off_list[min_y_r].item()
+        self.P_on = P_on_list[min_y_d].item()
 
-        self.k_on = k_on_list[min_x_d]
-        self.P_on = P_on_list[min_y_d]
+        del k_off_list, k_on_list, P_off_list, P_on_list, V_write_r, V_write_d, INDICATOR_r, INDICATOR_d
+        torch.cuda.empty_cache()
 
-        return self.P_off, self.P_on, self.k_off, self.k_on
+        return self.P_off, self.P_on, self.k_off, self.k_on, self.V_write[0]
+
+    @timer
+    def mult_P_fitting(self, G_off_variation: np.array, G_on_variation: np.array):
+        """
+        Calculate the list of P from multiple devices for variation fitting.
+
+        :param G_off_variation: The list of G_off from multiple devices
+        :param G_on_variation: The list of G_on from multiple devices
+        """
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
+
+        G_off_variation = torch.tensor(G_off_variation)
+        G_off_variation = G_off_variation.to(device)
+        G_on_variation = torch.tensor(G_on_variation)
+        G_on_variation = G_on_variation.to(device)
+        P_off_variation = np.zeros(self.device_nums)
+        P_on_variation = np.zeros(self.device_nums)
+
+        P_off_nums = 1000
+        P_on_nums = 1000
+        # P_off_unit = 1 / P_off_nums
+        # P_on_unit = 1 / P_on_nums
+        # P_off_list = torch.linspace(
+        #     round(self.P_off, 2) - 49 * P_off_unit,
+        #     round(self.P_off, 2) + 50 * P_off_unit,
+        #     P_off_nums
+        # )
+        # P_on_list = torch.linspace(
+        #     round(self.P_on, 2) - 49 * P_on_unit,
+        #     round(self.P_on, 2) + 50 * P_on_unit,
+        #     P_on_nums
+        # )
+        #
+        # for i in range(20):
+        #     P_off_list[P_off_list < 0] = 0
+        #     if P_off_list[0] <= self.P_off / 2:
+        #         P_off_unit = P_off_unit / 2
+        #         P_off_list = torch.linspace(round(self.P_off, 2) - 49 * P_off_unit,
+        #                                     round(self.P_off, 2) + 50 * P_off_unit, P_off_nums)
+        #     P_on_list[P_on_list < 0] = 0
+        #     if P_on_list[0] <= self.P_on / 2:
+        #         P_on_unit = P_on_unit / 2
+        #         P_on_list = torch.linspace(round(self.P_on, 2) - 49 * P_on_unit,
+        #                                    round(self.P_on, 2) + 50 * P_on_unit, P_on_nums)
+        P_off_list = torch.logspace(-4, 1, P_off_nums, base=10)
+        P_on_list = torch.logspace(-4, 1, P_on_nums, base=10)
+        P_off_list = P_off_list.to(device)
+        P_on_list = P_on_list.to(device)
+
+        J1 = 1
+        select_columns = np.array([i for i in range(self.device_nums)])
+        current_r = torch.tensor(
+            np.array(self.data[select_columns])[self.start_point_r: self.start_point_r + self.points_r].T)
+        current_d = torch.tensor(
+            np.array(self.data[select_columns])[self.start_point_d: self.start_point_d + self.points_d].T)
+        conductance_r = current_r / self.read_voltage
+        conductance_d = current_d / self.read_voltage
+        conductance_r = conductance_r.to(device)
+        conductance_d = conductance_d.to(device)
+        # x_r = (conductance_r - self.G_on) / (self.G_off - self.G_on)
+        # x_d = (conductance_d - self.G_on) / (self.G_off - self.G_on)
+        x_r = (
+                (conductance_r - G_on_variation.expand(self.points_r, self.device_nums).T)
+                / (G_off_variation.expand(self.points_r, self.device_nums).T - G_on_variation.expand(self.points_r, self.device_nums).T)
+        )
+        x_d = (
+                (conductance_d - G_on_variation.expand(self.points_r, self.device_nums).T)
+                / (G_off_variation.expand(self.points_r, self.device_nums).T - G_on_variation.expand(self.points_r, self.device_nums).T)
+        )
+        V_write_r = torch.tensor(self.V_write[self.start_point_r: self.start_point_r + self.points_r])
+        V_write_d = torch.tensor(self.V_write[self.start_point_d: self.start_point_d + self.points_d])
+        V_write_r = V_write_r.to(device)
+        V_write_d = V_write_d.to(device)
+        x_init_r = x_r[:, 0]
+        x_init_d = x_d[:, 0]
+
+        mem_x_r = torch.zeros([self.points_r, self.device_nums, P_off_nums])
+        mem_x_r[0] = x_init_r.expand(P_off_nums, self.device_nums).T
+        mem_x_r = mem_x_r.to(device)
+        for j in range(self.points_r - 1):
+            mem_x_r[j + 1] = torch.where(
+                V_write_r[j + 1] > self.v_off and V_write_r[j + 1] > 0,
+                self.k_off
+                * ((V_write_r[j + 1] / self.v_off - 1) ** self.alpha_off)
+                * J1
+                * (1 - mem_x_r[j]) ** P_off_list
+                * self.delta_t
+                * self.duty_ratio
+                + mem_x_r[j],
+                mem_x_r[j]
+            )
+            mem_x_r[j + 1] = torch.where(mem_x_r[j + 1] < 0, 0, mem_x_r[j + 1])
+            mem_x_r[j + 1] = torch.where(mem_x_r[j + 1] > 1, 1, mem_x_r[j + 1])
+        mem_x_r_T = mem_x_r.permute(2, 1, 0)
+        # mem_c_r = self.G_off * mem_x_r_T + self.G_on * (1 - mem_x_r_T)
+        mem_c_r = (
+                G_off_variation.expand(P_off_nums, self.device_nums).expand(self.points_r, P_off_nums, self.device_nums).permute(1, 2, 0)
+                * mem_x_r_T
+                + G_on_variation.expand(P_on_nums, self.device_nums).expand(self.points_d, P_on_nums, self.device_nums).permute(1, 2, 0)
+                * (1 - mem_x_r_T)
+        )
+        c_r_diff_percent = (mem_c_r - conductance_r) / conductance_r
+        INDICATOR_r = torch.sqrt(torch.sum(c_r_diff_percent * c_r_diff_percent, dim=2) / self.points_r).T
+        P_off_variation = P_off_list[torch.argmin(INDICATOR_r, dim=1)]
+        P_off_variation = P_off_variation.cpu()
+
+        mem_x_d = torch.zeros([self.points_d, self.device_nums, P_on_nums])
+        mem_x_d[0] = x_init_d.expand(P_on_nums, self.device_nums).T
+        mem_x_d = mem_x_d.to(device)
+        for j in range(self.points_d - 1):
+            mem_x_d[j + 1] = torch.where(
+                V_write_d[j + 1] < 0 and V_write_d[j + 1] < self.v_on,
+                self.k_on
+                * ((V_write_d[j + 1] / self.v_on - 1) ** self.alpha_on)
+                * J1
+                * mem_x_d[j] ** P_on_list
+                * self.delta_t
+                * self.duty_ratio
+                + mem_x_d[j],
+                mem_x_d[j]
+            )
+            mem_x_d[j + 1] = torch.where(mem_x_d[j + 1] < 0, 0, mem_x_d[j + 1])
+            mem_x_d[j + 1] = torch.where(mem_x_d[j + 1] > 1, 1, mem_x_d[j + 1])
+        mem_x_d_T = mem_x_d.permute(2, 1, 0)
+        # mem_c_d = self.G_off * mem_x_d_T + self.G_on * (1 - mem_x_d_T)
+        mem_c_d = (
+                G_off_variation.expand(P_off_nums, self.device_nums).expand(self.points_r, P_off_nums,
+                                                                            self.device_nums).permute(1, 2, 0)
+                * mem_x_d_T
+                + G_on_variation.expand(P_on_nums, self.device_nums).expand(self.points_d, P_on_nums,
+                                                                            self.device_nums).permute(1, 2, 0)
+                * (1 - mem_x_d_T)
+        )
+        c_d_diff_percent = (mem_c_d - conductance_d) / conductance_d
+        INDICATOR_d = torch.sqrt(torch.sum(c_d_diff_percent * c_d_diff_percent, dim=2) / self.points_d).T
+        P_on_variation = P_on_list[torch.argmin(INDICATOR_d, dim=1)]
+        P_on_variation = P_on_variation.cpu()
+        # print(P_off_variation)
+        # print(P_on_variation)
+
+        torch.cuda.empty_cache()
+
+        return P_off_variation.numpy(), P_on_variation.numpy()

@@ -25,8 +25,8 @@
     "SAF_lambda": 0,
     "SAF_ratio": 9,
     "SAF_delta": 0,
-    "Aging_k_on": 0,
-    "Aging_k_off": 0,
+    "Aging_on": 0,
+    "Aging_off": 0,
     "mem_size": 0.0001
   },
   "ferro": {
@@ -55,8 +55,8 @@
     "SAF_lambda": 1,
     "SAF_ratio": 9,
     "SAF_delta": 0,
-    "Aging_k_on": 0.5,
-    "Aging_k_off": 0.5,
+    "Aging_on": 0.5,
+    "Aging_off": 0.5,
     "mem_size": 0.0001
   },
   "hu": {
@@ -85,8 +85,8 @@
     "SAF_lambda": 0.1,
     "SAF_ratio": 9,
     "SAF_delta": 0,
-    "Aging_k_on": 1e-08,
-    "Aging_k_off": 1e-08,
+    "Aging_on": 1e-08,
+    "Aging_off": 1e-08,
     "mem_size": 0.0001
   },
   "new_ferro": {
@@ -115,8 +115,8 @@
     "SAF_lambda": 1,
     "SAF_ratio": 9,
     "SAF_delta": 0,
-    "Aging_k_on": 0.5,
-    "Aging_k_off": 0.5,
+    "Aging_on": 0.5,
+    "Aging_off": 0.5,
     "mem_size": 0.0001
   },
   "ferro_resistance_abandon": {
@@ -145,8 +145,8 @@
     "SAF_lambda": 0,
     "SAF_ratio": 9,
     "SAF_delta": 0,
-    "Aging_k_on": 0,
-    "Aging_k_off": 0
+    "Aging_on": 0,
+    "Aging_off": 0
   },
   "mine": {
     "P_on": 0.33598182862837817,
@@ -177,8 +177,8 @@
     "SAF_lambda": null,
     "SAF_ratio": null,
     "SAF_delta": null,
-    "Aging_k_on": null,
-    "Aging_k_off": null,
+    "Aging_on": null,
+    "Aging_off": null,
     "mem_size": 0.0001
   }
 }
