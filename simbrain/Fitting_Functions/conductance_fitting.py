@@ -80,10 +80,12 @@ class Conductance(object):
         k_on_list = -torch.logspace(-3, 6, k_on_num, base=10)
         k_on_list = k_on_list.to(device)
         P_off_num = 1000
-        P_off_list = torch.logspace(-5, 1, P_off_num, base=10)
+        # P_off_list = torch.logspace(-5, 1, P_off_num, base=10)
+        P_off_list = torch.linspace(0, 10, P_off_num)
         P_off_list = P_off_list.to(device)
         P_on_num = 1000
-        P_on_list = torch.logspace(-5, 1, P_on_num, base=10)
+        # P_on_list = torch.logspace(-5, 1, P_on_num, base=10)
+        P_on_list = torch.linspace(0, 10, P_on_num)
         P_on_list = P_on_list.to(device)
         V_write_r = torch.tensor(self.V_write[self.start_point_r: self.start_point_r + self.points_r])
         V_write_r = V_write_r.to(device)
@@ -137,7 +139,9 @@ class Conductance(object):
                 mem_x_r[i + 1] = torch.where(mem_x_r[i + 1] > 1, 1, mem_x_r[i + 1])
             mem_x_r_T = mem_x_r.permute(2, 3, 1, 0)
             mem_c_r = self.G_off * mem_x_r_T + self.G_on * (1 - mem_x_r_T)
-            c_r_diff_percent = (mem_c_r - conductance_r) / conductance_r
+            # TODO: Add a fitting indicator: diff / diff_percent
+            # c_r_diff_percent = (mem_c_r - conductance_r) / conductance_r
+            c_r_diff_percent = (mem_c_r - conductance_r)
             # INDICATOR_r = torch.sqrt(torch.sum(c_r_diff_percent * c_r_diff_percent, dim=3) / self.points_r).permute(2, 0, 1)
             # for i in range(self.batch_size):
             #     min_value = torch.min(INDICATOR_r[i])

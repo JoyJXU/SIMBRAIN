@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import torch
 from simbrain.Fitting_Functions.iv_curve_fitting import IVCurve
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
-
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
 
 def main():
     # Fit
@@ -89,7 +90,7 @@ def main():
         }
     )
 
-    file = "../../../memristordata/conductance_.xlsx"
+    file = "../../../memristordata/conductance_deletehead.xlsx"
     # for alpha_off_temp in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
     #     for alpha_on_temp in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
     #         dict.update(

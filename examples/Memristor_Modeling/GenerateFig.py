@@ -9,6 +9,8 @@ from scipy.stats import norm
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
 from simbrain.Fitting_Functions.variation_fitting import Variation
 
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
 
 def main():
     # Fit
