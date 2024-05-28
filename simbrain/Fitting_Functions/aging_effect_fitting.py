@@ -43,7 +43,7 @@ class AgingEffect(object):
         self.LRS = data['LRS']
         self.points = len(self.Cycle)
 
-        self.CYCLE = self.Cycle
+        self.CYCLE = self.Cycle * 1e-3
         self.HHRS = 1 / self.HRS
         self.LLRS = 1 / self.LRS
 
