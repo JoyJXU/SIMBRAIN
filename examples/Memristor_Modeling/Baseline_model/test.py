@@ -76,7 +76,7 @@ def main():
     file = "../../../memristordata/iv_curve.xlsx"
     exp_1 = IVCurve(file, dict)
     alpha_off, alpha_on = exp_1.fitting()
-    # alpha_off_temp, alpha_on_temp = alpha_off, alpha_on  # 5, 5
+    alpha_off, alpha_on = 5, 5
     dict.update(
         {
             'G_off': G_off,
