@@ -1,15 +1,12 @@
 import json
 import sys
-
-sys.path.append('../../../')
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import torch
 from simbrain.Fitting_Functions.iv_curve_fitting import IVCurve
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
+sys.path.append('../../../')
+
 
 def main():
     # Fit
@@ -31,7 +28,7 @@ def main():
         }
     )
     data = pd.DataFrame(pd.read_excel(
-        "../../../memristordata/conductance_.xlsx",
+        "../../../memristordata/conductance_deletehead.xlsx",
         sheet_name=0,
         header=None,
         index_col=None,
@@ -125,6 +122,30 @@ def main():
     with open("fitting_record.json", "w") as f:
         json.dump(dict, f, indent=2)
     # print(exp_2.loss_r, exp_2.loss_d, torch.min(exp_2.loss_r), torch.min(exp_2.loss_d))
+    # TODO: output excel
+    current_r = np.array(exp_2.data[:])[exp_2.start_point_r: exp_2.start_point_r + exp_2.points_r, 2:]
+    conductance_r = current_r / exp_2.read_voltage
+    x_r = (conductance_r - exp_2.G_on) / (exp_2.G_off - exp_2.G_on)
+    x_init_r = x_r[0, :]
+    V_write_r = exp_2.V_write[exp_2.start_point_r: exp_2.start_point_r + exp_2.points_r]
+    mem_x_r = np.zeros([exp_2.points_r, exp_2.device_nums])
+    mem_x_r[0] = x_init_r
+    J1 = 1
+    for i in range(exp_2.points_r - 1):
+        for j in range(exp_2.device_nums):
+            mem_x_r[i + 1, j] = (
+                    exp_2.k_off_devices.numpy()[j]
+                    * ((V_write_r[i + 1] / exp_2.v_off - 1) ** exp_2.alpha_off)
+                    * J1
+                    * (1 - mem_x_r[i, j]) ** exp_2.P_off_devices.numpy()[j]
+                    * exp_2.delta_t
+                    * exp_2.duty_ratio
+                    + mem_x_r[i, j]
+            )
+            mem_x_r[i + 1, j] = np.where(mem_x_r[i + 1, j] < 0, 0, mem_x_r[i + 1, j])
+            mem_x_r[i + 1, j] = np.where(mem_x_r[i + 1, j] > 1, 1, mem_x_r[i + 1, j])
+    data_curve = pd.DataFrame(mem_x_r)
+    data_curve.to_excel("../Generate_figure/conductance_curve.xlsx", index=False, header=False)
 
     # Plot
     fig = plt.figure(figsize=(12, 5.4))
@@ -195,16 +216,23 @@ def main():
         mem_x_d[i + 1] = np.where(mem_x_d[i + 1] > 1, 1, mem_x_d[i + 1])
     memx_total = np.concatenate((mem_x_r, mem_x_d))
     x_total = np.concatenate((x_r, x_d))
-    plot_x = np.arange(exp_2.points_r)
+    plot_x = np.arange(exp_2.points_r + exp_2.points_d)
+    # TODO: calculate RRMSE when fitting with RMSE
+
+    # TODO: output excel
+    best_curve = pd.DataFrame(mem_x_r)
+    best_curve.to_excel("../best_curve.xlsx", index=False, header=False)
 
     ax2 = fig.add_subplot(122)
     ax2.set_title('Conductance Curve')
-    ax2.plot(plot_x, mem_x_r, c='b')
+    ax2.plot(plot_x, memx_total, c='b')
     for i in range(exp_2.device_nums):
-        ax2.scatter(plot_x, x_r.T[i], c='r', s=0.1)
+        ax2.scatter(plot_x, x_total.T[i], c='r', s=0.1)
     ax2.set_xlabel('points')
     ax2.set_ylabel('x')
     ax2.set_title('Conductance Curve')
+
+    # TODO: plot with different G and P
 
     plt.tight_layout()
     plt.savefig("Baseline Model.png", dpi=300, bbox_inches='tight')
