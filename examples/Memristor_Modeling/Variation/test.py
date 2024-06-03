@@ -1,12 +1,12 @@
 import json
 import sys
-sys.path.append('../../../')
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
 from simbrain.Fitting_Functions.variation_fitting import Variation
+sys.path.append('../../../')
 
 
 def main():
@@ -26,9 +26,10 @@ def main():
             'P_off': None,
             'P_on': None,
             'delta_t': 100 * 1e-3,
+            'duty_ratio': 0.1
         }
     )
-    file = "../../../memristordata/conductance_.xlsx"
+    file = "../../../memristordata/conductance_deletehead.xlsx"
 
     data = pd.DataFrame(pd.read_excel(
         file,
@@ -103,7 +104,7 @@ def main():
     P_off_list, P_on_list = exp_0.mult_P_fitting(G_off_list, G_on_list)
 
     exp = Variation(
-        "../../../memristordata/conductance_.xlsx",
+        "../../../memristordata/conductance_deletehead.xlsx",
         G_off_list,
         G_on_list,
         P_off_list,
@@ -132,6 +133,21 @@ def main():
     print(df)
     # with open("fitting_record.json", "w") as f:
     #     json.dump(dict, f, indent=2)
+    # TODO: output excel
+    data_G = pd.DataFrame(
+        {
+            'G_off': G_off_list,
+            'G_on': G_on_list,
+        }
+    )
+    data_G.to_excel("../Generate_figure/G_variation.xlsx", index=False, header=False)
+    data_P = pd.DataFrame(
+        {
+            'P_off': P_off_list,
+            'P_on': P_on_list,
+        }
+    )
+    data_P.to_excel("../Generate_figure/P_variation.xlsx", index=False, header=False)
 
     # Plot
     plot_x_1 = np.linspace(exp.G_off * (1 - 3 * Goff_sigma), exp.G_off * (1 + 3 * Goff_sigma))
@@ -146,8 +162,7 @@ def main():
     ax1.set_xlabel('G_off')
     ax1.set_ylabel('Probability Density')
     ax1.set_title('D2D Variation (G_off)')
-    # ax2 = fig.add_subplot(322)
-    ax2 = ax1.twinx()
+    ax2 = fig.add_subplot(322)
     ax2.hist(exp.G_on_variation, bins=10, density=True)
     ax2.plot(plot_x_2, plot_y_2, c='orange')
     ax2.set_xlabel('G_on')
@@ -165,8 +180,7 @@ def main():
     ax3.set_xlabel('P_off')
     ax3.set_ylabel('Probability Density')
     ax3.set_title('D2D Variation (P_off)')
-    # ax4 = fig.add_subplot(324)
-    ax4 = ax3.twinx()
+    ax4 = fig.add_subplot(324)
     ax4.hist(exp.P_on_variation, bins=10, density=True, color='orange')
     ax4.plot(plot_x_2, plot_y_2, c='red')
     ax4.set_xlabel('P_on')

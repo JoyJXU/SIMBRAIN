@@ -1,6 +1,7 @@
+import os
 import json
 import sys
-sys.path.append('../../')
+sys.path.append('../../../')
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,12 +10,13 @@ from scipy.stats import norm
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
 from simbrain.Fitting_Functions.variation_fitting import Variation
 
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
 
 def main():
+    # os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
+    os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+
     # Fit
-    with open("../../memristordata/my_memristor.json") as f:
+    with open("../../../memristordata/my_memristor.json") as f:
         dict = json.load(f)
     dict.update(
         {
@@ -31,7 +33,7 @@ def main():
             'delta_t': 100 * 1e-3,
         }
     )
-    file = "../../memristordata/conductance_.xlsx"
+    file = "../../../memristordata/conductance_deletehead.xlsx"
 
     data = pd.DataFrame(pd.read_excel(
         file,
@@ -158,13 +160,13 @@ def main():
     plot_y_2 = norm.pdf(plot_x_2, exp.P_on, exp.P_on * Pon_sigma)
 
     ax3 = fig.add_subplot(gs[1, 1])
-    ax3.hist(exp.P_off_variation, bins=15, density=True)
+    ax3.hist(exp.P_off_variation, bins=20, density=True)
     ax3.plot(plot_x_1, plot_y_1, color='red', label='P_off')
     ax3.set_xlabel('P_off/P_on')
     ax3.set_ylabel('Probability Density')
     ax3.set_title('D2D Variation')
     ax4 = ax3.twinx()
-    ax4.hist(exp.P_on_variation, bins=15, density=True, color='orange')
+    ax4.hist(exp.P_on_variation, bins=20, density=True, color='orange')
     ax4.plot(plot_x_2, plot_y_2, color='green', label='P_on')
     ax4.set_ylabel('Probability Density')
     lines = ax3.get_lines() + ax4.get_lines()

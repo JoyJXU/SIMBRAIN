@@ -15,7 +15,7 @@
   "V_write_neg": null,
   "delta_t": 100e-3,
   "sampling_rate": 4096,
-  "duty_ratio": 0.2,
+  "duty_ratio": 0.1,
   "trans_ratio": null,
   "vinput_pos": null,
   "vinput_neg": null,
