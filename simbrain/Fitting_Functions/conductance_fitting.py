@@ -175,7 +175,8 @@ class Conductance(object):
                 mem_x_d[i + 1] = torch.where(mem_x_d[i + 1] > 1, 1, mem_x_d[i + 1])
             mem_x_d_T = mem_x_d.permute(2, 3, 1, 0)
             mem_c_d = self.G_off * mem_x_d_T + self.G_on * (1 - mem_x_d_T)
-            c_d_diff_percent = (mem_c_d - conductance_d) / conductance_d
+            # c_d_diff_percent = (mem_c_d - conductance_d) / conductance_d
+            c_d_diff_percent = (mem_c_d - conductance_d)
             # INDICATOR_d = torch.sqrt(torch.sum(c_d_diff_percent * c_d_diff_percent, dim=3) / self.points_d).permute(2, 0, 1)
             # for i in range(self.batch_size):
             #     min_value = torch.min(INDICATOR_d[i])

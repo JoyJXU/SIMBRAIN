@@ -9,7 +9,7 @@ import torch
 from simbrain.Fitting_Functions.iv_curve_fitting import IVCurve
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 
 def main():
     # Fit
@@ -163,6 +163,7 @@ def main():
     mem_x_d = np.zeros(exp_2.points_d)
     mem_x_r[0] = np.average(x_init_r)
     mem_x_d[0] = np.average(x_init_d)
+    # mem_x_d[0] = 0.7
     J1 = 1
     # k_off = 0.45
     # P_off = 0.25
@@ -195,13 +196,13 @@ def main():
         mem_x_d[i + 1] = np.where(mem_x_d[i + 1] > 1, 1, mem_x_d[i + 1])
     memx_total = np.concatenate((mem_x_r, mem_x_d))
     x_total = np.concatenate((x_r, x_d))
-    plot_x = np.arange(exp_2.points_r)
+    plot_x = np.arange(exp_2.points_r + exp_2.points_d)
 
     ax2 = fig.add_subplot(122)
     ax2.set_title('Conductance Curve')
-    ax2.plot(plot_x, mem_x_r, c='b')
+    ax2.plot(plot_x, memx_total, c='b')
     for i in range(exp_2.device_nums):
-        ax2.scatter(plot_x, x_r.T[i], c='r', s=0.1)
+        ax2.scatter(plot_x, x_total.T[i], c='r', s=0.1, alpha=0.3)
     ax2.set_xlabel('points')
     ax2.set_ylabel('x')
     ax2.set_title('Conductance Curve')

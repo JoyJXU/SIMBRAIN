@@ -1,0 +1,98 @@
+=================FLAGS==================
+wd: 0.0001
+batch_size: 1000
+epochs: 40
+lr: 0.01
+gpu: gpu
+seed: 117
+log_interval: 10
+test_interval: 5
+logdir: /home/jwxu/bindsnet_xjw/mem-brain-bindsnet/examples/MLP/log/old
+data_root: data/
+decreasing_lr: 80,120
+memristor_structure: crossbar
+memristor_device: new_ferro
+c2c_variation: False
+d2d_variation: 0
+stuck_at_fault: False
+retention_loss: 0
+aging_effect: 0
+process_node: 10000
+========================================
+Running on Device = cuda
+total crossbar area=0.008400000000000001 m2
+decreasing_lr: [80, 120]
+Train Epoch: 0 [10000/60000] Loss: 2.193492 Acc: 0.3930 lr: 1.00e-02
+Train Epoch: 0 [20000/60000] Loss: 1.961344 Acc: 0.6120 lr: 1.00e-02
+Train Epoch: 0 [30000/60000] Loss: 1.462051 Acc: 0.6790 lr: 1.00e-02
+Train Epoch: 0 [40000/60000] Loss: 0.955966 Acc: 0.7610 lr: 1.00e-02
+Train Epoch: 0 [50000/60000] Loss: 0.725703 Acc: 0.7830 lr: 1.00e-02
+Elapsed 13.26s, 13.26 s/epoch, 0.22 s/batch, ets 517.01s
+total_energy=tensor(1.5821, device='cuda:0')
+total_read_energy=tensor(0.0041, device='cuda:0')
+total_write_energy=tensor(1.4488, device='cuda:0')
+total_reset_energy=tensor(0.1292, device='cuda:0')
+average_power=tensor(0.9934, device='cuda:0')
+	Test set: Average loss: 0.0000, Accuracy: 8609/10000 (86%)
+Saving model to /home/jwxu/bindsnet_xjw/mem-brain-bindsnet/examples/MLP/log/old/best-0.pth
+Train Epoch: 1 [10000/60000] Loss: 0.543336 Acc: 0.8190 lr: 1.00e-02
+Train Epoch: 1 [20000/60000] Loss: 0.519393 Acc: 0.8390 lr: 1.00e-02
+Train Epoch: 1 [30000/60000] Loss: 0.428528 Acc: 0.8700 lr: 1.00e-02
+Train Epoch: 1 [40000/60000] Loss: 0.436676 Acc: 0.8680 lr: 1.00e-02
+Train Epoch: 1 [50000/60000] Loss: 0.385525 Acc: 0.9000 lr: 1.00e-02
+Elapsed 27.44s, 13.72 s/epoch, 0.23 s/batch, ets 521.35s
+total_energy=tensor(2.7878, device='cuda:0')
+total_read_energy=tensor(0.0075, device='cuda:0')
+total_write_energy=tensor(2.5553, device='cuda:0')
+total_reset_energy=tensor(0.2250, device='cuda:0')
+average_power=tensor(0.8867, device='cuda:0')
+Train Epoch: 2 [10000/60000] Loss: 0.336331 Acc: 0.8950 lr: 1.00e-02
+Train Epoch: 2 [20000/60000] Loss: 0.385758 Acc: 0.8890 lr: 1.00e-02
+Train Epoch: 2 [30000/60000] Loss: 0.372332 Acc: 0.8890 lr: 1.00e-02
+Train Epoch: 2 [40000/60000] Loss: 0.403309 Acc: 0.8720 lr: 1.00e-02
+Train Epoch: 2 [50000/60000] Loss: 0.364699 Acc: 0.8960 lr: 1.00e-02
+Elapsed 40.11s, 13.37 s/epoch, 0.22 s/batch, ets 494.69s
+total_energy=tensor(3.9217, device='cuda:0')
+total_read_energy=tensor(0.0101, device='cuda:0')
+total_write_energy=tensor(3.5965, device='cuda:0')
+total_reset_energy=tensor(0.3151, device='cuda:0')
+average_power=tensor(0.8400, device='cuda:0')
+Train Epoch: 3 [10000/60000] Loss: 0.346923 Acc: 0.8920 lr: 1.00e-02
+Train Epoch: 3 [20000/60000] Loss: 0.306376 Acc: 0.9060 lr: 1.00e-02
+Train Epoch: 3 [30000/60000] Loss: 0.282564 Acc: 0.9190 lr: 1.00e-02
+Train Epoch: 3 [40000/60000] Loss: 0.330600 Acc: 0.9120 lr: 1.00e-02
+Train Epoch: 3 [50000/60000] Loss: 0.271280 Acc: 0.9250 lr: 1.00e-02
+Elapsed 52.94s, 13.23 s/epoch, 0.22 s/batch, ets 476.44s
+total_energy=tensor(5.0291, device='cuda:0')
+total_read_energy=tensor(0.0127, device='cuda:0')
+total_write_energy=tensor(4.6133, device='cuda:0')
+total_reset_energy=tensor(0.4030, device='cuda:0')
+average_power=tensor(0.8129, device='cuda:0')
+Train Epoch: 4 [10000/60000] Loss: 0.277975 Acc: 0.9230 lr: 1.00e-02
+Train Epoch: 4 [20000/60000] Loss: 0.318121 Acc: 0.9090 lr: 1.00e-02
+Train Epoch: 4 [30000/60000] Loss: 0.262633 Acc: 0.9180 lr: 1.00e-02
+Train Epoch: 4 [40000/60000] Loss: 0.267543 Acc: 0.9220 lr: 1.00e-02
+Train Epoch: 4 [50000/60000] Loss: 0.204506 Acc: 0.9400 lr: 1.00e-02
+Elapsed 65.60s, 13.12 s/epoch, 0.22 s/batch, ets 459.17s
+total_energy=tensor(6.1223, device='cuda:0')
+total_read_energy=tensor(0.0152, device='cuda:0')
+total_write_energy=tensor(5.6174, device='cuda:0')
+total_reset_energy=tensor(0.4897, device='cuda:0')
+average_power=tensor(0.7948, device='cuda:0')
+Train Epoch: 5 [10000/60000] Loss: 0.256260 Acc: 0.9310 lr: 1.00e-02
+Train Epoch: 5 [20000/60000] Loss: 0.270153 Acc: 0.9250 lr: 1.00e-02
+Train Epoch: 5 [30000/60000] Loss: 0.214149 Acc: 0.9350 lr: 1.00e-02
+Train Epoch: 5 [40000/60000] Loss: 0.250125 Acc: 0.9270 lr: 1.00e-02
+Train Epoch: 5 [50000/60000] Loss: 0.237764 Acc: 0.9330 lr: 1.00e-02
+Elapsed 78.35s, 13.06 s/epoch, 0.22 s/batch, ets 444.01s
+total_energy=tensor(7.2011, device='cuda:0')
+total_read_energy=tensor(0.0177, device='cuda:0')
+total_write_energy=tensor(6.6083, device='cuda:0')
+total_reset_energy=tensor(0.5751, device='cuda:0')
+average_power=tensor(0.7811, device='cuda:0')
+	Test set: Average loss: 0.0000, Accuracy: 9425/10000 (94%)
+Removing old model /home/jwxu/bindsnet_xjw/mem-brain-bindsnet/examples/MLP/log/old/best-0.pth
+Saving model to /home/jwxu/bindsnet_xjw/mem-brain-bindsnet/examples/MLP/log/old/best-5.pth
+Train Epoch: 6 [10000/60000] Loss: 0.238673 Acc: 0.9390 lr: 1.00e-02
+Train Epoch: 6 [20000/60000] Loss: 0.219390 Acc: 0.9340 lr: 1.00e-02
+Total Elapse: 86.50, Best Result: 94.250%

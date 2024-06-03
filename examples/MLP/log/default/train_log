@@ -1,0 +1,87 @@
+=================FLAGS==================
+wd: 0.0001
+batch_size: 1000
+epochs: 40
+lr: 0.01
+gpu: gpu
+seed: 117
+log_interval: 10
+test_interval: 5
+logdir: /home/jwxu/bindsnet_xjw/mem-brain-bindsnet/examples/MLP/log/default
+data_root: data/
+decreasing_lr: 80,120
+memristor_structure: crossbar
+memristor_device: new_ferro
+c2c_variation: False
+d2d_variation: 0
+stuck_at_fault: False
+retention_loss: 0
+aging_effect: 0
+input_bit: 8
+ADC_precision: 8
+ADC_setting: 4
+ADC_rounding_function: floor
+wire_width: 200
+CMOS_technode: 32
+device_roadmap: HP
+temperature: 300
+hardware_estimation: False
+========================================
+Running on Device = cuda
+decreasing_lr: [80, 120]
+Train Epoch: 0 [10000/60000] Loss: 2.197962 Acc: 0.3350 lr: 1.00e-02
+Train Epoch: 0 [20000/60000] Loss: 1.937803 Acc: 0.6000 lr: 1.00e-02
+Train Epoch: 0 [30000/60000] Loss: 1.450744 Acc: 0.6590 lr: 1.00e-02
+Train Epoch: 0 [40000/60000] Loss: 0.916487 Acc: 0.7530 lr: 1.00e-02
+Train Epoch: 0 [50000/60000] Loss: 0.644681 Acc: 0.8040 lr: 1.00e-02
+Elapsed 12.04s, 12.04 s/epoch, 0.20 s/batch, ets 469.46s
+	Test set: Average loss: 0.0000, Accuracy: 8637/10000 (86%)
+Saving model to /home/jwxu/bindsnet_xjw/mem-brain-bindsnet/examples/MLP/log/default/best-0.pth
+Train Epoch: 1 [10000/60000] Loss: 0.514262 Acc: 0.8470 lr: 1.00e-02
+Train Epoch: 1 [20000/60000] Loss: 0.457866 Acc: 0.8650 lr: 1.00e-02
+Train Epoch: 1 [30000/60000] Loss: 0.450191 Acc: 0.8680 lr: 1.00e-02
+Train Epoch: 1 [40000/60000] Loss: 0.374829 Acc: 0.8900 lr: 1.00e-02
+Train Epoch: 1 [50000/60000] Loss: 0.370917 Acc: 0.9090 lr: 1.00e-02
+Elapsed 25.35s, 12.68 s/epoch, 0.21 s/batch, ets 481.69s
+Train Epoch: 2 [10000/60000] Loss: 0.424453 Acc: 0.8880 lr: 1.00e-02
+Train Epoch: 2 [20000/60000] Loss: 0.367956 Acc: 0.8890 lr: 1.00e-02
+Train Epoch: 2 [30000/60000] Loss: 0.347467 Acc: 0.9050 lr: 1.00e-02
+Train Epoch: 2 [40000/60000] Loss: 0.329819 Acc: 0.9130 lr: 1.00e-02
+Train Epoch: 2 [50000/60000] Loss: 0.382618 Acc: 0.8870 lr: 1.00e-02
+Elapsed 36.96s, 12.32 s/epoch, 0.21 s/batch, ets 455.89s
+Train Epoch: 3 [10000/60000] Loss: 0.306038 Acc: 0.9130 lr: 1.00e-02
+Train Epoch: 3 [20000/60000] Loss: 0.343709 Acc: 0.8860 lr: 1.00e-02
+Train Epoch: 3 [30000/60000] Loss: 0.348828 Acc: 0.9000 lr: 1.00e-02
+Train Epoch: 3 [40000/60000] Loss: 0.304336 Acc: 0.9120 lr: 1.00e-02
+Train Epoch: 3 [50000/60000] Loss: 0.313236 Acc: 0.9080 lr: 1.00e-02
+Elapsed 48.77s, 12.19 s/epoch, 0.20 s/batch, ets 438.89s
+Train Epoch: 4 [10000/60000] Loss: 0.276440 Acc: 0.9230 lr: 1.00e-02
+Train Epoch: 4 [20000/60000] Loss: 0.240777 Acc: 0.9320 lr: 1.00e-02
+Train Epoch: 4 [30000/60000] Loss: 0.280550 Acc: 0.9140 lr: 1.00e-02
+Train Epoch: 4 [40000/60000] Loss: 0.259234 Acc: 0.9260 lr: 1.00e-02
+Train Epoch: 4 [50000/60000] Loss: 0.287813 Acc: 0.9040 lr: 1.00e-02
+Elapsed 60.46s, 12.09 s/epoch, 0.20 s/batch, ets 423.19s
+Train Epoch: 5 [10000/60000] Loss: 0.244475 Acc: 0.9230 lr: 1.00e-02
+Train Epoch: 5 [20000/60000] Loss: 0.210969 Acc: 0.9350 lr: 1.00e-02
+Train Epoch: 5 [30000/60000] Loss: 0.249245 Acc: 0.9330 lr: 1.00e-02
+Train Epoch: 5 [40000/60000] Loss: 0.217870 Acc: 0.9390 lr: 1.00e-02
+Train Epoch: 5 [50000/60000] Loss: 0.294866 Acc: 0.9160 lr: 1.00e-02
+Elapsed 72.09s, 12.02 s/epoch, 0.20 s/batch, ets 408.53s
+	Test set: Average loss: 0.0000, Accuracy: 9406/10000 (94%)
+Removing old model /home/jwxu/bindsnet_xjw/mem-brain-bindsnet/examples/MLP/log/default/best-0.pth
+Saving model to /home/jwxu/bindsnet_xjw/mem-brain-bindsnet/examples/MLP/log/default/best-5.pth
+Train Epoch: 6 [10000/60000] Loss: 0.187343 Acc: 0.9470 lr: 1.00e-02
+Train Epoch: 6 [20000/60000] Loss: 0.234067 Acc: 0.9330 lr: 1.00e-02
+Train Epoch: 6 [30000/60000] Loss: 0.210002 Acc: 0.9430 lr: 1.00e-02
+Train Epoch: 6 [40000/60000] Loss: 0.214511 Acc: 0.9350 lr: 1.00e-02
+Train Epoch: 6 [50000/60000] Loss: 0.206101 Acc: 0.9430 lr: 1.00e-02
+Elapsed 85.26s, 12.18 s/epoch, 0.20 s/batch, ets 401.96s
+Train Epoch: 7 [10000/60000] Loss: 0.188918 Acc: 0.9490 lr: 1.00e-02
+Train Epoch: 7 [20000/60000] Loss: 0.191896 Acc: 0.9480 lr: 1.00e-02
+Train Epoch: 7 [30000/60000] Loss: 0.213974 Acc: 0.9410 lr: 1.00e-02
+Train Epoch: 7 [40000/60000] Loss: 0.219736 Acc: 0.9340 lr: 1.00e-02
+Train Epoch: 7 [50000/60000] Loss: 0.201195 Acc: 0.9410 lr: 1.00e-02
+Elapsed 97.08s, 12.13 s/epoch, 0.20 s/batch, ets 388.31s
+Train Epoch: 8 [10000/60000] Loss: 0.199612 Acc: 0.9380 lr: 1.00e-02
+Train Epoch: 8 [20000/60000] Loss: 0.164225 Acc: 0.9520 lr: 1.00e-02
+Total Elapse: 101.88, Best Result: 94.060%
