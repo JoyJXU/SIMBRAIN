@@ -18,6 +18,7 @@ def main():
 
     file_G = "G_variation.xlsx"
     file_P = "P_variation.xlsx"
+    file_scatter = "x_scatter.xlsx"
     file_curve = "conductance_curve.xlsx"
     best_curve = "best_curve.xlsx"
 
@@ -40,6 +41,13 @@ def main():
     data_P.columns = ['P_off', 'P_on']
     P_off_variation = np.array(data_P['P_off'])
     P_on_variation = np.array(data_P['P_on'])
+
+    data_scatter = pd.DataFrame(pd.read_excel(
+        file_scatter,
+        sheet_name=0,
+        header=None,
+        index_col=None,
+    ))
 
     data_curve = pd.DataFrame(pd.read_excel(
         file_curve,
@@ -115,7 +123,9 @@ def main():
     ax5.set_title('Potential Curve')
     ax5.plot(plot_x, best_curve, linewidth=10, c='r')
     for i in range(data_curve.shape[1]):
-        ax5.plot(plot_x, data_curve[i], color=colors[i], linewidth=0.5)
+        ax5.scatter(plot_x, data_scatter[i], color='orange', s=0.5, alpha=0.5)
+        # ax5.plot(plot_x, data_curve[i], color=colors[i], linewidth=0.5)
+        ax5.plot(plot_x, data_curve[i], color='blue', linewidth=0.4, alpha=0.5)
     ax5.set_xlabel('points')
     ax5.set_ylabel('x')
     ax5.set_title('Potential Curve')
