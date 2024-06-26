@@ -85,14 +85,14 @@ class MemristorArray(torch.nn.Module):
 
         self.wire_width = sim_params['wire_width']
         relax_ratio_col = self.memristor_info_dict[self.device_name]['relax_ratio_col'] # Leave space for adjacent memristors
-        relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_col'] # Leave space for adjacent memristors
+        relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_row'] # Leave space for adjacent memristors
         mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
         self.length_row = shape[1] * relax_ratio_col * mem_size
         self.length_col = shape[0] * relax_ratio_row * mem_size
         AR = self.tech_info_dict[str(self.wire_width)]['AR']
         Rho = self.tech_info_dict[str(self.wire_width)]['Rho']
         wire_resistance_unit_col = relax_ratio_col * mem_size * Rho / (AR * self.wire_width * self.wire_width * 1e-18)
-        wire_resistance_unit_row = relax_ratio_col * mem_size * Rho / (AR * self.wire_width * self.wire_width * 1e-18)
+        wire_resistance_unit_row = relax_ratio_row * mem_size * Rho / (AR * self.wire_width * self.wire_width * 1e-18)
         self.register_buffer("total_wire_resistance", torch.Tensor())
         self.total_wire_resistance = wire_resistance_unit_col * torch.arange(1, self.shape[1] + 1, device=self.total_wire_resistance.device) + \
             wire_resistance_unit_row * torch.arange(self.shape[0], 0, -1, device=self.total_wire_resistance.device)[:, None]
@@ -328,14 +328,8 @@ class MemristorArray(torch.nn.Module):
 
         # Non-idealities
         mem_info = self.memristor_info_dict[self.device_name]
-        k_off = mem_info['k_off']
-        k_on = mem_info['k_on']
         v_off = mem_info['v_off']
         v_on = mem_info['v_on']
-        alpha_off = mem_info['alpha_off']
-        alpha_on = mem_info['alpha_on']
-        P_off = mem_info['P_off']
-        P_on = mem_info['P_on']
         G_off = mem_info['G_off']
         G_on = mem_info['G_on']
         retention_loss_tau = mem_info['retention_loss_tau']

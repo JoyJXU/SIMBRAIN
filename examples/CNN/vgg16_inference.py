@@ -24,7 +24,7 @@ parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--rep", type=int, default=10)
 parser.add_argument("--batch_size", type=int, default=25)
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
-parser.add_argument("--memristor_device", type=str, default='new_ferro') # ideal, ferro, or hu
+parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
@@ -80,6 +80,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 
 # Network Model
 print('==> Building memristor-based model..')
+# net = VGG('VGG16')
 net = mem_VGG('VGG16', mem_device=sim_params)
 net = net.to(device)
 
