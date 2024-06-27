@@ -25,8 +25,8 @@ def main():
             'k_on': None,
             'P_off': None,
             'P_on': None,
-            'delta_t': 100 * 1e-3,
-            'duty_ratio': 0.1
+            'delta_t': 20 * 1e-3,
+            'duty_ratio': 0.5
         }
     )
     file = "../../../memristordata/conductance_deletehead.xlsx"
@@ -131,9 +131,14 @@ def main():
         index=['Goff_sigma', 'Gon_sigma', 'Poff_sigma', 'Pon_sigma', 'sigma_relative', 'sigma_absolute']
     )
     print(df)
-    # with open("fitting_record.json", "w") as f:
-    #     json.dump(dict, f, indent=2)
-    # TODO: output excel
+    print('R_square:', exp.R_square)
+    conductance = np.array(exp_0.data[:])[:, 2:] / exp_0.read_voltage
+    x = (conductance - G_on) / (G_off - G_on)
+    rrmse = exp_0.loss / (np.max(x) - np.min(x))
+    print('RRMSE:', rrmse.item())
+    with open("fitting_record.json", "w") as f:
+        json.dump(dict, f, indent=2)
+    # Output d2d variation data
     data_G = pd.DataFrame(
         {
             'G_off': G_off_list,
@@ -193,12 +198,12 @@ def main():
     plot_y = p(plot_x)
 
     ax5 = fig.add_subplot(325)
-    ax5.scatter(exp.memx_total, exp.variation_x, c='r')
+    ax5.scatter(np.square(exp.memx_total), np.square(exp.variation_x), c='r')
     ax5.set_xlabel('x')
     ax5.set_ylabel('Variation')
     ax5.set_title('C2C Variation')
     ax6 = fig.add_subplot(326)
-    ax6.scatter(plot_x, exp.var_x_average, c='r')
+    ax6.scatter(np.square(plot_x), np.square(exp.var_x_average), c='r')
     ax6.plot(plot_x, plot_y, c='b')
     ax6.set_xlabel('x')
     ax6.set_ylabel('Variation_mean')

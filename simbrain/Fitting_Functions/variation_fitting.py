@@ -28,6 +28,7 @@ class Variation(object):
             dictionary: dict = {},
             **kwargs,
     ) -> None:
+        # Read excel
         self.data = pd.DataFrame(pd.read_excel(
             file,
             sheet_name='Sheet1',
@@ -36,6 +37,7 @@ class Variation(object):
         ))
         self.data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)'] + list(self.data.columns[2:] - 2)
 
+        # Read parameters
         self.J1 = 1
         self.v_off = dictionary['v_off']
         self.v_on = dictionary['v_on']
@@ -50,14 +52,15 @@ class Variation(object):
         self.delta_t = dictionary['delta_t']
         self.duty_ratio = dictionary['duty_ratio']
 
+        # Read data
         self.V_write = np.array(self.data['Pulse Voltage(V)'])
         self.points_r = np.sum(self.V_write > 0)
         self.points_d = np.sum(self.V_write < 0)
-
         self.V_write_r = self.V_write[:self.points_r]
         self.V_write_d = self.V_write[self.points_r:]
         self.read_voltage = np.array(self.data['Read Voltage(V)'])[0]
 
+        # Set default parameters
         self.device_nums = self.data.shape[1] - 2
         self.G_off_variation = G_off_list
         self.G_on_variation = G_on_list
@@ -132,24 +135,23 @@ class Variation(object):
 
     @timer
     def c2c_fitting(self):
-        x_r = []
-        x_d = []
-        for i in range(self.device_nums):
-            # TODO: considering d2d or not?
-            conductance_r = np.array(self.data[i][:self.points_r] / self.read_voltage)
-            # x_r.append((
-            #     (conductance_r - self.G_on_variation[i])
-            #     / (self.G_off_variation[i] - self.G_on_variation[i])
-            # )[:])
-            x_r.append((conductance_r - self.G_on) / (self.G_off - self.G_on))
-            conductance_d = np.array(self.data[i][self.points_r:] / self.read_voltage)
-            # x_d.append((
-            #     (conductance_d - self.G_on_variation[i])
-            #     / (self.G_off_variation[i] - self.G_on_variation[i])
-            # )[1:])
-            x_d.append((conductance_d - self.G_on) / (self.G_off - self.G_on))
-        x_total = np.concatenate((np.array(x_r), np.array(x_d)), axis=1).flatten()
+        # Conductance from devices
+        current_r = np.array(self.data[:])[:self.points_r, 2:]
+        current_d = np.array(self.data[:])[self.points_r:, 2:]
+        conductance_r = current_r / self.read_voltage
+        conductance_d = current_d / self.read_voltage
+        # If considering d2d?
+        # x_r = ((conductance_r - self.G_on_variation[np.newaxis, :])
+        #        / (self.G_off_variation[np.newaxis, :] - self.G_on_variation[np.newaxis, :]))
+        # x_d = ((conductance_d - self.G_on_variation[np.newaxis, :])
+        #        / (self.G_off_variation[np.newaxis, :] - self.G_on_variation[np.newaxis, :]))
+        x_r = (conductance_r - self.G_on) / (self.G_off - self.G_on)
+        x_d = (conductance_d - self.G_on) / (self.G_off - self.G_on)
+        x_total = np.concatenate((x_r, x_d)).T.flatten()
 
+        # Conductance from models
+        x_init_r = np.mean(x_r[0])
+        x_init_d = np.mean(x_d[0])
         best_mem_x_r = []
         best_mem_x_d = []
         for i in range(self.device_nums):
@@ -159,22 +161,22 @@ class Variation(object):
             #     x_r[i][0],
             #     self.V_write_r
             # ))[:])
-            best_mem_x_r.append(np.array(self.Memristor_conductance_model(
-                self.P_off,
-                self.P_on,
-                x_r[i][0],
-                self.V_write_r
-            ))[:])
             # best_mem_x_d.append(np.array(self.Memristor_conductance_model(
             #     self.P_off_variation[i],
             #     self.P_on_variation[i],
             #     x_d[i][0],
             #     self.V_write_d
-            # ))[1:])
+            # ))[:])
+            best_mem_x_r.append(np.array(self.Memristor_conductance_model(
+                self.P_off,
+                self.P_on,
+                x_init_r,
+                self.V_write_r
+            ))[:])
             best_mem_x_d.append(np.array(self.Memristor_conductance_model(
                 self.P_off,
                 self.P_on,
-                x_d[i][0],
+                x_init_d,
                 self.V_write_d
             ))[:])
 
@@ -197,44 +199,55 @@ class Variation(object):
         x_sorted = np.array([i[0] for i in var_x_complex])
         var_x_sorted = np.array([i[1] for i in var_x_complex])
 
-        group_no = max(10, int((len(x_total)/5)**0.5))
-        print('Group number:{}'.format(group_no))
+        # group_no = max(10, int((len(x_total)/5)**0.5))
+        # print('Group number:{}'.format(group_no))
+        #
+        # # Group with pulse number
+        # total_points = (self.points_r + self.points_d) * self.device_nums
+        # every_points = math.ceil(total_points / group_no)
+        #
+        # x_mean = []
+        # var_x_median = []
+        # var_x_average = []
+        # for i in range(group_no):
+        #     temp_x_mean = np.mean(x_sorted[every_points * i:(every_points * (i + 1))])
+        #     temp_var_median = np.median(var_x_sorted[every_points * i:(every_points * (i + 1))])
+        #     temp_var_average = np.mean(var_x_sorted[every_points * i:(every_points * (i + 1))])
+        #     x_mean.append(temp_x_mean ** 2)
+        #     var_x_median.append(temp_var_median ** 2)
+        #     var_x_average.append(temp_var_average ** 2)
 
-        # Group with pulse number
-        total_points = (self.points_r + self.points_d) * self.device_nums
-        every_points = math.ceil(total_points / group_no)
-        # TODO: modify the method of clustering
+        # z1 = np.polyfit(x_mean, var_x_median, 1)
+        # p1 = np.poly1d(z1)
+        # print(p1)
 
-        x_mean = []
-        var_x_median = []
-        var_x_average = []
-        for i in range(group_no):
-            temp_x_mean = np.mean(x_sorted[every_points * i:(every_points * (i + 1))])
-            temp_var_median = np.median(var_x_sorted[every_points * i:(every_points * (i + 1))])
-            temp_var_average = np.mean(var_x_sorted[every_points * i:(every_points * (i + 1))])
-            x_mean.append(temp_x_mean ** 2)
-            var_x_median.append(temp_var_median ** 2)
-            var_x_average.append(temp_var_average ** 2)
+        group = 10
+        segments = np.linspace(0, 1, group + 1)
+        x_mean = np.zeros(group)
+        variation_mean = np.zeros(group)
+        for i in range(group):
+            if i == group - 1:
+                mask = (x_sorted >= segments[i]) & (x_sorted <= segments[i + 1])
+            else:
+                mask = (x_sorted >= segments[i]) & (x_sorted < segments[i + 1])
 
-        z1 = np.polyfit(x_mean, var_x_median, 1)
-        p1 = np.poly1d(z1)
-        print(p1)
+            x_mean[i] = np.mean(x_sorted[mask])
+            variation_mean[i] = np.mean(var_x_sorted[mask])
 
-        z2 = np.polyfit(x_mean, var_x_average, 1)
+        z2 = np.polyfit(np.square(x_mean), np.square(variation_mean), 1)
         p2 = np.poly1d(z2)
         print(p2)
 
         self.x_mean = x_mean
-        self.var_x_average = var_x_average
+        self.var_x_average = variation_mean
         self.memx_total = best_memx_total
         self.variation_x = variation_x
 
         sigma_relative = math.sqrt(abs(z2[0]) * math.pi / 2)
         sigma_absolute = math.sqrt(abs(z2[1]) * math.pi / 2)
 
-        SSR = np.sum(variation_x ** 2)
-        SST = np.sum((x_total - np.mean(x_total)) ** 2)
+        SSR = np.sum(np.square(np.square(variation_mean) - (z2[0] * np.square(x_mean) + z2[1])))
+        SST = np.sum(np.square(np.square(variation_mean) - np.mean(np.square(variation_mean))))
         self.R_square = 1 - SSR / SST
-        print(self.R_square)
 
         return sigma_relative, sigma_absolute

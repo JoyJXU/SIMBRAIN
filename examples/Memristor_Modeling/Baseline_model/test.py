@@ -6,7 +6,9 @@ import matplotlib.pyplot as plt
 from simbrain.Fitting_Functions.iv_curve_fitting import IVCurve
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+
 
 def main():
     # Fit
@@ -24,7 +26,8 @@ def main():
             'k_on': None,
             'P_off': None,
             'P_on': None,
-            'delta_t': 100 * 1e-3,
+            'delta_t': 20 * 1e-3,
+            "duty_ratio": 0.5
         }
     )
     data = pd.DataFrame(pd.read_excel(
@@ -83,7 +86,6 @@ def main():
             "alpha_on": alpha_on,
             'v_off': 1.5,
             'v_on': -1.5,
-            'delta_t': 100 * 1e-3,
         }
     )
 
@@ -121,75 +123,67 @@ def main():
     print(df)
     with open("fitting_record.json", "w") as f:
         json.dump(dict, f, indent=2)
-    # print(exp_2.loss_r, exp_2.loss_d, torch.min(exp_2.loss_r), torch.min(exp_2.loss_d))
-    # TODO: output excel
+
+    # Output conductance scatter
     current_r = np.array(exp_2.data[:])[exp_2.start_point_r: exp_2.start_point_r + exp_2.points_r, 2:]
+    current_d = np.array(exp_2.data[:])[exp_2.start_point_d: exp_2.start_point_d + exp_2.points_d, 2:]
     conductance_r = current_r / exp_2.read_voltage
-    x_r = (conductance_r - exp_2.G_on) / (exp_2.G_off - exp_2.G_on)
-    x_init_r = x_r[0, :]
+    conductance_d = current_d / exp_2.read_voltage
     V_write_r = exp_2.V_write[exp_2.start_point_r: exp_2.start_point_r + exp_2.points_r]
-    mem_x_r = np.zeros([exp_2.points_r, exp_2.device_nums])
-    mem_x_r[0] = x_init_r
+    V_write_d = exp_2.V_write[exp_2.start_point_d: exp_2.start_point_d + exp_2.points_d]
+    x_r = (conductance_r - G_on_list[np.newaxis, :]) / (G_off_list[np.newaxis, :] - G_on_list[np.newaxis, :])
+    x_d = (conductance_d - G_on_list[np.newaxis, :]) / (G_off_list[np.newaxis, :] - G_on_list[np.newaxis, :])
+    x_scatter = pd.DataFrame(np.concatenate((np.array(x_r), np.array(x_d))))
+    x_scatter.to_excel("../Generate_figure/x_scatter.xlsx", index=False, header=False)
+
+    # Output conductance curve
     J1 = 1
+    P_off_list, P_on_list = exp_2.mult_P_fitting(G_off_list, G_on_list)
+    x_init_r = np.array(x_r)[0]
+    x_init_d = np.array(x_d)[0]
+    mem_x_r = np.zeros([exp_2.points_r, exp_2.device_nums])
+    mem_x_d = np.zeros([exp_2.points_d, exp_2.device_nums])
+    mem_x_r[0] = x_init_r
+    mem_x_d[0] = x_init_d
+
     for i in range(exp_2.points_r - 1):
         for j in range(exp_2.device_nums):
             mem_x_r[i + 1, j] = (
-                    exp_2.k_off_devices.numpy()[j]
+                    exp_2.k_off
                     * ((V_write_r[i + 1] / exp_2.v_off - 1) ** exp_2.alpha_off)
                     * J1
-                    * (1 - mem_x_r[i, j]) ** exp_2.P_off_devices.numpy()[j]
+                    * (1 - mem_x_r[i, j]) ** P_off_list[j]
                     * exp_2.delta_t
                     * exp_2.duty_ratio
                     + mem_x_r[i, j]
             )
             mem_x_r[i + 1, j] = np.where(mem_x_r[i + 1, j] < 0, 0, mem_x_r[i + 1, j])
             mem_x_r[i + 1, j] = np.where(mem_x_r[i + 1, j] > 1, 1, mem_x_r[i + 1, j])
-    data_curve = pd.DataFrame(mem_x_r)
+    for i in range(exp_2.points_d - 1):
+        for j in range(exp_2.device_nums):
+            mem_x_d[i + 1, j] = (
+                    exp_2.k_on
+                    * ((V_write_d[i + 1] / exp_2.v_on - 1) ** exp_2.alpha_on)
+                    * J1
+                    * mem_x_d[i, j] ** P_on_list[j]
+                    * exp_2.delta_t
+                    * exp_2.duty_ratio
+                    + mem_x_d[i, j]
+            )
+            mem_x_d[i + 1, j] = np.where(mem_x_d[i + 1, j] < 0, 0, mem_x_d[i + 1, j])
+            mem_x_d[i + 1, j] = np.where(mem_x_d[i + 1, j] > 1, 1, mem_x_d[i + 1, j])
+
+    data_curve = pd.DataFrame(np.concatenate((np.array(mem_x_r), np.array(mem_x_d))))
     data_curve.to_excel("../Generate_figure/conductance_curve.xlsx", index=False, header=False)
 
-    # Plot
-    fig = plt.figure(figsize=(12, 5.4))
-
-    x_init = (exp_1.current[0] / exp_1.voltage[0] - exp_1.G_on) / (exp_1.G_off - exp_1.G_on)
-    x_init = x_init if x_init > 0 else 0
-    x_init = x_init if x_init < 1 else 1
-
-    mem_x, mem_c = exp_1.Memristor_conductance_model(6, 4, x_init, exp_1.voltage)
-    current_fit = np.array(mem_c) * np.array(exp_1.voltage)
-    ax1 = fig.add_subplot(121)
-    ax1.set_title('I-V Curve')
-    ax1.plot(exp_1.voltage, current_fit, c='b')
-    ax1.scatter(exp_1.voltage, exp_1.current, c='r')
-    ax1.set_xlabel('Voltage (V)')
-    ax1.set_ylabel('Current (A)')
-    ax1.set_title('I-V Curve')
-
-    dict.update(
-        {
-            'G_off': G_off,
-            'G_on': G_on
-        }
-    )
-    current_r = np.array(exp_2.data[:])[exp_2.start_point_r: exp_2.start_point_r + exp_2.points_r, 2:]
-    current_d = np.array(exp_2.data[:])[exp_2.start_point_d: exp_2.start_point_d + exp_2.points_d, 2:]
-    conductance_r = current_r / exp_2.read_voltage
-    conductance_d = current_d / exp_2.read_voltage
     x_r = (conductance_r - exp_2.G_on) / (exp_2.G_off - exp_2.G_on)
     x_d = (conductance_d - exp_2.G_on) / (exp_2.G_off - exp_2.G_on)
-    V_write_r = exp_2.V_write[exp_2.start_point_r: exp_2.start_point_r + exp_2.points_r]
-    V_write_d = exp_2.V_write[exp_2.start_point_d: exp_2.start_point_d + exp_2.points_d]
     x_init_r = x_r[0]
     x_init_d = x_d[0]
     mem_x_r = np.zeros(exp_2.points_r)
     mem_x_d = np.zeros(exp_2.points_d)
     mem_x_r[0] = np.average(x_init_r)
     mem_x_d[0] = np.average(x_init_d)
-    # mem_x_d[0] = 0.7
-    J1 = 1
-    # k_off = 0.45
-    # P_off = 0.25
-    # k_on = -400
-    # P_on = 1.3
 
     for i in range(exp_2.points_r - 1):
         mem_x_r[i + 1] = (
@@ -217,14 +211,56 @@ def main():
         mem_x_d[i + 1] = np.where(mem_x_d[i + 1] > 1, 1, mem_x_d[i + 1])
     memx_total = np.concatenate((mem_x_r, mem_x_d))
     x_total = np.concatenate((x_r, x_d))
+
+    # Output best curve
+    best_curve = pd.DataFrame(memx_total)
+    best_curve.to_excel("../Generate_figure/best_curve.xlsx", index=False, header=False)
+
+    # Output error
+    x_r = (conductance_r - exp_2.G_on) / (G_off - exp_2.G_on)
+    x_d = (conductance_d - exp_2.G_on) / (G_off - exp_2.G_on)
+    x = np.concatenate((x_r, x_d))
+    df_e = pd.DataFrame(
+        {
+            'value': [
+                np.min(exp_2.loss_r.numpy()),
+                np.min(exp_2.loss_d.numpy()),
+                exp_2.loss.numpy(),
+                np.min(exp_2.loss_r.numpy()) / (np.max(x_r) - np.min(x_r)),
+                np.min(exp_2.loss_d.numpy()) / (np.max(x_d) - np.min(x_d)),
+                exp_2.loss.numpy() / (np.max(x) - np.min(x))
+            ]
+        },
+        index=['RMSE_r', 'RMSE_d', 'RMSE', 'RRMSE_r', 'RRMSE_d', 'RRMSE']
+    )
+    print(df_e)
+
+    # Plot
+    fig = plt.figure(figsize=(12, 5.4))
+
+    x_init = (exp_1.current[0] / exp_1.voltage[0] - exp_1.G_on) / (exp_1.G_off - exp_1.G_on)
+    x_init = x_init if x_init > 0 else 0
+    x_init = x_init if x_init < 1 else 1
+
+    mem_x, mem_c = exp_1.Memristor_conductance_model(6, 4, x_init, exp_1.voltage)
+    current_fit = np.array(mem_c) * np.array(exp_1.voltage)
+    if (alpha_off == 5 and alpha_on == 5) is None:
+        ax1 = fig.add_subplot(121)
+        ax1.set_title('I-V Curve')
+        ax1.plot(exp_1.voltage, current_fit, c='b')
+        ax1.scatter(exp_1.voltage, exp_1.current, c='r')
+        ax1.set_xlabel('Voltage (V)')
+        ax1.set_ylabel('Current (A)')
+        ax1.set_title('I-V Curve')
+
+    dict.update(
+        {
+            'G_off': G_off,
+            'G_on': G_on
+        }
+    )
+
     plot_x = np.arange(exp_2.points_r + exp_2.points_d)
-
-    # TODO: calculate RRMSE when fitting with RMSE
-
-    # TODO: output excel
-    best_curve = pd.DataFrame(mem_x_r)
-    best_curve.to_excel("../best_curve.xlsx", index=False, header=False)
-
     ax2 = fig.add_subplot(122)
     ax2.set_title('Conductance Curve')
     ax2.plot(plot_x, memx_total, c='b')
@@ -233,8 +269,6 @@ def main():
     ax2.set_xlabel('points')
     ax2.set_ylabel('x')
     ax2.set_title('Conductance Curve')
-
-    # TODO: plot with different G and P
 
     plt.tight_layout()
     plt.savefig("Baseline Model.png", dpi=300, bbox_inches='tight')
