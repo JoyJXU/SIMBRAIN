@@ -7,6 +7,7 @@ from simbrain.Fitting_Functions.iv_curve_fitting import IVCurve
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
 import os
 
+# os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 
@@ -90,16 +91,6 @@ def main():
     )
 
     file = "../../../memristordata/conductance_deletehead.xlsx"
-    # for alpha_off_temp in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
-    #     for alpha_on_temp in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
-    #         dict.update(
-    #             {
-    #                 'alpha_off': alpha_off_temp,
-    #                 'alpha_on': alpha_on_temp,
-    #             }
-    #         )
-    #         exp_2 = Conductance(file, dict)
-    #         P_off, P_on, k_off, k_on, _ = exp_2.fitting()
     exp_2 = Conductance(file, dict)
     P_off, P_on, k_off, k_on, _ = exp_2.fitting()
     dict.update(
@@ -242,9 +233,9 @@ def main():
     x_init = x_init if x_init > 0 else 0
     x_init = x_init if x_init < 1 else 1
 
-    mem_x, mem_c = exp_1.Memristor_conductance_model(6, 4, x_init, exp_1.voltage)
+    mem_x, mem_c = exp_1.Memristor_conductance_model(alpha_off, alpha_on, x_init, exp_1.voltage)
     current_fit = np.array(mem_c) * np.array(exp_1.voltage)
-    if (alpha_off == 5 and alpha_on == 5) is None:
+    if (alpha_off == 5 and alpha_on == 5) is False:
         ax1 = fig.add_subplot(121)
         ax1.set_title('I-V Curve')
         ax1.plot(exp_1.voltage, current_fit, c='b')
