@@ -44,8 +44,8 @@ class AgingEffect(object):
         self.points = len(self.Cycle)
 
         self.CYCLE = self.Cycle
-        self.HHRS = 1 / self.HRS
-        self.LLRS = 1 / self.LRS
+        self.LCS = 1 / self.HRS
+        self.HCS = 1 / self.LRS
 
         self.sampling_rate = dictionary['sampling_rate']
         if self.sampling_rate is None:
@@ -70,7 +70,7 @@ class AgingEffect(object):
         params_off, pconv_off = curve_fit(
             self.equation_1_log,
             self.CYCLE,
-            np.log(self.LLRS),
+            np.log(self.HCS),
             p0=1e-4
         )
 
@@ -78,7 +78,7 @@ class AgingEffect(object):
         params_on, pconv_on = curve_fit(
             self.equation_1_log,
             self.CYCLE,
-            np.log(self.HHRS),
+            np.log(self.LCS),
             p0=1e-4
         )
 
@@ -92,13 +92,13 @@ class AgingEffect(object):
         params_off, pconv_off = curve_fit(
             self.equation_2,
             self.CYCLE,
-            self.LLRS,
+            self.HCS,
         )
 
         params_on, pconv_on = curve_fit(
             self.equation_2,
             self.CYCLE,
-            self.HHRS,
+            self.LCS,
         )
 
         Aging_off = params_off[0]
