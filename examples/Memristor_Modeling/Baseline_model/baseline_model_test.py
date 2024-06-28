@@ -7,8 +7,8 @@ from simbrain.Fitting_Functions.iv_curve_fitting import IVCurve
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
 import os
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+# os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 
 def main():
