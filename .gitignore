@@ -116,6 +116,7 @@ Test_Accuracy_Results.txt
 **.png
 **.txt
 **/fitting_record.json
+**.xlsx
 
 # Results from network monitoring test.
 examples/saved_checkpoints
