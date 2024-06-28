@@ -30,7 +30,7 @@ else:
 
 @timer
 def fitting():
-    # file = "../../memristordata/conductance_.xlsx"
+    # file = "../../memristor_data/conductance_.xlsx"
     # data = pd.DataFrame(pd.read_excel(
     #     file,
     #     sheet_name=0,

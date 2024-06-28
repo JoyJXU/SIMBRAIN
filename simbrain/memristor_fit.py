@@ -96,14 +96,14 @@ class MemristorFitting(object):
                 pass
             elif not os.path.isfile(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/saf_data.xlsx"
+                    + "/memristor_data/saf_data.xlsx"
             ):
                 raise Exception("Error! Missing data files.\nFailed to update SAF_lambda, SAF_ratio.")
             else:
                 print("Pre-deployment Stuck at Fault calculating...")
                 SAF_lambda, SAF_ratio = StuckAtFault(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/saf_data.xlsx"
+                    + "/memristor_data/saf_data.xlsx"
                 ).pre_deployment_fitting()
                 mem_info.update(
                     {
@@ -117,13 +117,13 @@ class MemristorFitting(object):
             pass
         elif not os.path.isfile(
                 os.path.dirname(os.path.dirname(__file__))
-                + "/memristordata/conductance.xlsx"
+                + "/memristor_data/conductance.xlsx"
         ):
             raise Exception("Error! Missing data files.\nFailed to update G_off, G_on.")
         else:
 
             data = pd.DataFrame(pd.read_excel(
-                os.path.dirname(os.path.dirname(__file__)) + "/memristordata/conductance.xlsx",
+                os.path.dirname(os.path.dirname(__file__)) + "/memristor_data/conductance.xlsx",
                 sheet_name='Sheet1',
                 header=None,
                 index_col=None
@@ -169,14 +169,14 @@ class MemristorFitting(object):
                 pass
             elif not os.path.isfile(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/conductance.xlsx"
+                    + "/memristor_data/conductance.xlsx"
             ):
                 raise Exception("Error! Missing data files.\nFailed to update Goff_sigma, Gon_sigma.")
             else:
                 print("Device to Device Variation calculating...")
                 Goff_mu, Goff_sigma, Gon_mu, Gon_sigma = Variation(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/conductance.xlsx",
+                    + "/memristor_data/conductance.xlsx",
                     G_off_variation,
                     G_on_variation,
                     P_off_variation,
@@ -195,13 +195,13 @@ class MemristorFitting(object):
             pass
         elif not os.path.isfile(
                 os.path.dirname(os.path.dirname(__file__))
-                + "/memristordata/conductance.xlsx"
+                + "/memristor_data/conductance.xlsx"
         ):
             raise Exception("Error! Missing data files.\nFailed to update G_off, G_on.")
         else:
 
             data = pd.DataFrame(pd.read_excel(
-                os.path.dirname(os.path.dirname(__file__)) + "/memristordata/conductance.xlsx",
+                os.path.dirname(os.path.dirname(__file__)) + "/memristor_data/conductance.xlsx",
                 sheet_name='Sheet1',
                 header=None,
                 index_col=None
@@ -229,7 +229,7 @@ class MemristorFitting(object):
             raise Exception("Error! Missing data files.\nFailed to update alpha_off, alpha_on.")
         elif not os.path.isfile(
                 os.path.dirname(os.path.dirname(__file__))
-                + "/memristordata/iv_curve.xlsx"
+                + "/memristor_data/iv_curve.xlsx"
         ):
             print("Warning! Missing required parameters.\nDefault value is 5.")
             mem_info.update(
@@ -241,7 +241,7 @@ class MemristorFitting(object):
         else:
             alpha_off, alpha_on = IVCurve(
                 os.path.dirname(os.path.dirname(__file__))
-                + "/memristordata/iv_curve.xlsx",
+                + "/memristor_data/iv_curve.xlsx",
                 mem_info
             ).fitting()
             mem_info.update(
@@ -258,13 +258,13 @@ class MemristorFitting(object):
             raise Exception("Error! Missing required parameters.\nFailed to update P_off, P_on, k_off, k_on.")
         elif not os.path.isfile(
                 os.path.dirname(os.path.dirname(__file__))
-                + "/memristordata/conductance.xlsx"
+                + "/memristor_data/conductance.xlsx"
         ):
             raise Exception("Error! Missing data files.\nFailed to update P_off, P_on, k_off, k_on.")
         else:
             conductance_temp = (Conductance(
                 os.path.dirname(os.path.dirname(__file__))
-                + "/memristordata/conductance.xlsx",
+                + "/memristor_data/conductance.xlsx",
                 mem_info
             ))
             P_off, P_on, k_off, k_on, V_write_pos = conductance_temp.fitting()
@@ -287,14 +287,14 @@ class MemristorFitting(object):
                 pass
             elif not os.path.isfile(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/conductance.xlsx"
+                    + "/memristor_data/conductance.xlsx"
             ):
                 raise Exception("Error! Missing data files.\nFailed to update Poff_sigma, Pon_sigma.")
             else:
                 print("Device to Device Variation(Non-linearity) calculating...")
                 variation_temp = Variation(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/conductance.xlsx",
+                    + "/memristor_data/conductance.xlsx",
                     G_off_variation,
                     G_on_variation,
                     P_off_variation,
@@ -315,7 +315,7 @@ class MemristorFitting(object):
                 pass
             elif not os.path.isfile(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/conductance.xlsx"
+                    + "/memristor_data/conductance.xlsx"
             ):
                 raise Exception("Error! Missing data files.\nFailed to update sigma_relative, sigma_absolute.")
             else:
@@ -325,7 +325,7 @@ class MemristorFitting(object):
                 except:
                     variation_temp = Variation(
                         os.path.dirname(os.path.dirname(__file__))
-                        + "/memristordata/conductance.xlsx",
+                        + "/memristor_data/conductance.xlsx",
                         G_off_variation,
                         G_on_variation,
                         P_off_variation,
@@ -346,14 +346,14 @@ class MemristorFitting(object):
                 pass
             elif not os.path.isfile(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/saf_data.xlsx"
+                    + "/memristor_data/saf_data.xlsx"
             ):
                 raise Exception("Error! Missing data files.\nFailed to update SAF_delta.")
             else:
                 print("Post-deployment Stuck at Fault calculating...")
                 SAF_delta = StuckAtFault(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/saf_data.xlsx"
+                    + "/memristor_data/saf_data.xlsx"
                 ).post_deployment_fitting()
                 mem_info.update(
                     {
@@ -367,14 +367,14 @@ class MemristorFitting(object):
                 pass
             elif not os.path.isfile(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/retention_loss.xlsx"
+                    + "/memristor_data/retention_loss.xlsx"
             ):
                 raise Exception("Error! Missing data files.\nFailed to update retention_loss_tau, retention_loss_beta.")
             else:
                 print("Retention Loss calculating...")
                 retention_loss_tau, retention_loss_beta = RetentionLoss(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/retention_loss.xlsx"
+                    + "/memristor_data/retention_loss.xlsx"
                 ).fitting()
                 mem_info.update(
                     {
@@ -389,14 +389,14 @@ class MemristorFitting(object):
                 pass
             elif not os.path.isfile(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/aging_effect.xlsx"
+                    + "/memristor_data/aging_effect.xlsx"
             ):
                 raise Exception("Error! Missing data files.\nFailed to update Aging_off, Aging_on.")
             else:
                 print("Aging Effect calculating...")
                 aging_cal = AgingEffect(
                     os.path.dirname(os.path.dirname(__file__))
-                    + "/memristordata/aging_effect.xlsx",
+                    + "/memristor_data/aging_effect.xlsx",
                     mem_info
                 )
                 if self.aging_effect == 1:

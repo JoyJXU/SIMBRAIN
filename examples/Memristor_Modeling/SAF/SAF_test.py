@@ -10,9 +10,9 @@ from simbrain.Fitting_Functions.stuck_at_fault_fitting import StuckAtFault
 def main():
     # Fit
     # Pre-deployment SAF
-    with open("../../../memristordata/my_memristor.json") as f:
+    with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
-    file = "../../../memristordata/saf_data.xlsx"
+    file = "../../../memristor_data/saf_data.xlsx"
     exp = StuckAtFault(file)
     SAF_lambda, SAF_ratio = exp.pre_deployment_fitting()
     dict.update(

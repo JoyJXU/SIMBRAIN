@@ -7,13 +7,12 @@ from simbrain.Fitting_Functions.iv_curve_fitting import IVCurve
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
-# os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
 
 
 def main():
     # Fit
-    with open("../../../memristordata/my_memristor.json") as f:
+    with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
     dict.update(
         {
@@ -32,7 +31,7 @@ def main():
         }
     )
     data = pd.DataFrame(pd.read_excel(
-        "../../../memristordata/conductance_deletehead.xlsx",
+        "../../../memristor_data/conductance_deletehead.xlsx",
         sheet_name=0,
         header=None,
         index_col=None,
@@ -75,10 +74,15 @@ def main():
         }
     )
 
-    file = "../../../memristordata/iv_curve.xlsx"
-    exp_1 = IVCurve(file, dict)
-    alpha_off, alpha_on = exp_1.fitting()
-    alpha_off, alpha_on = 5, 5
+    file = "../../../memristor_data/iv_curve.xlsx"
+    if os.path.isfile(file):
+        print('Going through IV curve fitting process')
+        exp_1 = IVCurve(file, dict)
+        alpha_off, alpha_on = exp_1.fitting()
+    else:
+        print('No IV curve data!')
+        alpha_off, alpha_on = 5, 5 # TODO: change default setting
+
     dict.update(
         {
             'G_off': G_off,
@@ -90,7 +94,7 @@ def main():
         }
     )
 
-    file = "../../../memristordata/conductance_deletehead.xlsx"
+    file = "../../../memristor_data/conductance_deletehead.xlsx"
     exp_2 = Conductance(file, dict)
     P_off, P_on, k_off, k_on, _ = exp_2.fitting()
     dict.update(
@@ -229,13 +233,13 @@ def main():
     # Plot
     fig = plt.figure(figsize=(12, 5.4))
 
-    x_init = (exp_1.current[0] / exp_1.voltage[0] - exp_1.G_on) / (exp_1.G_off - exp_1.G_on)
-    x_init = x_init if x_init > 0 else 0
-    x_init = x_init if x_init < 1 else 1
-
-    mem_x, mem_c = exp_1.Memristor_conductance_model(alpha_off, alpha_on, x_init, exp_1.voltage)
-    current_fit = np.array(mem_c) * np.array(exp_1.voltage)
-    if (alpha_off == 5 and alpha_on == 5) is False:
+    file = "../../../memristor_data/iv_curve.xlsx"
+    if os.path.isfile(file):
+        x_init = (exp_1.current[0] / exp_1.voltage[0] - exp_1.G_on) / (exp_1.G_off - exp_1.G_on)
+        x_init = x_init if x_init > 0 else 0
+        x_init = x_init if x_init < 1 else 1
+        mem_x, mem_c = exp_1.Memristor_conductance_model(alpha_off, alpha_on, x_init, exp_1.voltage)
+        current_fit = np.array(mem_c) * np.array(exp_1.voltage)
         ax1 = fig.add_subplot(121)
         ax1.set_title('I-V Curve')
         ax1.plot(exp_1.voltage, current_fit, c='b')

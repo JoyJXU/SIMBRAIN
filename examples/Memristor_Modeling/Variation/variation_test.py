@@ -11,7 +11,7 @@ sys.path.append('../../../')
 
 def main():
     # Fit
-    with open("../../../memristordata/my_memristor.json") as f:
+    with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
     dict.update(
         {
@@ -29,7 +29,7 @@ def main():
             'duty_ratio': 0.5
         }
     )
-    file = "../../../memristordata/conductance_deletehead.xlsx"
+    file = "../../../memristor_data/conductance_deletehead.xlsx"
 
     data = pd.DataFrame(pd.read_excel(
         file,
@@ -104,7 +104,7 @@ def main():
     P_off_list, P_on_list = exp_0.mult_P_fitting(G_off_list, G_on_list)
 
     exp = Variation(
-        "../../../memristordata/conductance_deletehead.xlsx",
+        "../../../memristor_data/conductance_deletehead.xlsx",
         G_off_list,
         G_on_list,
         P_off_list,

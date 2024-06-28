@@ -95,7 +95,6 @@ class Conductance(object):
         """
         Calculate parameters k and P for the baseline model.
         """
-        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
         if torch.cuda.is_available():
             device = torch.device("cuda")

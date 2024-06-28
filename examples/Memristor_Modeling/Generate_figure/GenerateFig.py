@@ -16,7 +16,7 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
     # Fit
-    with open("../../../memristordata/my_memristor.json") as f:
+    with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
     dict.update(
         {
@@ -33,7 +33,7 @@ def main():
             'delta_t': 100 * 1e-3,
         }
     )
-    file = "../../../memristordata/conductance_deletehead.xlsx"
+    file = "../../../memristor_data/conductance_deletehead.xlsx"
 
     data = pd.DataFrame(pd.read_excel(
         file,

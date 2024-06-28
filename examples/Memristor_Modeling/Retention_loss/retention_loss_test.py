@@ -9,9 +9,9 @@ from simbrain.Fitting_Functions.retention_loss_fitting import RetentionLoss
 
 def main():
     # Fit
-    with open("../../../memristordata/my_memristor.json") as f:
+    with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
-    file = "../../../memristordata/retention_loss.xlsx"
+    file = "../../../memristor_data/retention_loss.xlsx"
     exp = RetentionLoss(file)
     tau, beta = exp.fitting()
     dict.update(

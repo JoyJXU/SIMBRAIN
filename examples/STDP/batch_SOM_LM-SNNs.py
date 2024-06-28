@@ -95,11 +95,11 @@ n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
 
 # %% Obtain memristor parameters
-with open("../../memristordata/sim_params.json") as f:
+with open("../../memristor_data/sim_params.json") as f:
     sim_params = json.load(f)
 sim_params['device_structure'] = args.memristor_structure
 sim_params['batch_interval'] = args.time * 2 + 1
-with open("../../memristordata/my_memristor.json") as f:
+with open("../../memristor_data/my_memristor.json") as f:
     my_memristor_r = json.load(f)
 print(json.dumps(sim_params, indent=4, separators=(',', ':')))
 
@@ -118,7 +118,7 @@ diff_2 = {k: fitting_record_w[k] for k in fitting_record_w if my_memristor_r[k] 
 print('Before update:\n', json.dumps(diff_1, indent=4, separators=(',', ':')))
 print('After update:\n', json.dumps(diff_2, indent=4, separators=(',', ':')))
 
-with open("../../memristordata/fitting_record.json", "w") as f:
+with open("../../memristor_data/fitting_record.json", "w") as f:
     json.dump(fitting_record_w, f, indent=2)
 
 # %% Multiple test

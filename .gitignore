@@ -118,6 +118,7 @@ Test_Accuracy_Results.txt
 **/fitting_record.json
 examples/*.xlsx
 examples/**/*.xlsx
+memristor_data/*.xlsx
 
 # Results from network monitoring test.
 examples/saved_checkpoints

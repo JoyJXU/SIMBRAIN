@@ -9,9 +9,9 @@ from simbrain.Fitting_Functions.aging_effect_fitting import AgingEffect
 
 def main():
     # Fit
-    with open("../../../memristordata/my_memristor.json") as f:
+    with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
-    file = "../../../memristordata/aging_effect.xlsx"
+    file = "../../../memristor_data/aging_effect.xlsx"
     exp = AgingEffect(file, dict)
     Aging_k_off_1, Aging_k_on_1 = exp.fitting_equation1()
     Aging_k_off_2, b_off, Aging_k_on_2, b_on = exp.fitting_equation2()

@@ -14,7 +14,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 
 def main():
     # Fit
-    with open("../../../memristordata/my_memristor.json") as f:
+    with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
     dict.update(
         {
@@ -32,7 +32,7 @@ def main():
         }
     )
     data = pd.DataFrame(pd.read_excel(
-        "../../../memristordata/conductance_.xlsx",
+        "../../../memristor_data/conductance_.xlsx",
         sheet_name=0,
         header=None,
         index_col=None,
@@ -75,7 +75,7 @@ def main():
         }
     )
 
-    file = "../../../memristordata/iv_curve.xlsx"
+    file = "../../../memristor_data/iv_curve.xlsx"
     exp_1 = IVCurve(file, dict)
     alpha_off, alpha_on = exp_1.fitting()
     alpha_off, alpha_on = 5, 5
@@ -91,7 +91,7 @@ def main():
         }
     )
 
-    file = "../../../memristordata/conductance_deletehead.xlsx"
+    file = "../../../memristor_data/conductance_deletehead.xlsx"
     # for alpha_off_temp in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
     #     for alpha_on_temp in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
     #         dict.update(
