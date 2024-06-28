@@ -77,8 +77,6 @@ class DAC_Module(torch.nn.Module):
             elif sgn == 'neg':
                 v_read = torch.relu(mem_v * -1)
 
-            v_read_1 = torch.unsqueeze(v_read,0)
-
             mem_v = None
             v_read = torch.round(v_read * (2 ** self.input_bit - 1))
             v_read = torch.clamp(v_read, 0, 2 ** self.input_bit - 1)

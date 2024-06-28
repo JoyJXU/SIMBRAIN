@@ -26,23 +26,16 @@ from bindsnet.models import IncreasingInhibitionNetwork
 from bindsnet.network.monitors import Monitor
 from bindsnet.utils import get_square_weights, get_square_assignments
 from bindsnet.evaluation import all_activity, proportion_weighting, assign_labels
-from bindsnet.analysis.plotting import (
-    plot_input,
-    plot_spikes,
-    plot_weights,
-    plot_assignments,
-    plot_performance,
-    plot_voltages,
-)
+
 
 # %% Argument
 parser = argparse.ArgumentParser()
+parser.add_argument("--multiple_test_no", type=int, default=90)
 parser.add_argument("--seed", type=int, default=0)
-parser.add_argument("--n_neurons", type=int, default=100)
+parser.add_argument("--n_neurons", type=int, default=625)
 parser.add_argument("--train_batch_size", type=int, default=50)
 parser.add_argument("--test_batch_size", type=int, default=128)
-parser.add_argument("--multiple_test_no", type=int, default=90)
-parser.add_argument("--n_epochs", type=int, default=3)
+parser.add_argument("--n_epochs", type=int, default=2)
 parser.add_argument("--n_test", type=int, default=10000)
 parser.add_argument("--n_train", type=int, default=60000)
 parser.add_argument("--n_workers", type=int, default=-1)
@@ -56,8 +49,23 @@ parser.add_argument("--update_inhibation_weights", type=int, default=500)
 parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
-parser.add_argument("--memristor_device", type=str, default='ferro')  # trace: original trace
-parser.add_argument("--c2c_variation", type=bool, default=True)
+parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
+parser.add_argument("--memristor_device", type=str, default='trace') # trace: original trace
+parser.add_argument("--c2c_variation", type=bool, default=False)
+parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
+parser.add_argument("--stuck_at_fault", type=bool, default=False)
+parser.add_argument("--retention_loss", type=int, default=0) # 0: No retention, 1: during pulse, 2: no pluse for a long time
+parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
+parser.add_argument("--input_bit", type=int, default=1)
+parser.add_argument("--ADC_precision", type=int, default=8)
+parser.add_argument("--ADC_setting", type=int, default=4)  # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
+parser.add_argument("--ADC_rounding_function", type=str, default='floor')  # floor or round
+parser.add_argument("--wire_width", type=int, default=200) # In practice, wire_width shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
+parser.add_argument("--CMOS_technode", type=int, default=32)
+parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
+parser.add_argument("--temperature", type=int, default=300)
+parser.add_argument("--hardware_estimation", type=int, default=False)
+
 parser.set_defaults(plot=False, gpu=True)
 
 args = parser.parse_args()
@@ -66,7 +74,6 @@ seed = args.seed
 n_neurons = args.n_neurons
 train_batch_size = args.train_batch_size
 test_batch_size = args.test_batch_size
-multiple_test_no = args.multiple_test_no
 n_epochs = args.n_epochs
 n_test = math.ceil(args.n_test / test_batch_size)
 n_train = math.ceil(args.n_train / train_batch_size)
@@ -75,16 +82,24 @@ theta_plus = args.theta_plus
 time = args.time
 dt = args.dt
 intensity = args.intensity
+multiple_test_no = args.multiple_test_no
 progress_interval = args.progress_interval
 plot_interval = args.plot_interval
 update_interval = args.update_interval
 plot = args.plot
 gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
-device_params = {'device_name': args.memristor_device, 'c2c_variation': args.c2c_variation}
+sim_params = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
+              'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
+              'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
+              'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
+              'batch_interval': 1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
+              'ADC_setting': args.ADC_setting,'ADC_rounding_function': args.ADC_rounding_function,
+              'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
+              'hardware_estimation': args.hardware_estimation}
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
@@ -141,11 +156,13 @@ for test_cnt in range(multiple_test_no):
     out = open(out_root, 'a')
 
     # %% Enable test while training
+    init_num = 500
     signal_break = 0
     tmp_acc = 0
     best_acc = 0
     best_capacity = 0
-    patience = 10
+    regular_step = 50
+    patience = 150
 
     # %% Build network.
     network = IncreasingInhibitionNetwork(
@@ -157,7 +174,7 @@ for test_cnt in range(multiple_test_no):
         tc_theta_decay=1e7,
         inpt_shape=(1, 28, 28),
         nu=(1e-4, 1e-2),
-        mem_device=device_params,
+        sim_params=sim_params,
         batch_size=train_batch_size
     )
 
@@ -291,7 +308,7 @@ for test_cnt in range(multiple_test_no):
             # %% Test while training
             network.train(mode=False)
 
-            if (step >= 500 or epoch > 0) and ((step * train_batch_size) % (update_interval * 20) == 0):
+            if (step >= init_num or epoch > 0) and ((epoch * n_train + step * train_batch_size) % (update_interval * regular_step) == 0):
                 accuracy_test = {"all": 0, "proportion": 0}
                 print("\nBegin testing while training\n")
                 for batch_test in tqdm(test_dataloader):
@@ -329,7 +346,7 @@ for test_cnt in range(multiple_test_no):
                     signal_break = 0
                     best_capacity = epoch * args.n_train + (step + 1) * train_batch_size
                 else:
-                    signal_break += 1
+                    signal_break += regular_step
 
                 total_capacity = epoch * args.n_train + (step + 1) * train_batch_size
 

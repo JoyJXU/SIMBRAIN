@@ -122,7 +122,7 @@ n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
 
 # %% Multiple test
-out_root = 'Accuracy_Results.txt'
+out_root = 'Accuracy_Results_fast_train.txt'
 
 # %% Load MNIST training data.
 dataset = MNIST(
@@ -154,52 +154,56 @@ test_dataloader = torch.utils.data.DataLoader(
 
 for test_cnt in range(multiple_test_no):
     out = open(out_root, 'a')
-
-    # %% Enable test while training
-    init_num = 500
-    signal_break = 0
-    tmp_acc = 0
     best_acc = 0
-    best_capacity = 0
-    patience = 50
-    regular_step = 50
-    slow_step = 5
-    critical_acc = 88
-
+    signal_break = 0
+    patience = 200
+    print("test_cnt = %d"%test_cnt)    
     # %% Build network.
     network = IncreasingInhibitionNetwork(
         n_input=784,
         n_neurons=n_neurons,
-        start_inhib=10,
-        max_inhib=-40,
+        start_inhib=10, #10
+        max_inhib=-40, #-40
         theta_plus=0.05,
         tc_theta_decay=1e7,
         inpt_shape=(1, 28, 28),
-        nu=(1e-4, 1e-2),
+        nu=(1e-4, 1e-2), 
         sim_params=sim_params,
         batch_size=train_batch_size
     )
-
+    
     network.to(device)
-
+    
+    # %% Load MNIST data.
+    dataset = MNIST(
+        PoissonEncoder(time=time, dt=dt),
+        None,
+        root=os.path.join("..", "..", "data", "MNIST"),
+        # root=os.path.join("/home/jiahao/project/bindsnet-master/data/MNIST"),
+        download=True,
+        transform=transforms.Compose(
+            [transforms.ToTensor(), transforms.Lambda(lambda x: x * intensity)]
+        ),
+    )
+    
     # Record spikes during the simulation.
     spike_record = torch.zeros((update_interval, int(time / dt), n_neurons), device=device)
-
+    
     # Neuron assignments and spike proportions.
     n_classes = 10
     assignments = -torch.ones(n_neurons, device=device)
     proportions = torch.zeros((n_neurons, n_classes), device=device)
     rates = torch.zeros((n_neurons, n_classes), device=device)
-
+    
     # Sequence of accuracy estimates.
     accuracy = {"all": [], "proportion": []}
-
+    
     # Voltage recording for excitatory and inhibitory layers.
     som_voltage_monitor = Monitor(
         network.layers["Y"], ["v"], time=int(time / dt), device=device
     )
     network.add_monitor(som_voltage_monitor, name="som_voltage")
-
+    
     # Set up monitors for spikes and voltages
     spikes = {}
     for layer in set(network.layers):
@@ -207,14 +211,13 @@ for test_cnt in range(multiple_test_no):
             network.layers[layer], state_vars=["s"], time=int(time / dt), device=device
         )
         network.add_monitor(spikes[layer], name="%s_spikes" % layer)
-
     voltages = {}
     for layer in set(network.layers) - {"X"}:
         voltages[layer] = Monitor(
             network.layers[layer], state_vars=["v"], time=int(time / dt), device=device
         )
         network.add_monitor(voltages[layer], name="%s_voltages" % layer)
-
+    
     inpt_ims, inpt_axes = None, None
     spike_ims, spike_axes = None, None
     weights_im = None
@@ -223,57 +226,86 @@ for test_cnt in range(multiple_test_no):
     voltage_axes, voltage_ims = None, None
     save_weights_fn = "plots/weights/weights.png"
     save_performance_fn = "plots/performance/performance.png"
-    save_assignments_fn = "plots/assignments/assignments.png"
-
-    directorys = ["plots", "plots/weights", "plots/performance", "plots/assignments"]
+    save_assaiments_fn = "plots/assaiments/assaiments.png"
+    
+    directorys = ["plots", "plots/weights", "plots/performance", "plots/assaiments"]
     for directory in directorys:
         if not os.path.exists(directory):
             os.makedirs(directory)
-
-    # diagonal weights for increasing the inhibition
+    
+    # diagonal weights for increassing the inhibitiosn
     weights_mask = (1 - torch.diag(torch.ones(n_neurons))).to(device)
-
+    
     # %% Train the network.
     print("\nBegin training.\n")
     start = t()
-
+    
     for epoch in range(n_epochs):
+        #signal_break = signal_break - 30
         labels = []
-
+    
         if epoch % progress_interval == 0:
             print("Progress: %d / %d (%.4f seconds)" % (epoch, n_epochs, t() - start))
             start = t()
-
+    
         # Create a dataloader to iterate and batch data
         dataloader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=train_batch_size,
-            shuffle=True,
-            num_workers=n_workers,
+            dataset, 
+            batch_size=train_batch_size, 
+            shuffle=True, 
+            num_workers=n_workers, 
             pin_memory=gpu
         )
-
+        
+        
         pbar = tqdm(total=n_train)
         for step, batch in enumerate(dataloader):
             if step == n_train:
                 break
-
-            network.train(mode=True)
-
-            # Get next input sample.
-            inputs = {"X": batch["encoded_image"].transpose(0, 1).to(device)}
-
+    
+            inputs = {"X": batch["encoded_image"].transpose(0, 1).to(device)} 
+    
             if step > 0:
-                if (step * train_batch_size) % update_inhibation_weights == 0:  # update_inhibation_weights=500
-                    if (step * train_batch_size) % (update_inhibation_weights * 10) == 0:
+                if (step*train_batch_size) % update_inhibation_weights == 0:#update_inhibation_weights=500a
+                    if (step*train_batch_size) % (update_inhibation_weights * 10) == 0:
                         network.Y_to_Y.w -= weights_mask * 50
                     else:
-                        # Inhibit the connection even more
                         network.Y_to_Y.w -= weights_mask * 0.5
-
-                if (step * train_batch_size) % update_interval == 0:
+    
+                if (step*train_batch_size) % update_interval == 0:
                     # Convert the array of labels into a tensor
                     label_tensor = torch.tensor(labels, device=device)
+    
+                    # Get network predictions.
+                    all_activity_pred = all_activity(
+                        spikes=spike_record, assignments=assignments, n_labels=n_classes
+                    )
+                    proportion_pred = proportion_weighting(
+                        spikes=spike_record,
+                        assignments=assignments,
+                        proportions=proportions,
+                        n_labels=n_classes,
+                    )
+    
+                    # TODO: Compute network accuracy according to available classification strategies.
+                    accuracy["all"].append(
+                        100
+                        * torch.sum(label_tensor.long() == all_activity_pred).item()
+                        / len(label_tensor)
+                    )
+                    accuracy["proportion"].append(
+                        100
+                        * torch.sum(label_tensor.long() == proportion_pred).item()
+                        / len(label_tensor)
+                    )
+    
+                    tqdm.write("%.2f"% (accuracy["all"][-1],))
+                    if accuracy["all"][-1] >= best_acc:
+                        best_acc = accuracy["all"][-1]
+                        torch.save(network.state_dict(), "best_model_A.pth")
+                        signal_break = 0
+                    else:
+                        signal_break = signal_break + 1
 
                     # Assign labels to excitatory layer neurons.
                     assignments, proportions, rates = assign_labels(
@@ -282,98 +314,122 @@ for test_cnt in range(multiple_test_no):
                         n_labels=n_classes,
                         rates=rates,
                     )
-
+    
                     labels = []
 
+                    
+                    
             # labels.append(batch["label"])
             labels.extend(batch["label"].tolist())
-
+            
             # Run the network on the input.
             temp_spikes = 0
             network.run(inputs=inputs, time=time, input_time_dim=1)
             temp_spikes = spikes["Y"].get("s").permute((1, 0, 2))
-
+    
             # Get voltage recording.
             exc_voltages = som_voltage_monitor.get("v")
-
+    
             # Add to spikes recording.
+            # spike_record[step % update_interval] = temp_spikes.detach().clone().cpu()
             spike_record[
-            (step * train_batch_size) % update_interval: (step * train_batch_size) % update_interval + temp_spikes.size(
-                0)
-            ].copy_(temp_spikes, non_blocking=True)
-
-            # %% Update
+                (step*train_batch_size) % update_interval : (step*train_batch_size) % update_interval + temp_spikes.size(0)
+                ].copy_(temp_spikes, non_blocking=True)
+    
+    
+            # %% plot end and update        
             network.reset_state_variables()  # Reset state variables.
             pbar.set_description_str("Train progress: ")
             pbar.update()
+            # pbar.update(batch_size)
+            if signal_break == patience:
+                break                      
+        if signal_break == patience:
+            break                    
+        
+    print("Progress: %d / %d (%.4f seconds)" % (epoch + 1, n_epochs, t() - start))
+    print("Training complete.\n")
+    
+    # #%% Save estimated accuracy
+    #acc_out = 'test_100_variation_acc.pth'
+   # torch.save(accuracy, acc_out)
+     
+    # %% Load MNIST data.
+    test_dataset = MNIST(
+        PoissonEncoder(time=time, dt=dt),
+        None,
+        root=os.path.join("..", "..", "data", "MNIST"),
+        # root=os.path.join("/home/jiahao/project/bindsnet-master/data/MNIST"),
+        download=True,
+        train=False,
+        transform=transforms.Compose(
+            [transforms.ToTensor(), transforms.Lambda(lambda x: x * intensity)]
+        ),
+    )
+    
+    # Create a dataloader to iterate and batch data
+    test_dataloader = torch.utils.data.DataLoader(
+        test_dataset, batch_size=test_batch_size, shuffle=False, num_workers=n_workers, pin_memory=gpu
+    )
+    
+    # Sequence of accuracy estimates.
+    accuracy = {"all": 0, "proportion": 0}
+    
+    # # Record spikes during the simulation.
+    # spike_record = torch.zeros(1, int(time / dt), n_neurons, device=device)
+    network.load_state_dict(torch.load("best_model_A.pth"))    
+    # %% Test the network.
+    print("\nBegin testing\n")
+    network.train(mode=False)
+    start = t()
 
-            # %% Test while training
-            network.train(mode=False)
-
-            if (step >= init_num or epoch > 0) and ((epoch * n_train + step * train_batch_size) % (update_interval * regular_step) == 0 or \
-                                               ((epoch * n_train + step * train_batch_size) % (
-                                                       update_interval * slow_step) == 0 and tmp_acc > critical_acc)):
-                accuracy_test = {"all": 0, "proportion": 0}
-                print("\nBegin testing while training\n")
-                for batch_test in tqdm(test_dataloader):
-                    # Get next input sample.
-                    inputs_test = {"X": batch_test["encoded_image"].transpose(0, 1).to(device)}
-
-                    # Run the network on the input.
-                    network.run(inputs=inputs_test, time=time, input_time_dim=1)
-
-                    spike_record_test = spikes["Y"].get("s").transpose(0, 1)
-                    label_tensor_test = torch.tensor(batch_test["label"], device=device)
-
-                    # Get network predictions.
-                    all_activity_pred_test = all_activity(
-                        spikes=spike_record_test, assignments=assignments, n_labels=n_classes
-                    )
-                    proportion_pred_test = proportion_weighting(
-                        spikes=spike_record_test,
-                        assignments=assignments,
-                        proportions=proportions,
-                        n_labels=n_classes,
-                    )
-
-                    # Compute network accuracy according to available classification strategies.
-                    accuracy_test["all"] += float(torch.sum(label_tensor_test.long() == all_activity_pred_test).item())
-                    accuracy_test["proportion"] += float(
-                        torch.sum(label_tensor_test.long() == proportion_pred_test).item()
-                    )
-                    network.reset_state_variables()
-
-                # Strategies of when to end the training
-                tmp_acc = accuracy_test["all"] * 100 / args.n_test
-                if tmp_acc > best_acc:
-                    signal_break = 0
-                    best_acc = tmp_acc
-                    best_capacity = epoch * args.n_train + (step + 1) * train_batch_size
-                elif tmp_acc < critical_acc:
-                    signal_break += regular_step
-                else:
-                    signal_break += slow_step 
-
-                total_capacity = epoch * args.n_train + (step + 1) * train_batch_size
-
-                print("\nCurrent all activity accuracy: %.4f" % (accuracy_test["all"] / args.n_test))
-                print("\nBest all activity accuracy: %.4f, Best capacity: %d, Signal break:%d.\n" % \
-                      (best_acc, best_capacity, signal_break))
-                print("Testing while training complete.\n")
-
-                if signal_break >= patience:
-                    break
-
-        if signal_break >= patience:
-            break
-
-    print("Best_acc: %.4f" % best_acc)
-
-    # %% output+clear
-    out_txt = 'All activity accuracy:' + str(best_acc) + '\tbest capacity:' + str(best_capacity) + \
-              '\ttest capacity:' + str(total_capacity) + '\n'
+    print("Test progress: ")
+    for batch in tqdm(test_dataloader):  
+        # Get next input sample.
+        # inputs = {"X": batch["encoded_image"].view(int(time / dt), 1, 1, 28, 28)}
+        inputs = {"X": batch["encoded_image"].transpose(0, 1).to(device)} 
+    
+        # Run the network on the input.
+        # TODO
+        # network.run -> spikes["Y"]
+        network.run(inputs=inputs, time=time, input_time_dim=1)
+    
+        spike_record = spikes["Y"].get("s").transpose(0, 1) # Convert the array of labels into a tensor
+        label_tensor = torch.tensor(batch["label"], device=device)
+    
+        # Get network predictions.
+        all_activity_pred = all_activity(
+            spikes=spike_record, assignments=assignments, n_labels=n_classes
+        )
+        proportion_pred = proportion_weighting(
+            spikes=spike_record,
+            assignments=assignments,
+            proportions=proportions,
+            n_labels=n_classes,
+        )
+    
+        # Compute network accuracy according to available classification strategies.
+        accuracy["all"] += float(torch.sum(label_tensor.long() == all_activity_pred).item())
+        accuracy["proportion"] += float(
+            torch.sum(label_tensor.long() == proportion_pred).item()
+        )
+    
+        network.reset_state_variables()  # Reset state variables.
+    
+    
+    
+    # yyl
+    print("\nAll activity accuracy: %.4f" % (accuracy["all"] / args.n_test))
+    print("Proportion weighting accuracy: %.4f \n" % (accuracy["proportion"] / args.n_test))
+    
+    # print("Progress: %d / %d (%.4f seconds)" % (epoch + 1, n_epochs, t() - start))
+    print("Testing complete.\n")
+    
+    #%% output+clear
+    out_txt = 'All activity accuracy:' + str(accuracy["all"] / args.n_test) +\
+                '\tProportion weighting accuracy:' + str(accuracy["proportion"] / args.n_test) + '\n'
     out.write(out_txt)
     out.close()
-
+    
     del network
 

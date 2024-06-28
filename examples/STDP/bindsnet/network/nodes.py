@@ -146,10 +146,12 @@ class Nodes(torch.nn.Module):
         """
         self.dt = torch.tensor(dt)
         if self.traces:
+            
             self.trace_decay = torch.exp(
                 -self.dt / self.tc_trace
             )  # Spike trace decay (per timestep).
-            if (self.device_name != 'trace' and self.learning == True):            
+
+            if (self.device_name != 'trace' and self.learning == True):
                 self.transform.voltage_generation(self.trace_decay, plot=False)
 
 
