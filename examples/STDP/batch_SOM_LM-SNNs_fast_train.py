@@ -35,7 +35,7 @@ parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--n_neurons", type=int, default=625)
 parser.add_argument("--train_batch_size", type=int, default=50)
 parser.add_argument("--test_batch_size", type=int, default=128)
-parser.add_argument("--n_epochs", type=int, default=2)
+parser.add_argument("--n_epochs", type=int, default=3)
 parser.add_argument("--n_test", type=int, default=10000)
 parser.add_argument("--n_train", type=int, default=60000)
 parser.add_argument("--n_workers", type=int, default=-1)
@@ -43,14 +43,14 @@ parser.add_argument("--theta_plus", type=float, default=0.05)
 parser.add_argument("--time", type=int, default=250)
 parser.add_argument("--dt", type=int, default=1.0)
 parser.add_argument("--intensity", type=float, default=64)
-parser.add_argument("--progress_interval", type=int, default=10)
+parser.add_argument("--progress_interval", type=int, default=1)
 parser.add_argument("--update_interval", type=int, default=250)
 parser.add_argument("--update_inhibation_weights", type=int, default=500)
 parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
-parser.add_argument("--memristor_device", type=str, default='trace') # trace: original trace
+parser.add_argument("--memristor_device", type=str, default='ideal') # trace: original trace
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
@@ -99,7 +99,7 @@ sim_params = {'device_structure': args.memristor_structure, 'device_name': args.
               'hardware_estimation': args.hardware_estimation}
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
@@ -156,13 +156,14 @@ for test_cnt in range(multiple_test_no):
     out = open(out_root, 'a')
 
     # %% Enable test while training
-    init_num = 500
+    init_num = 100000 # start capacity (number of training patterns)
     signal_break = 0
     tmp_acc = 0
     best_acc = 0
     best_capacity = 0
-    regular_step = 50
-    patience = 150
+    total_capacity = 0
+    regular_step = 100
+    patience = 500
 
     # %% Build network.
     network = IncreasingInhibitionNetwork(
@@ -240,7 +241,6 @@ for test_cnt in range(multiple_test_no):
 
         if epoch % progress_interval == 0:
             print("Progress: %d / %d (%.4f seconds)" % (epoch, n_epochs, t() - start))
-            start = t()
 
         # Create a dataloader to iterate and batch data
         dataloader = torch.utils.data.DataLoader(
@@ -308,7 +308,7 @@ for test_cnt in range(multiple_test_no):
             # %% Test while training
             network.train(mode=False)
 
-            if (step >= init_num or epoch > 0) and ((epoch * n_train + step * train_batch_size) % (update_interval * regular_step) == 0):
+            if ((epoch * args.n_train + step * train_batch_size) >= init_num) and ((epoch * args.n_train + step * train_batch_size) % (train_batch_size * regular_step) == 0):
                 accuracy_test = {"all": 0, "proportion": 0}
                 print("\nBegin testing while training\n")
                 for batch_test in tqdm(test_dataloader):
@@ -365,7 +365,7 @@ for test_cnt in range(multiple_test_no):
 
     # %% output+clear
     out_txt = 'All activity accuracy:' + str(best_acc) + '\tbest capacity:' + str(
-        best_capacity) + '\ttest capacity:' + str(total_capacity) + '\n'
+        best_capacity) + '\ttest capacity:' + str(total_capacity) + '\ttotal time:' + str(t() - start) + '\n'
     out.write(out_txt)
     out.close()
 
