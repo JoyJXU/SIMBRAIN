@@ -67,6 +67,8 @@ class MemristorArray(torch.nn.Module):
             self.register_buffer("Goff_aging", torch.Tensor())
             self.register_buffer("Gon_0", torch.Tensor())
             self.register_buffer("Goff_0", torch.Tensor())
+            self.register_buffer("aging_end_t", torch.Tensor())
+            self.register_buffer("aging_end_G", torch.Tensor())            
 
         if self.stuck_at_fault:
             self.register_buffer("SAF0_mask", torch.Tensor())
@@ -170,6 +172,8 @@ class MemristorArray(torch.nn.Module):
             self.Goff_aging = torch.zeros(*self.shape, device=self.Goff_aging.device)
             self.Gon_aging = torch.stack([self.Goff_aging] * self.batch_size)
             self.Goff_aging = torch.stack([self.Goff_aging] * self.batch_size)
+            Aging_on = self.memristor_info_dict[self.device_name]['Aging_on']
+            Aging_off = self.memristor_info_dict[self.device_name]['Aging_off']
 
             # Initialize the start point Gon/Goff
             if self.d2d_variation in [1, 2]:
@@ -178,6 +182,13 @@ class MemristorArray(torch.nn.Module):
             else:
                 self.Gon_0 = self.memristor_info_dict[self.device_name]['G_on'] * torch.ones(batch_size, *self.shape, device=self.Gon_0.device)
                 self.Goff_0 = self.memristor_info_dict[self.device_name]['G_off'] * torch.ones(batch_size, *self.shape, device=self.Goff_0.device)
+                
+            if self.aging_effect == 1: #equation 1: G=G_0*(1-age)**t
+                self.aging_end_t = torch.log(torch.tensor(self.Goff_0 / self.Gon_0, device=self.Gon_0.device)) / torch.log(torch.tensor((1 - Aging_on) / (1 - Aging_off), device=self.Gon_0.device))
+                self.aging_end_G = self.Gon_0 * (1 - Aging_on) ** self.aging_end_t
+            elif self.aging_effect == 2: #equation 2: G=age*t+G_0
+                self.aging_end_t = (self.Goff_0 - self.Gon_0) / (Aging_on - Aging_off) 
+                self.aging_end_G = self.Gon_0 + Aging_on * self.aging_end_t            
 
         if self.stuck_at_fault:
             SAF_lambda = self.memristor_info_dict[self.device_name]['SAF_lambda']
@@ -498,7 +509,10 @@ class MemristorArray(torch.nn.Module):
         elif self.aging_effect == 2: #equation 2: G=age*t+G_0
             self.Gon_aging = age_on * self.mem_t * self.dt + self.Gon_0
             self.Goff_aging = age_off * self.mem_t * self.dt + self.Goff_0
-
+        self.Gon_aging = torch.where((self.aging_end_t > 0) & (torch.tensor(self.mem_t * self.dt, device=self.aging_end_t.device) > self.aging_end_t), self.aging_end_G, self.Gon_aging)
+        self.Goff_aging = torch.where((self.aging_end_t > 0) & (torch.tensor(self.mem_t * self.dt, device=self.aging_end_t.device) > self.aging_end_t), self.aging_end_G, self.Goff_aging)
+        self.Gon_aging = torch.clamp(self.Gon_aging, min=0)
+        self.Goff_aging = torch.clamp(self.Goff_aging, min=0)
 
     def update_SAF_mask(self) -> None:
         if self.stuck_at_fault:

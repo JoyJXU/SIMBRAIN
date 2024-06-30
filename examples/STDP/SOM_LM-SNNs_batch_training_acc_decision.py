@@ -339,6 +339,8 @@ for test_cnt in range(multiple_test_no):
     
             # %% plot end and update        
             network.reset_state_variables()  # Reset state variables.
+            if epoch < n_epochs - 1 or step < n_train - 1:
+                network.mem_t_update()
             pbar.set_description_str("Train progress: ")
             pbar.update()
             # pbar.update(batch_size)
