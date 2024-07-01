@@ -49,13 +49,13 @@ parser.add_argument("--update_inhibation_weights", type=int, default=500)
 parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
-parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
-parser.add_argument("--memristor_device", type=str, default='ferro') # trace: original trace
-parser.add_argument("--c2c_variation", type=bool, default=False)
+parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar
+parser.add_argument("--memristor_device", type=str, default='ideal') # trace: original trace
+parser.add_argument("--c2c_variation", type=bool, default=True)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # 0: No retention, 1: during pulse, 2: no pluse for a long time
-parser.add_argument("--aging_effect", type=int, default=2) # 0: No aging effect, 1: equation 1, 2: equation 2
+parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--input_bit", type=int, default=1)
 parser.add_argument("--ADC_precision", type=int, default=16)
 parser.add_argument("--ADC_setting", type=int, default=4)  # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
@@ -99,7 +99,7 @@ sim_params = {'device_structure': args.memristor_structure, 'device_name': args.
               'hardware_estimation': args.hardware_estimation}
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
@@ -122,7 +122,7 @@ n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
 
 # %% Multiple test
-out_root = 'Accuracy_Results_dynamic_train.txt'
+out_root = 'Accuracy_Results_preliminary.txt'
 
 # %% Load MNIST training data.
 dataset = MNIST(
@@ -153,19 +153,15 @@ test_dataloader = torch.utils.data.DataLoader(
 )
 
 for test_cnt in range(multiple_test_no):
-    out = open(out_root, 'a')
-
     # %% Enable test while training
-    init_num = 100000 # start capacity (number of training patterns)
+    init_num = 0 # start capacity (number of training patterns)
     signal_break = 0
     tmp_acc = 0
     best_acc = 0
     best_capacity = 0
     total_capacity = 0
-    patience = 500
     regular_step = 100
-    slow_step = 20
-    critical_acc = 88
+
 
     # %% Build network.
     network = IncreasingInhibitionNetwork(
@@ -312,9 +308,7 @@ for test_cnt in range(multiple_test_no):
             # %% Test while training
             network.train(mode=False)
 
-            if ((epoch * args.n_train + (step + 1) * train_batch_size) >= init_num) and \
-                    ((epoch * args.n_train + (step + 1) * train_batch_size) % (train_batch_size * regular_step) == 0 or \
-                     ((epoch * args.n_train + (step + 1) * train_batch_size) % (train_batch_size * slow_step) == 0 and tmp_acc > critical_acc)):
+            if ((epoch * args.n_train + (step + 1) * train_batch_size) >= init_num) and ((epoch * args.n_train + (step + 1) * train_batch_size) % (train_batch_size * regular_step) == 0):
                 accuracy_test = {"all": 0, "proportion": 0}
                 print("\nBegin testing while training\n")
                 for batch_test in tqdm(test_dataloader):
@@ -347,36 +341,23 @@ for test_cnt in range(multiple_test_no):
 
                 # Strategies of when to end the training
                 tmp_acc = accuracy_test["all"] * 100 / args.n_test
-                if tmp_acc > best_acc:
-                    signal_break = 0
+                if tmp_acc >= best_acc:
                     best_acc = tmp_acc
                     best_capacity = epoch * args.n_train + (step + 1) * train_batch_size
-                elif tmp_acc < critical_acc:
-                    signal_break += regular_step
-                else:
-                    signal_break += slow_step
+                total_capacity = epoch * args.n_train + (step + 1) * train_batch_size
 
                 print("\nCurrent all activity accuracy: %.4f" % (accuracy_test["all"] / args.n_test))
                 print("\nBest all activity accuracy: %.4f, Best capacity: %d, Signal break:%d.\n" % \
                       (best_acc, best_capacity, signal_break))
                 print("Testing while training complete.\n")
 
-                if signal_break >= patience:
-                    total_capacity = epoch * args.n_train + (step + 1) * train_batch_size
-                    break
-
-            total_capacity = epoch * args.n_train + (step + 1) * train_batch_size
-
-        if signal_break >= patience:
-            break
+                out = open(out_root, 'a')
+                out_txt = 'Best accuracy:' + str(best_acc) + '\tbest capacity:' + str(best_capacity) + \
+                          '\ttest accuracy:' + str(tmp_acc) + '\ttest capacity:' + str(total_capacity)  + '\n'
+                out.write(out_txt)
+                out.close()
 
     print("Best_acc: %.4f" % best_acc)
-
-    # %% output+clear
-    out_txt = 'All activity accuracy:' + str(best_acc) + '\tbest capacity:' + str(
-        best_capacity) + '\ttest capacity:' + str(total_capacity) + '\ttotal time:' + str(t() - start) + '\n'
-    out.write(out_txt)
-    out.close()
 
     del network
 
