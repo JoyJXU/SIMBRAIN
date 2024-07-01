@@ -14,7 +14,7 @@ import math
 import json
 
 import sys
-sys.path.append('../../')
+sys.path.append('../')
 
 from torchvision import transforms
 from tqdm import tqdm
@@ -25,7 +25,7 @@ from bindsnet.encoding import PoissonEncoder
 from bindsnet.models import IncreasingInhibitionNetwork
 from bindsnet.network.monitors import Monitor
 from bindsnet.evaluation import all_activity, proportion_weighting, assign_labels
-from simbrain.memristor_fit import MemristorFitting
+from Memristor_Modeling.full_fitting_flow import full_fitting
 
 # %% Argument
 parser = argparse.ArgumentParser()
@@ -95,31 +95,7 @@ n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
 
 # %% Obtain memristor parameters
-with open("../../memristor_data/sim_params.json") as f:
-    sim_params = json.load(f)
-sim_params['device_structure'] = args.memristor_structure
-sim_params['batch_interval'] = args.time * 2 + 1
-with open("../../memristor_data/my_memristor.json") as f:
-    my_memristor_r = json.load(f)
-print(json.dumps(sim_params, indent=4, separators=(',', ':')))
-
-exp = MemristorFitting(sim_params, my_memristor_r)
-
-if exp.device_name == "mine":
-    exp.mem_fitting()
-    fitting_record_w = exp.fitting_record
-else:
-    fitting_record_w = my_memristor_r
-    
-del my_memristor_r['G_off_fit']
-del my_memristor_r['G_on_fit']
-diff_1 = {k: my_memristor_r[k] for k in my_memristor_r if my_memristor_r[k] != fitting_record_w[k]}
-diff_2 = {k: fitting_record_w[k] for k in fitting_record_w if my_memristor_r[k] != fitting_record_w[k]}
-print('Before update:\n', json.dumps(diff_1, indent=4, separators=(',', ':')))
-print('After update:\n', json.dumps(diff_2, indent=4, separators=(',', ':')))
-
-with open("../../memristor_data/fitting_record.json", "w") as f:
-    json.dump(fitting_record_w, f, indent=2)
+sim_params = full_fitting(args.memristor_structure, args.time * 2 + 1)
 
 # %% Multiple test
 out_root = 'Test_Accuracy_Results.txt'

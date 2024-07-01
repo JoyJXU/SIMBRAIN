@@ -121,7 +121,7 @@ def main():
 
     ax5 = fig.add_subplot(gs[1, 0])
     ax5.set_title('Potential Curve')
-    ax5.plot(plot_x, best_curve, linewidth=10, c='r')
+    # ax5.plot(plot_x, best_curve, linewidth=10, c='r')
     for i in range(data_curve.shape[1]):
         ax5.scatter(plot_x, data_scatter[i], color='orange', s=0.5, alpha=0.5)
         # ax5.plot(plot_x, data_curve[i], color=colors[i], linewidth=0.5)

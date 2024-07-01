@@ -55,12 +55,14 @@ class AgingEffect(object):
         self.G_0_H = 1 / np.median(self.HRS[G_0_i:G_0_i + self.sampling_rate])
         self.G_0_L = 1 / np.median(self.LRS[G_0_i:G_0_i + self.sampling_rate])
 
+    # For calculating
     def equation_1(self, CYCLE, r):
         return self.G_0 * np.power(1 - r, CYCLE)
 
     def equation_2(self, CYCLE, k, b):
         return k * CYCLE + b
 
+    # For plotting
     def equation_1_log(self, CYCLE, r):
         return np.log(self.G_0) + CYCLE * np.log(1 - r)
 

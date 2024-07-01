@@ -218,8 +218,8 @@ class MemristorArray(torch.nn.Module):
         sigma_absolute = mem_info['sigma_absolute']
         retention_loss_tau = mem_info['retention_loss_tau']
         retention_loss_beta = mem_info['retention_loss_beta']
-        Aging_k_on = mem_info['Aging_k_on']
-        Aging_k_off = mem_info['Aging_k_off']
+        Aging_on = mem_info['Aging_on']
+        Aging_off = mem_info['Aging_off']
 
         self.mem_t += self.shape[0]
         self.mem_c_pre = self.mem_c.clone()
@@ -280,7 +280,7 @@ class MemristorArray(torch.nn.Module):
             self.x2.masked_fill_(self.SAF1_mask, 1)
 
         if self.aging_effect:
-            self.cal_Gon_Goff(Aging_k_on, Aging_k_off)
+            self.cal_Gon_Goff(Aging_on, Aging_off)
             self.mem_c = self.Goff_aging * self.x2 + self.Gon_aging * (1 - self.x2)
 
         elif self.d2d_variation in [1, 2]:

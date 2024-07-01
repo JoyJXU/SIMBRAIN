@@ -91,11 +91,10 @@ class Conductance(object):
                     raise Exception("Error! Out of memory!")
 
     @timer
-    def fitting(self):
+    def fitting(self, loss_option='rmse'):
         """
         Calculate parameters k and P for the baseline model.
         """
-
         if torch.cuda.is_available():
             device = torch.device("cuda")
         else:
@@ -177,7 +176,10 @@ class Conductance(object):
             # TODO: Add a fitting indicator: diff / diff_percent
             # c_r_diff_percent = (mem_c_r - conductance_r) / conductance_r
             # c_r_diff = (mem_c_r - conductance_r)
-            x_r_diff = mem_x_r_T - x_r
+            if loss_option == 'rmse':
+                x_r_diff = mem_x_r_T - x_r
+            elif loss_option == 'rrmse':
+                x_r_diff = (mem_x_r_T - x_r) / x_r
 
             INDICATOR_r_i = torch.sqrt(torch.sum(x_r_diff * x_r_diff, dim=3) / self.points_r).permute(2, 0, 1)
             for i in range(self.batch_size):
@@ -216,7 +218,10 @@ class Conductance(object):
             # c_d_diff_percent = (mem_c_d - conductance_d) / conductance_d
             # RMSE
             # c_d_diff = (mem_c_d - conductance_d)
-            x_d_diff = mem_x_d_T - x_d
+            if loss_option == 'rmse':
+                x_d_diff = mem_x_d_T - x_d
+            elif loss_option == 'rrmse':
+                x_d_diff = (mem_x_d_T - x_d) / x_d
 
             INDICATOR_d_i = torch.sqrt(torch.sum(x_d_diff * x_d_diff, dim=3) / self.points_d).permute(2, 0, 1)
             for i in range(self.batch_size):

@@ -1,16 +1,17 @@
+import os
 import json
-import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from simbrain.Fitting_Functions.iv_curve_fitting import IVCurve
 from simbrain.Fitting_Functions.conductance_fitting import Conductance
-import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
+
+# os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
 
 
 def main():
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     # Fit
     with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
@@ -30,40 +31,53 @@ def main():
             "duty_ratio": 0.5
         }
     )
-    data = pd.DataFrame(pd.read_excel(
-        "../../../memristor_data/conductance_deletehead.xlsx",
-        sheet_name=0,
-        header=None,
-        index_col=None,
-    ))
-    data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)'] + list(data.columns[2:] - 2)
+    if os.path.isfile("../../../memristor_data/G_variation.xlsx"):
+        data = pd.DataFrame(pd.read_excel(
+            "../../../memristor_data/G_variation.xlsx",
+            sheet_name='Sheet1',
+            header=None,
+            index_col=None
+        ))
+        data.columns = ['G_off', 'G_on']
+        G_off_list = np.array(data['G_off'])
+        G_on_list = np.array(data['G_on'])
+        G_off = np.mean(G_off_list)
+        G_on = np.mean(G_on_list)
+    else:
+        data = pd.DataFrame(pd.read_excel(
+            "../../../memristor_data/conductance_deletehead.xlsx",
+            sheet_name=0,
+            header=None,
+            index_col=None,
+        ))
+        data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)'] + list(data.columns[2:] - 2)
 
-    V_write = np.array(data['Pulse Voltage(V)'])
-    points_r = np.sum(V_write > 0)
-    points_d = np.sum(V_write < 0)
-    read_voltage = np.array(data['Read Voltage(V)'])[0]
+        V_write = np.array(data['Pulse Voltage(V)'])
+        points_r = np.sum(V_write > 0)
+        points_d = np.sum(V_write < 0)
+        read_voltage = np.array(data['Read Voltage(V)'])[0]
 
-    device_nums = data.shape[1] - 2
-    G_off_list = np.zeros(device_nums)
-    G_on_list = np.zeros(device_nums)
+        device_nums = data.shape[1] - 2
+        G_off_list = np.zeros(device_nums)
+        G_on_list = np.zeros(device_nums)
 
-    for i in range(device_nums):
-        G_off_list[i] = np.average(
-            data[i][points_r - 10:points_r] / read_voltage
-        )
-        G_on_list[i] = np.average(
-            data[i][points_r + points_d - 10:] / read_voltage
-        )
+        for i in range(device_nums):
+            G_off_list[i] = np.average(
+                data[i][points_r - 10:points_r] / read_voltage
+            )
+            G_on_list[i] = np.average(
+                data[i][points_r + points_d - 10:] / read_voltage
+            )
 
-    G_off = np.mean(G_off_list)
-    G_on = np.mean(G_on_list)
+        G_off = np.mean(G_off_list)
+        G_on = np.mean(G_on_list)
 
-    G_off_temp = G_off  # 1.85e-9
-    G_on_temp = G_on  # 2.8e-10
+    G_off_iv = G_off  # 1.85e-9
+    G_on_iv = G_on  # 2.8e-10
     dict.update(
         {
-            'G_off': G_off_temp,
-            'G_on': G_on_temp
+            'G_off': G_off_iv,
+            'G_on': G_on_iv
         }
     )
 
@@ -74,14 +88,14 @@ def main():
         }
     )
 
-    file = "../../../memristor_data/iv_curve.xlsx"
+    file = "../../../memristor_data/iv_curve_.xlsx"
     if os.path.isfile(file):
         print('Going through IV curve fitting process')
         exp_1 = IVCurve(file, dict)
         alpha_off, alpha_on = exp_1.fitting()
     else:
         print('No IV curve data!')
-        alpha_off, alpha_on = 5, 5 # TODO: change default setting
+        alpha_off, alpha_on = 5, 5  # TODO: change default setting
 
     dict.update(
         {
@@ -96,11 +110,10 @@ def main():
 
     file = "../../../memristor_data/conductance_deletehead.xlsx"
     exp_2 = Conductance(file, dict)
-    P_off, P_on, k_off, k_on, _ = exp_2.fitting()
+    loss = 'rmse'
+    P_off, P_on, k_off, k_on, _ = exp_2.fitting(loss_option=loss)
     dict.update(
         {
-            # 'G_off': G_off_temp,
-            # 'G_on': G_on_temp,
             "P_off": P_off,
             "P_on": P_on,
             "k_off": k_off,
@@ -215,26 +228,45 @@ def main():
     x_r = (conductance_r - exp_2.G_on) / (G_off - exp_2.G_on)
     x_d = (conductance_d - exp_2.G_on) / (G_off - exp_2.G_on)
     x = np.concatenate((x_r, x_d))
-    df_e = pd.DataFrame(
-        {
-            'value': [
-                np.min(exp_2.loss_r.numpy()),
-                np.min(exp_2.loss_d.numpy()),
-                exp_2.loss.numpy(),
-                np.min(exp_2.loss_r.numpy()) / (np.max(x_r) - np.min(x_r)),
-                np.min(exp_2.loss_d.numpy()) / (np.max(x_d) - np.min(x_d)),
-                exp_2.loss.numpy() / (np.max(x) - np.min(x))
-            ]
-        },
-        index=['RMSE_r', 'RMSE_d', 'RMSE', 'RRMSE_r', 'RRMSE_d', 'RRMSE']
-    )
-    print(df_e)
+    if loss == 'rmse':
+        df_e = pd.DataFrame(
+            {
+                'value': [
+                    np.min(exp_2.loss_r.numpy()),
+                    np.min(exp_2.loss_d.numpy()),
+                    exp_2.loss.numpy(),
+                    np.min(exp_2.loss_r.numpy()) / (np.max(x_r) - np.min(x_r)),
+                    np.min(exp_2.loss_d.numpy()) / (np.max(x_d) - np.min(x_d)),
+                    exp_2.loss.numpy() / (np.max(x) - np.min(x))
+                ]
+            },
+            index=['RMSE_r', 'RMSE_d', 'RMSE', 'RRMSE_r', 'RRMSE_d', 'RRMSE']
+        )
+        print(df_e)
+    elif loss == 'rrmse':
+        df_e = pd.DataFrame(
+            {
+                'value': [
+                    np.min(exp_2.loss_r.numpy()),
+                    np.min(exp_2.loss_d.numpy()),
+                    exp_2.loss.numpy(),
+                ]
+            },
+            index=['RRMSE_r', 'RRMSE_d', 'RRMSE']
+        )
+        print(df_e)
 
     # Plot
     fig = plt.figure(figsize=(12, 5.4))
 
     file = "../../../memristor_data/iv_curve.xlsx"
     if os.path.isfile(file):
+        dict.update(
+            {
+                'G_off': G_off_iv,
+                'G_on': G_on_iv
+            }
+        )
         x_init = (exp_1.current[0] / exp_1.voltage[0] - exp_1.G_on) / (exp_1.G_off - exp_1.G_on)
         x_init = x_init if x_init > 0 else 0
         x_init = x_init if x_init < 1 else 1
@@ -248,22 +280,23 @@ def main():
         ax1.set_ylabel('Current (A)')
         ax1.set_title('I-V Curve')
 
-    dict.update(
-        {
-            'G_off': G_off,
-            'G_on': G_on
-        }
-    )
-
-    plot_x = np.arange(exp_2.points_r + exp_2.points_d)
-    ax2 = fig.add_subplot(122)
-    ax2.set_title('Conductance Curve')
-    ax2.plot(plot_x, memx_total, c='b')
-    for i in range(exp_2.device_nums):
-        ax2.scatter(plot_x, x_total.T[i], c='r', s=0.1, alpha=0.3)
-    ax2.set_xlabel('points')
-    ax2.set_ylabel('x')
-    ax2.set_title('Conductance Curve')
+    file = "../../../memristor_data/conductance_deletehead.xlsx"
+    if os.path.isfile(file):
+        dict.update(
+            {
+                'G_off': G_off,
+                'G_on': G_on
+            }
+        )
+        plot_x = np.arange(exp_2.points_r + exp_2.points_d)
+        ax2 = fig.add_subplot(122)
+        ax2.set_title('Conductance Curve')
+        ax2.plot(plot_x, memx_total, c='b')
+        for i in range(exp_2.device_nums):
+            ax2.scatter(plot_x, x_total.T[i], c='r', s=0.1, alpha=0.3)
+        ax2.set_xlabel('points')
+        ax2.set_ylabel('x')
+        ax2.set_title('Conductance Curve')
 
     plt.tight_layout()
     plt.savefig("Baseline Model.png", dpi=300, bbox_inches='tight')

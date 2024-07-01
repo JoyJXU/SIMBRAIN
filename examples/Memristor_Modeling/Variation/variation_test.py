@@ -1,3 +1,4 @@
+import os
 import json
 import sys
 import numpy as np
@@ -10,6 +11,7 @@ sys.path.append('../../../')
 
 
 def main():
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     # Fit
     with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
@@ -118,7 +120,7 @@ def main():
             "Pon_sigma": Poff_sigma
         }
     )
-    sigma_relative, sigma_absolute = exp.c2c_fitting()
+    sigma_relative, sigma_absolute = exp.c2c_fitting(cluster_option='ew')
     dict.update(
         {
             "sigma_relative": sigma_relative,

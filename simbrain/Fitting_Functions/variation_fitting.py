@@ -134,7 +134,7 @@ class Variation(object):
         return Poff_mu, Poff_sigma, Pon_mu, Pon_sigma
 
     @timer
-    def c2c_fitting(self):
+    def c2c_fitting(self, cluster_option='ef'):
         # Conductance from devices
         current_r = np.array(self.data[:])[:self.points_r, 2:]
         current_d = np.array(self.data[:])[self.points_r:, 2:]
@@ -199,55 +199,72 @@ class Variation(object):
         x_sorted = np.array([i[0] for i in var_x_complex])
         var_x_sorted = np.array([i[1] for i in var_x_complex])
 
-        # group_no = max(10, int((len(x_total)/5)**0.5))
-        # print('Group number:{}'.format(group_no))
-        #
-        # # Group with pulse number
-        # total_points = (self.points_r + self.points_d) * self.device_nums
-        # every_points = math.ceil(total_points / group_no)
-        #
-        # x_mean = []
-        # var_x_median = []
-        # var_x_average = []
-        # for i in range(group_no):
-        #     temp_x_mean = np.mean(x_sorted[every_points * i:(every_points * (i + 1))])
-        #     temp_var_median = np.median(var_x_sorted[every_points * i:(every_points * (i + 1))])
-        #     temp_var_average = np.mean(var_x_sorted[every_points * i:(every_points * (i + 1))])
-        #     x_mean.append(temp_x_mean ** 2)
-        #     var_x_median.append(temp_var_median ** 2)
-        #     var_x_average.append(temp_var_average ** 2)
+        if cluster_option == 'ef':
+            group_no = max(10, int((len(x_total)/5)**0.5))
+            print('Group number:{}'.format(group_no))
 
-        # z1 = np.polyfit(x_mean, var_x_median, 1)
-        # p1 = np.poly1d(z1)
-        # print(p1)
+            # Group with pulse number
+            total_points = (self.points_r + self.points_d) * self.device_nums
+            every_points = math.ceil(total_points / group_no)
 
-        group = 10
-        segments = np.linspace(0, 1, group + 1)
-        x_mean = np.zeros(group)
-        variation_mean = np.zeros(group)
-        for i in range(group):
-            if i == group - 1:
-                mask = (x_sorted >= segments[i]) & (x_sorted <= segments[i + 1])
-            else:
-                mask = (x_sorted >= segments[i]) & (x_sorted < segments[i + 1])
+            x_mean = []
+            var_x_median = []
+            var_x_average = []
+            for i in range(group_no):
+                temp_x_mean = np.mean(x_sorted[every_points * i:(every_points * (i + 1))])
+                temp_var_median = np.median(var_x_sorted[every_points * i:(every_points * (i + 1))])
+                temp_var_average = np.mean(var_x_sorted[every_points * i:(every_points * (i + 1))])
+                x_mean.append(temp_x_mean ** 2)
+                var_x_median.append(temp_var_median ** 2)
+                var_x_average.append(temp_var_average ** 2)
 
-            x_mean[i] = np.mean(x_sorted[mask])
-            variation_mean[i] = np.mean(var_x_sorted[mask])
+            z1 = np.polyfit(x_mean, var_x_median, 1)
+            p1 = np.poly1d(z1)
 
-        z2 = np.polyfit(np.square(x_mean), np.square(variation_mean), 1)
-        p2 = np.poly1d(z2)
-        print(p2)
+            self.x_mean = x_mean
+            self.var_x_average = var_x_median
+            self.memx_total = best_memx_total
+            self.variation_x = variation_x
 
-        self.x_mean = x_mean
-        self.var_x_average = variation_mean
-        self.memx_total = best_memx_total
-        self.variation_x = variation_x
+            sigma_relative = math.sqrt(abs(z1[0]) * math.pi / 2)
+            sigma_absolute = math.sqrt(abs(z1[1]) * math.pi / 2)
 
-        sigma_relative = math.sqrt(abs(z2[0]) * math.pi / 2)
-        sigma_absolute = math.sqrt(abs(z2[1]) * math.pi / 2)
+            SSR = np.sum(np.square(var_x_median - (z1[0] * np.square(x_mean) + z1[1])))
+            SST = np.sum(np.square(var_x_median - np.mean(var_x_median)))
+            self.R_square = 1 - SSR / SST
 
-        SSR = np.sum(np.square(np.square(variation_mean) - (z2[0] * np.square(x_mean) + z2[1])))
-        SST = np.sum(np.square(np.square(variation_mean) - np.mean(np.square(variation_mean))))
-        self.R_square = 1 - SSR / SST
+        elif cluster_option == 'ew':
+            group = 10
+            segments = np.linspace(0, 1, group + 1)
+            x_mean = np.zeros(group)
+            variation_mean = np.zeros(group)
+            for i in range(group):
+                if i == group - 1:
+                    mask = (x_sorted >= segments[i]) & (x_sorted <= segments[i + 1])
+                else:
+                    mask = (x_sorted >= segments[i]) & (x_sorted < segments[i + 1])
+
+                x_mean[i] = np.mean(x_sorted[mask])
+                variation_mean[i] = np.mean(var_x_sorted[mask])
+
+            z1 = np.polyfit(np.square(x_mean), np.square(variation_mean), 1)
+            p1 = np.poly1d(z1)
+
+            self.x_mean = x_mean
+            self.var_x_average = variation_mean
+            self.memx_total = best_memx_total
+            self.variation_x = variation_x
+
+            sigma_relative = math.sqrt(abs(z1[0]) * math.pi / 2)
+            sigma_absolute = math.sqrt(abs(z1[1]) * math.pi / 2)
+
+            SSR = np.sum(np.square(np.square(variation_mean) - (z1[0] * np.square(x_mean) + z1[1])))
+            SST = np.sum(np.square(np.square(variation_mean) - np.mean(np.square(variation_mean))))
+            self.R_square = 1 - SSR / SST
+
+        else:
+            print('You have not specified a clustering method')
+            sigma_relative = 1
+            sigma_absolute = 1
 
         return sigma_relative, sigma_absolute
