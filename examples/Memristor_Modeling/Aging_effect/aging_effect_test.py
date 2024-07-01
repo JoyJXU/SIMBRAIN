@@ -9,10 +9,6 @@ from simbrain.Fitting_Functions.aging_effect_fitting import AgingEffect
 
 
 def main():
-    aging_effect_option = 1
-    if aging_effect_option:
-        shutil.copy("../../../reference_memristor_data/aging_effect.xlsx",
-                    "../../../memristor_data/aging_effect.xlsx")
     # Fit
     with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
