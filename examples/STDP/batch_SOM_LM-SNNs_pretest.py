@@ -51,7 +51,7 @@ parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar
 parser.add_argument("--memristor_device", type=str, default='ideal') # trace: original trace
-parser.add_argument("--c2c_variation", type=bool, default=True)
+parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # 0: No retention, 1: during pulse, 2: no pluse for a long time
@@ -122,7 +122,7 @@ n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
 
 # %% Multiple test
-out_root = 'Accuracy_Results_preliminary.txt'
+out_root = 'Accuracy_Results_pretest.txt'
 
 # %% Load MNIST training data.
 dataset = MNIST(
