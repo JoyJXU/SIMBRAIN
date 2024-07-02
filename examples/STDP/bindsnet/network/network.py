@@ -258,7 +258,7 @@ class Network(torch.nn.Module):
 
 
     def run(
-        self, inputs: Dict[str, torch.Tensor], time: int, init_batch_sign: bool, one_step=False, **kwargs
+        self, inputs: Dict[str, torch.Tensor], time: int, init_batch_sign=True, one_step=False, **kwargs
     ) -> None:
         # language=rst
         """
