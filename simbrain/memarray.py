@@ -239,7 +239,7 @@ class MemristorArray(torch.nn.Module):
 
         self.mem_t += self.shape[0]
         self.mem_c_pre = self.mem_c.clone()
-
+        # print(self.mem_t)
         if self.d2d_variation in [1, 3]:
             self.mem_x = torch.where(mem_v >= v_off, \
                                      self.mem_x + self.dt * self.dr * (k_off * (mem_v / v_off - 1) ** alpha_off) * ( \

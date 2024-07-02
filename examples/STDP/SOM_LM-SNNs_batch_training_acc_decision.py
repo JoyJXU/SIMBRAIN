@@ -93,7 +93,7 @@ sim_params = {'device_structure': args.memristor_structure, 'device_name': args.
               'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
               'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
-              'batch_interval': 1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
+              'batch_interval': 2*args.time+1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
               'ADC_setting': args.ADC_setting,'ADC_rounding_function': args.ADC_rounding_function,
               'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
               'hardware_estimation': args.hardware_estimation}
