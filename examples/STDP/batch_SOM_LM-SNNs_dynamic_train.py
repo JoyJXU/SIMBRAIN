@@ -347,7 +347,7 @@ for test_cnt in range(multiple_test_no):
 
                 # Strategies of when to end the training
                 tmp_acc = accuracy_test["all"] * 100 / args.n_test
-                if tmp_acc > best_acc:
+                if tmp_acc >= best_acc:
                     signal_break = 0
                     best_acc = tmp_acc
                     best_capacity = epoch * args.n_train + (step + 1) * train_batch_size

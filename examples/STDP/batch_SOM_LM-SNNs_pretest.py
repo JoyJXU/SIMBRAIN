@@ -93,7 +93,7 @@ sim_params = {'device_structure': args.memristor_structure, 'device_name': args.
               'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
               'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
-              'batch_interval': 1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
+              'batch_interval': args.time*2+1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
               'ADC_setting': args.ADC_setting,'ADC_rounding_function': args.ADC_rounding_function,
               'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
               'hardware_estimation': args.hardware_estimation}
@@ -161,7 +161,7 @@ for test_cnt in range(multiple_test_no):
     best_capacity = 0
     total_capacity = 0
     regular_step = 100
-
+    init_batch_sign = True
 
     # %% Build network.
     network = IncreasingInhibitionNetwork(
@@ -286,7 +286,7 @@ for test_cnt in range(multiple_test_no):
 
             # Run the network on the input.
             temp_spikes = 0
-            network.run(inputs=inputs, time=time, input_time_dim=1)
+            network.run(inputs=inputs, time=time, input_time_dim=1, init_batch_sign=init_batch_sign)
             temp_spikes = spikes["Y"].get("s").permute((1, 0, 2))
 
             # Get voltage recording.
@@ -300,10 +300,9 @@ for test_cnt in range(multiple_test_no):
 
             # %% Update
             network.reset_state_variables()  # Reset state variables.
-            if epoch < n_epochs - 1 or step < n_train - 1:
-                network.mem_t_update()
             pbar.set_description_str("Train progress: ")
             pbar.update()
+            init_batch_sign = False
 
             # %% Test while training
             network.train(mode=False)
@@ -316,7 +315,7 @@ for test_cnt in range(multiple_test_no):
                     inputs_test = {"X": batch_test["encoded_image"].transpose(0, 1).to(device)}
 
                     # Run the network on the input.
-                    network.run(inputs=inputs_test, time=time, input_time_dim=1)
+                    network.run(inputs=inputs_test, time=time, input_time_dim=1, init_batch_sign=True)
 
                     spike_record_test = spikes["Y"].get("s").transpose(0, 1)
                     label_tensor_test = torch.tensor(batch_test["label"], device=device)
@@ -356,6 +355,10 @@ for test_cnt in range(multiple_test_no):
                           '\ttest accuracy:' + str(tmp_acc) + '\ttest capacity:' + str(total_capacity)  + '\n'
                 out.write(out_txt)
                 out.close()
+
+            network.train(mode=True)
+            network.mem_t_update()
+            total_capacity = epoch * args.n_train + (step + 1) * train_batch_size
 
     print("Best_acc: %.4f" % best_acc)
 
