@@ -51,7 +51,8 @@ parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar
 parser.add_argument("--memristor_device", type=str, default='ideal') # trace: original trace
-parser.add_argument("--c2c_variation", type=bool, default=True)
+parser.add_argument("--limited_states", type=int, default=4) 
+parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
 parser.add_argument("--retention_loss", type=int, default=0) # 0: No retention, 1: during pulse, 2: no pluse for a long time
@@ -90,7 +91,7 @@ plot = args.plot
 gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
 sim_params = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
-              'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
+              'limited_states':args.limited_states,'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
               'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
               'batch_interval': 1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
@@ -99,7 +100,7 @@ sim_params = {'device_structure': args.memristor_structure, 'device_name': args.
               'hardware_estimation': args.hardware_estimation}
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
@@ -161,6 +162,7 @@ for test_cnt in range(multiple_test_no):
     best_capacity = 0
     total_capacity = 0
     regular_step = 100
+    init_batch_sign = True
 
 
     # %% Build network.
@@ -286,7 +288,7 @@ for test_cnt in range(multiple_test_no):
 
             # Run the network on the input.
             temp_spikes = 0
-            network.run(inputs=inputs, time=time, input_time_dim=1)
+            network.run(inputs=inputs, time=time, input_time_dim=1, init_batch_sign=init_batch_sign)
             temp_spikes = spikes["Y"].get("s").permute((1, 0, 2))
 
             # Get voltage recording.
@@ -302,6 +304,7 @@ for test_cnt in range(multiple_test_no):
             network.reset_state_variables()  # Reset state variables.
             if epoch < n_epochs - 1 or step < n_train - 1:
                 network.mem_t_update()
+            init_batch_sign=False
             pbar.set_description_str("Train progress: ")
             pbar.update()
 
@@ -316,7 +319,7 @@ for test_cnt in range(multiple_test_no):
                     inputs_test = {"X": batch_test["encoded_image"].transpose(0, 1).to(device)}
 
                     # Run the network on the input.
-                    network.run(inputs=inputs_test, time=time, input_time_dim=1)
+                    network.run(inputs=inputs_test, time=time, input_time_dim=1, init_batch_sign=True)
 
                     spike_record_test = spikes["Y"].get("s").transpose(0, 1)
                     label_tensor_test = torch.tensor(batch_test["label"], device=device)

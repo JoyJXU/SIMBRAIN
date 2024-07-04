@@ -3,6 +3,8 @@ from simbrain.mempower import Power
 from simbrain.memarea import Area
 import torch
 import json
+import xlrd2
+import math
 
 class MemristorArray(torch.nn.Module):
     # language=rst
@@ -41,6 +43,7 @@ class MemristorArray(torch.nn.Module):
         self.stuck_at_fault = sim_params['stuck_at_fault']
         self.retention_loss = sim_params['retention_loss']
         self.aging_effect = sim_params['aging_effect']
+        self.limited_states = sim_params['limited_states']
     
         if self.c2c_variation:
             self.register_buffer("normal_absolute", torch.Tensor())
@@ -74,6 +77,10 @@ class MemristorArray(torch.nn.Module):
             self.register_buffer("SAF0_mask", torch.Tensor())
             self.register_buffer("SAF1_mask", torch.Tensor())
             self.register_buffer("Q_mask", torch.Tensor())
+        
+        if self.limited_states < 128:
+            self.register_buffer("mem_x_lut", torch.Tensor())
+            self.register_buffer("mem_x_threshold", torch.Tensor())            
 
         self.memristor_info_dict = memristor_info_dict
         self.dt = self.memristor_info_dict[self.device_name]['delta_t']
@@ -207,6 +214,19 @@ class MemristorArray(torch.nn.Module):
             self.mem_v_threshold = torch.zeros(batch_size, *self.shape, device=self.mem_v_threshold.device)
             self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
 
+        if self.limited_states < 128:
+            states_file = "../../STDP_limited_states.xlsx"
+            xlfile = xlrd2.open_workbook(states_file)
+            xlsheet = xlfile.sheet_by_name("sheet1")
+            mem_x_lut = []
+            mem_x_threshold = []
+            for i in range(self.limited_states):
+                mem_x_lut.append(xlsheet.cell(i, int(3 * math.log(self.limited_states,2) - 2)).value)
+            for i in range(self.limited_states):
+                mem_x_threshold.append(xlsheet.cell(i, int(3 * math.log(self.limited_states,2) - 3)).value)
+            self.mem_x_lut = torch.tensor(mem_x_lut, device=self.mem_x.device)
+            self.mem_x_threshold = torch.tensor(mem_x_threshold, device=self.mem_x.device)
+                
         if self.hardware_estimation:
             self.power.set_batch_size(batch_size=self.batch_size)
 
@@ -260,6 +280,12 @@ class MemristorArray(torch.nn.Module):
     
         self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
     
+        if self.limited_states < 128:
+            mem_x_threshold = self.mem_x_threshold.unsqueeze(0).unsqueeze(0).unsqueeze(0)
+            mask = (self.mem_x.unsqueeze(-1) <= mem_x_threshold)
+            index = torch.sum(mask,dim=3) - 1
+            self.mem_x = self.mem_x_lut[index]
+
         # Retention Loss
         if self.retention_loss == 1:
             # G(t) = G(0) * e^(- t*tau)^beta                      

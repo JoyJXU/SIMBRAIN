@@ -168,7 +168,25 @@ class STDPMapping(Mapping):
                 ori_trace[i + 1] = 1
 
         # Memristor-based Trace
-        test_array = MemristorArray(sim_params=self.sim_params, shape=(1, 1), memristor_info_dict=self.memristor_info_dict)
+        test_sim_params = {'device_structure': self.sim_params['device_structure'],
+                   'device_name': self.sim_params['device_name'],
+                   'limited_states':128,
+                   'c2c_variation': False,
+                   'd2d_variation': 0,
+                   'stuck_at_fault': False,
+                   'retention_loss': 0,
+                   'aging_effect': 0,
+                   'wire_width': self.sim_params['wire_width'],
+                   'input_bit': self.sim_params['input_bit'],
+                   'batch_interval': self.sim_params['batch_interval'],
+                   'CMOS_technode': self.sim_params['CMOS_technode'],
+                   'ADC_precision': self.sim_params['ADC_precision'],
+                   'ADC_setting': self.sim_params['ADC_setting'],
+                   'ADC_rounding_function': self.sim_params['ADC_rounding_function'],
+                   'device_roadmap': self.sim_params['device_roadmap'],
+                   'temperature': self.sim_params['temperature'],
+                   'hardware_estimation': self.sim_params['hardware_estimation']}
+        test_array = MemristorArray(sim_params=test_sim_params, shape=(1, 1), memristor_info_dict=self.memristor_info_dict)
         test_array.set_batch_size(batch_size=1)
         mem_info = self.memristor_info_dict[self.device_name]
 

@@ -51,6 +51,7 @@ parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
 parser.add_argument("--memristor_device", type=str, default='ideal') # trace: original trace
+parser.add_argument("--limited_states", type=int, default=2)
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
@@ -90,7 +91,7 @@ plot = args.plot
 gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
 sim_params = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
-              'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
+              'limited_states':args.limited_states, 'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
               'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
               'batch_interval': args.time*2+1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
