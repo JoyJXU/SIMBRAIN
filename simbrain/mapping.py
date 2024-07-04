@@ -325,8 +325,7 @@ class STDPMapping(Mapping):
         Abstract base class method for resetting state variables.
         """
         v_reset = self.memristor_luts[self.device_name]['V_reset']
-        self.mem_v.fill_(v_reset)
-        
+        self.mem_v.fill_(v_reset)       
         # Adopt large negative pulses to reset the memristor array
         self.mem_array.memristor_write(mem_v=self.mem_v)
 

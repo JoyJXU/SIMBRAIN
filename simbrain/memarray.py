@@ -58,7 +58,7 @@ class MemristorArray(torch.nn.Module):
             self.register_buffer("SAF0_mask", torch.Tensor())
             self.register_buffer("SAF1_mask", torch.Tensor())
             
-        if self.retention_loss == 2:
+        if self.retention_loss:
             self.register_buffer("mem_v_threshold", torch.Tensor())
             self.register_buffer("mem_loss_time", torch.Tensor())  
         
@@ -203,7 +203,7 @@ class MemristorArray(torch.nn.Module):
             self.SAF0_mask = self.Q_mask < ((SAF_ratio / (SAF_ratio + 1)) * SAF_lambda)
             self.SAF1_mask = (self.Q_mask >= ((SAF_ratio / (SAF_ratio + 1)) * SAF_lambda)) & (self.Q_mask < SAF_lambda)
 
-        if self.retention_loss == 2:
+        if self.retention_loss:
             self.mem_v_threshold = torch.zeros(batch_size, *self.shape, device=self.mem_v_threshold.device)
             self.mem_loss_time = torch.zeros(batch_size, *self.shape, device=self.mem_loss_time.device)
 
@@ -232,7 +232,7 @@ class MemristorArray(torch.nn.Module):
         G_on = mem_info['G_on']
         sigma_relative = mem_info['sigma_relative']
         sigma_absolute = mem_info['sigma_absolute']
-        retention_loss_tau = mem_info['retention_loss_tau']
+        retention_loss_tau_reciprocal = mem_info['retention_loss_tau_reciprocal']
         retention_loss_beta = mem_info['retention_loss_beta']
         Aging_on = mem_info['Aging_on']
         Aging_off = mem_info['Aging_off']
@@ -261,23 +261,12 @@ class MemristorArray(torch.nn.Module):
         self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
     
         # Retention Loss
-        if self.retention_loss == 1:
-            # G(t) = G(0) * e^(- t*tau)^beta                      
-            self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-            self.mem_x *= torch.exp(torch.tensor(-((1 - self.dr) * self.dt * retention_loss_tau) ** retention_loss_beta))
-            self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
-            self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
-            # tau = 0.012478 , beta = 1.066  or  tau = 0.01245 , beta = 1.073
-            
-        if self.retention_loss == 2:
-            # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)                    
+        if self.retention_loss:                   
             self.mem_v_threshold = torch.where((mem_v > v_on) & (mem_v < v_off), torch.zeros_like(mem_v), torch.ones_like(mem_v))
             self.mem_loss_time[self.mem_v_threshold == 0] += self.dt
-            self.mem_loss_time[self.mem_v_threshold == 1] = 0         
-            self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-            self.mem_x -= self.mem_x * self.dt * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
-            self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
-            self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
+            self.mem_loss_time[self.mem_v_threshold == 1] = (1 - self.dr) * self.dt         
+            self.mem_x -= self.mem_x * (1 - self.dr) * self.dt * (retention_loss_tau_reciprocal ** retention_loss_beta) * retention_loss_beta * (self.mem_loss_time ** (retention_loss_beta - 1))
+            self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
     
         if self.c2c_variation:
             self.normal_relative.normal_(mean=0., std=sigma_relative)
@@ -343,31 +332,16 @@ class MemristorArray(torch.nn.Module):
         v_on = mem_info['v_on']
         G_off = mem_info['G_off']
         G_on = mem_info['G_on']
-        retention_loss_tau = mem_info['retention_loss_tau']
+        retention_loss_tau_reciprocal = mem_info['retention_loss_tau_reciprocal']
         retention_loss_beta = mem_info['retention_loss_beta']
         Aging_on = mem_info['Aging_on']
         Aging_off = mem_info['Aging_off']
 
-        if self.retention_loss == 1:
-            # G(t) = G(0) * e^(- t*tau)^beta
-            self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-            self.mem_x *= torch.exp(
-                torch.tensor(-((1 - self.dr) * self.dt * retention_loss_tau) ** retention_loss_beta))
-            self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
-            self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
-            # tau = 0.012478 , beta = 1.066  or  tau = 0.01245 , beta = 1.073
-
-        if self.retention_loss == 2:
-            # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)
-            self.mem_v_threshold = torch.where((mem_v > v_on) & (mem_v < v_off), torch.zeros_like(mem_v),
-                                               torch.ones_like(mem_v))
-            self.mem_loss_time[self.mem_v_threshold == 0] += self.dt
-            self.mem_loss_time[self.mem_v_threshold == 1] = 0
-            self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-            self.mem_x -= self.mem_x * self.dt * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (
+        if self.retention_loss:
+            self.mem_loss_time += self.dt
+            self.mem_x -= self.mem_x * self.dt * retention_loss_tau_reciprocal ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (
                         retention_loss_beta - 1)
-            self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
-            self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
+            self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
 
         if self.c2c_variation:
             device_v = torch.mul(self.mem_x, self.normal_relative) + self.normal_absolute
@@ -420,7 +394,7 @@ class MemristorArray(torch.nn.Module):
         G_on = mem_info['G_on']
         sigma_relative = mem_info['sigma_relative']
         sigma_absolute = mem_info['sigma_absolute']
-        retention_loss_tau = mem_info['retention_loss_tau']
+        retention_loss_tau_reciprocal = mem_info['retention_loss_tau_reciprocal']
         retention_loss_beta = mem_info['retention_loss_beta']
         Aging_on = mem_info['Aging_on']
         Aging_off = mem_info['Aging_off']
@@ -449,25 +423,14 @@ class MemristorArray(torch.nn.Module):
         self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
 
         # Retention Loss
-        if self.retention_loss == 1:
-            # G(t) = G(0) * e^(- t*tau)^beta
-            self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-            self.mem_x *= torch.exp(torch.tensor(-((1 - self.dr) * self.dt * retention_loss_tau) ** retention_loss_beta))
-            self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
-            self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
-            # tau = 0.012478 , beta = 1.066  or  tau = 0.01245 , beta = 1.073
-
-        if self.retention_loss == 2:
-            # dG(t)/dt = - tau^beta * beta * G(t) * t ^ (beta - 1)
+        if self.retention_loss:
             self.mem_v_threshold = torch.where((mem_v > v_on) & (mem_v < v_off), torch.zeros_like(mem_v),
                                                torch.ones_like(mem_v))
             self.mem_loss_time[self.mem_v_threshold == 0] += self.dt
-            self.mem_loss_time[self.mem_v_threshold == 1] = 0
-            self.mem_x = G_off * self.mem_x + G_on * (1 - self.mem_x)
-            self.mem_x -= self.mem_x * self.dt * retention_loss_tau ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (
+            self.mem_loss_time[self.mem_v_threshold == 1] = (1 - self.dr) * self.dt
+            self.mem_x -= self.mem_x * self.dt * retention_loss_tau_reciprocal ** retention_loss_beta * retention_loss_beta * self.mem_loss_time ** (
                         retention_loss_beta - 1)
-            self.mem_x = torch.clamp(self.mem_x, min=G_on, max=G_off)
-            self.mem_x = (self.mem_x - G_on) / (G_off - G_on)
+            self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
 
         if self.c2c_variation:
             self.normal_relative.normal_(mean=0., std=sigma_relative)
