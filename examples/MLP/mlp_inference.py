@@ -18,11 +18,11 @@ parser.add_argument("--rep", type=int, default=10)
 parser.add_argument("--batch_size", type=int, default=100)
 parser.add_argument('--data_root', default='data/', help='folder to save the model')
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
-parser.add_argument("--memristor_device", type=str, default='ferro') # ideal, ferro, or hu
+parser.add_argument("--memristor_device", type=str, default='ideal') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
-parser.add_argument("--retention_loss", type=bool, default=True) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
+parser.add_argument("--retention_loss", type=bool, default=False) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
 parser.add_argument("--input_bit", type=int, default=8)
 parser.add_argument("--ADC_precision", type=int, default=8)

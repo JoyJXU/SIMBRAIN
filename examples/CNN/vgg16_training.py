@@ -27,7 +27,7 @@ parser.add_argument("--train_batch_size", type=int, default=200)
 parser.add_argument("--test_batch_size", type=int, default=100)
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
-parser.add_argument("--memristor_device", type=str, default='new_ferro') # ideal, ferro, or hu
+parser.add_argument("--memristor_device", type=str, default='ideal') # ideal, ferro, or hu
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
