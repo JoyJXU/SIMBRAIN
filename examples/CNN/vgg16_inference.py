@@ -38,7 +38,7 @@ parser.add_argument("--wire_width", type=int, default=200) # In practice, wire_w
 parser.add_argument("--CMOS_technode", type=int, default=32)
 parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--hardware_estimation", type=int, default=True)
+parser.add_argument("--hardware_estimation", type=int, default=False)
 args = parser.parse_args()
 
 # Sets up Gpu use
@@ -60,7 +60,8 @@ sim_params = {'device_structure': args.memristor_structure, 'device_name': args.
               'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
               'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
-              'batch_interval': 1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
+              'batch_interval': 1, 'write_batch_interval': 1, 
+              'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
               'ADC_setting': args.ADC_setting,'ADC_rounding_function': args.ADC_rounding_function,
               'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
               'hardware_estimation': args.hardware_estimation}
@@ -127,13 +128,13 @@ for test_cnt in range(args.rep):
     # Memristor write
     for layer in net.features.children():
         if isinstance(layer, Mem_Conv2d):
+            layer.mem_update()
             if args.stuck_at_fault == True:
                 layer.crossbar.update_SAF_mask()
-            layer.mem_update()
     if isinstance(net.classifier, Mem_Linear):
+        net.classifier.mem_update()
         if args.stuck_at_fault == True:
             net.classifier.crossbar.update_SAF_mask()
-        net.classifier.mem_update()
 
 
     net = net.to(device)

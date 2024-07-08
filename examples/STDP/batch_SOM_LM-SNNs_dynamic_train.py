@@ -93,7 +93,8 @@ sim_params = {'device_structure': args.memristor_structure, 'device_name': args.
               'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
               'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
-              'batch_interval': args.time*2+1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
+              'batch_interval': args.time*2+1, 'write_batch_interval':args.time+1,
+              'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
               'ADC_setting': args.ADC_setting,'ADC_rounding_function': args.ADC_rounding_function,
               'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
               'hardware_estimation': args.hardware_estimation}
@@ -365,7 +366,10 @@ for test_cnt in range(multiple_test_no):
                     total_capacity = epoch * args.n_train + (step + 1) * train_batch_size
                     break
             network.train(mode=True)
-            network.mem_t_update()
+            if (sim_params['device_name'] != 'trace' and network.learning):
+                for l in network.layers:
+                    network.layers[l].update_SAF_mask()
+                network.mem_t_update()
             total_capacity = epoch * args.n_train + (step + 1) * train_batch_size
         if signal_break >= patience:
             break

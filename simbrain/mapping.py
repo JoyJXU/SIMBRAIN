@@ -51,6 +51,7 @@ class Mapping(torch.nn.Module):
         self.register_buffer("mem_v", torch.Tensor())
         self.register_buffer("mem_x_read", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
+        self.register_buffer("mem_wr_t", torch.Tensor())
 
         with open('../../memristor_device_info.json', 'r') as f:
             self.memristor_info_dict = json.load(f)
@@ -89,6 +90,7 @@ class Mapping(torch.nn.Module):
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.mem_x_read = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_x_read.device)
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+        self.mem_wr_t = torch.zeros(batch_size, *self.shape, device=self.mem_wr_t.device)       
 
 
 class STDPMapping(Mapping):
@@ -121,6 +123,7 @@ class STDPMapping(Mapping):
         self.ADC_module = ADC_Module(sim_params=sim_params, shape=self.shape,
                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
         self.batch_interval = sim_params['batch_interval']
+        self.write_batch_interval = sim_params['write_batch_interval']
 
         self.register_buffer("mem_v_read", torch.Tensor())
         self.register_buffer("x", torch.Tensor())
@@ -144,10 +147,14 @@ class STDPMapping(Mapping):
         if self.learning:
             mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
             self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
+            mem_wr_t_matrix = (self.write_batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
+            self.mem_wr_t[:, :, :] = mem_wr_t_matrix.view(-1, 1, 1)            
         else:
             self.mem_t.fill_(torch.min(self.mem_t_batch_update[:]))
-
+            self.mem_wr_t.fill_(torch.min(self.mem_wr_t_batch_update[:]))
+            
         self.mem_array.mem_t = self.mem_t
+        self.mem_array.mem_wr_t = self.mem_wr_t
 
 
     def voltage_generation(self, trace_decay, plot) -> None:
@@ -179,6 +186,7 @@ class STDPMapping(Mapping):
                            'wire_width': self.sim_params['wire_width'],
                            'input_bit': self.sim_params['input_bit'],
                            'batch_interval': self.sim_params['batch_interval'],
+                           'write_batch_interval': self.sim_params['write_batch_interval'],
                            'CMOS_technode': self.sim_params['CMOS_technode'],
                            'ADC_precision': self.sim_params['ADC_precision'],
                            'ADC_setting': self.sim_params['ADC_setting'],
@@ -332,6 +340,7 @@ class STDPMapping(Mapping):
 
     def mem_t_update(self) -> None:
         self.mem_array.mem_t += self.batch_interval * (self.batch_size - 1)
+        self.mem_array.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
 
     def update_SAF_mask(self) -> None:
         self.mem_array.update_SAF_mask()
@@ -423,6 +432,7 @@ class MLPMapping(Mapping):
             raise Exception("Only 2-set and 4-set ADC are supported!")
 
         self.batch_interval = sim_params['batch_interval']
+        self.write_batch_interval = sim_params['write_batch_interval']
 
 
     def set_batch_size_mlp(self, batch_size) -> None:
@@ -451,12 +461,19 @@ class MLPMapping(Mapping):
         self.norm_ratio = torch.zeros(batch_size, device=self.norm_ratio.device)
         # self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
+        mem_wr_t_matrix =  (self.write_batch_interval * torch.arange(self.batch_size, device=self.mem_wr_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
+        self.mem_wr_t[:, :, :] = mem_wr_t_matrix.view(-1, 1, 1)
 
         self.mem_pos_pos.mem_t = self.mem_t.clone()
         self.mem_neg_pos.mem_t = self.mem_t.clone()
         self.mem_pos_neg.mem_t = self.mem_t.clone()
         self.mem_neg_neg.mem_t = self.mem_t.clone()
+
+        self.mem_pos_pos.mem_wr_t = self.mem_wr_t.clone()
+        self.mem_neg_pos.mem_wr_t = self.mem_wr_t.clone()
+        self.mem_pos_neg.mem_wr_t = self.mem_wr_t.clone()
+        self.mem_neg_neg.mem_wr_t = self.mem_wr_t.clone()
 
 
     def mapping_write_mlp(self, target_x):
@@ -563,6 +580,11 @@ class MLPMapping(Mapping):
         self.mem_neg_pos.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_pos_neg.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_neg_neg.mem_t += self.batch_interval * (self.batch_size - 1)
+        
+        self.mem_pos_pos.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
+        self.mem_neg_pos.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
+        self.mem_pos_neg.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
+        self.mem_neg_neg.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)        
 
     def update_SAF_mask(self) -> None:
         self.mem_pos_pos.update_SAF_mask()
@@ -734,6 +756,7 @@ class CNNMapping(Mapping):
             raise Exception("Only 4-set ADC are supported!")
 
         self.batch_interval = sim_params['batch_interval']
+        self.write_batch_interval = sim_params['write_batch_interval']
 
     def set_batch_size_cnn(self, batch_size) -> None:
         self.set_batch_size(batch_size)
@@ -759,11 +782,18 @@ class CNNMapping(Mapping):
         # self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
         mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
         self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
+        mem_wr_t_matrix = (self.write_batch_interval * torch.arange(self.batch_size, device=self.mem_wr_t.device))
+        self.mem_wr_t[:, :, :] = mem_wr_t_matrix.view(-1, 1, 1)
 
         self.mem_pos_pos.mem_t = self.mem_t.clone()
         self.mem_neg_pos.mem_t = self.mem_t.clone()
         self.mem_pos_neg.mem_t = self.mem_t.clone()
         self.mem_neg_neg.mem_t = self.mem_t.clone()
+        
+        self.mem_pos_pos.mem_wr_t = self.mem_wr_t.clone()
+        self.mem_neg_pos.mem_wr_t = self.mem_wr_t.clone()
+        self.mem_pos_neg.mem_wr_t = self.mem_wr_t.clone()
+        self.mem_neg_neg.mem_wr_t = self.mem_wr_t.clone()
 
     def mapping_write_cnn(self, target_x):
         # Memristor reset first
@@ -881,6 +911,11 @@ class CNNMapping(Mapping):
         self.mem_neg_pos.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_pos_neg.mem_t += self.batch_interval * (self.batch_size - 1)
         self.mem_neg_neg.mem_t += self.batch_interval * (self.batch_size - 1)
+        
+        self.mem_pos_pos.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
+        self.mem_neg_pos.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
+        self.mem_pos_neg.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
+        self.mem_neg_neg.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
 
     def update_SAF_mask(self) -> None:
         self.mem_pos_pos.update_SAF_mask()

@@ -33,7 +33,8 @@ class MemristorArray(torch.nn.Module):
         self.register_buffer("mem_c_pre", torch.Tensor())
         self.register_buffer("mem_i", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
-
+        self.register_buffer("mem_wr_t", torch.Tensor())
+        
         self.device_structure = sim_params['device_structure']
         self.device_name = sim_params['device_name']
         self.c2c_variation = sim_params['c2c_variation']
@@ -121,6 +122,7 @@ class MemristorArray(torch.nn.Module):
         self.mem_c_pre = torch.ones(batch_size, *self.shape, device=self.mem_c_pre.device) * \
                      self.memristor_info_dict[self.device_name]['G_on']
         self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
+        self.mem_wr_t = torch.zeros(batch_size, *self.shape, device=self.mem_wr_t.device)      
         self.mem_i = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_i.device)
 
         if self.c2c_variation:
@@ -240,6 +242,7 @@ class MemristorArray(torch.nn.Module):
         Aging_off = mem_info['Aging_off']
 
         self.mem_t += self.shape[0]
+        self.mem_wr_t += self.shape[0]
         self.mem_c_pre = self.mem_c.clone()
         # print(self.mem_t)
         if self.d2d_variation in [1, 3]:
@@ -406,6 +409,7 @@ class MemristorArray(torch.nn.Module):
         Aging_off = mem_info['Aging_off']
 
         self.mem_t += 1
+        self.mem_wr_t += 1
         self.mem_c_pre = self.mem_c.clone()
 
         if self.d2d_variation in [1, 3]:
@@ -474,13 +478,13 @@ class MemristorArray(torch.nn.Module):
 
     def cal_Gon_Goff(self, age_on, age_off) -> None:
         if self.aging_effect == 1: #equation 1: G=G_0*(1-age)**t
-            self.Gon_aging = self.Gon_0 * ((1 - age_on) ** (self.mem_t * self.dt))
-            self.Goff_aging = self.Goff_0 * ((1 - age_off) ** (self.mem_t * self.dt))
+            self.Gon_aging = self.Gon_0 * ((1 - age_on) ** (self.mem_wr_t * self.dt))
+            self.Goff_aging = self.Goff_0 * ((1 - age_off) ** (self.mem_wr_t * self.dt))
         elif self.aging_effect == 2: #equation 2: G=age*t+G_0
-            self.Gon_aging = age_on * self.mem_t * self.dt + self.Gon_0
-            self.Goff_aging = age_off * self.mem_t * self.dt + self.Goff_0
-        self.Gon_aging = torch.where((self.aging_end_t > 0) & (torch.tensor(self.mem_t * self.dt, device=self.aging_end_t.device) > self.aging_end_t), self.aging_end_G, self.Gon_aging)
-        self.Goff_aging = torch.where((self.aging_end_t > 0) & (torch.tensor(self.mem_t * self.dt, device=self.aging_end_t.device) > self.aging_end_t), self.aging_end_G, self.Goff_aging)
+            self.Gon_aging = age_on * self.mem_wr_t * self.dt + self.Gon_0
+            self.Goff_aging = age_off * self.mem_wr_t * self.dt + self.Goff_0
+        self.Gon_aging = torch.where((self.aging_end_t > 0) & (torch.tensor(self.mem_wr_t * self.dt, device=self.aging_end_t.device) > self.aging_end_t), self.aging_end_G, self.Gon_aging)
+        self.Goff_aging = torch.where((self.aging_end_t > 0) & (torch.tensor(self.mem_wr_t * self.dt, device=self.aging_end_t.device) > self.aging_end_t), self.aging_end_G, self.Goff_aging)
         self.Gon_aging = torch.clamp(self.Gon_aging, min=0)
         self.Goff_aging = torch.clamp(self.Goff_aging, min=0)
 
@@ -492,7 +496,7 @@ class MemristorArray(torch.nn.Module):
             SAF_delta = mem_info['SAF_delta']
 
             Q_ratio = self.SAF0_mask.float().mean() + self.SAF1_mask.float().mean()
-            target_ratio = SAF_lambda + self.mem_t.max() * self.dt * SAF_delta
+            target_ratio = SAF_lambda + self.mem_wr_t.max() * self.dt * SAF_delta
             increase_ratio = (target_ratio - Q_ratio) / (1 - Q_ratio)
 
             if increase_ratio > 0 and SAF_delta > 0:
