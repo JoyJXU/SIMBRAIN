@@ -121,8 +121,8 @@ class MemristorArray(torch.nn.Module):
                      self.memristor_info_dict[self.device_name]['G_on']
         self.mem_c_pre = torch.ones(batch_size, *self.shape, device=self.mem_c_pre.device) * \
                      self.memristor_info_dict[self.device_name]['G_on']
-        self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
-        self.mem_wr_t = torch.zeros(batch_size, *self.shape, device=self.mem_wr_t.device)      
+        self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device, dtype=torch.int)
+        self.mem_wr_t = torch.zeros(batch_size, *self.shape, device=self.mem_wr_t.device, dtype=torch.int)      
         self.mem_i = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_i.device)
 
         if self.c2c_variation:

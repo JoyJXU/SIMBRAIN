@@ -89,8 +89,8 @@ class Mapping(torch.nn.Module):
         self.batch_size = batch_size
         self.mem_v = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.mem_x_read = torch.zeros(batch_size, 1, self.shape[1], device=self.mem_x_read.device)
-        self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device)
-        self.mem_wr_t = torch.zeros(batch_size, *self.shape, device=self.mem_wr_t.device)       
+        self.mem_t = torch.zeros(batch_size, *self.shape, device=self.mem_t.device, dtype=torch.int)
+        self.mem_wr_t = torch.zeros(batch_size, *self.shape, device=self.mem_wr_t.device, dtype=torch.int)       
 
 
 class STDPMapping(Mapping):
