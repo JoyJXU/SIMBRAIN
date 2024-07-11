@@ -130,8 +130,6 @@ try:
                     layer.mem_update()
                     if args.stuck_at_fault == True:
                         layer.crossbar.update_SAF_mask()
-                    # mem_t update
-                    layer.crossbar.mem_t_update()
 
             if batch_idx % args.log_interval == 0 and batch_idx > 0:
                 pred = output.data.max(1)[1]  # get the index of the max log-probability
