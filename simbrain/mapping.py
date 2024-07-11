@@ -725,8 +725,6 @@ class CNNMapping(Mapping):
         else:
             raise Exception("Only 4-set ADC are supported!")
 
-        self.batch_interval = sim_params['batch_interval']
-        self.write_batch_interval = sim_params['write_batch_interval']
 
     def set_batch_size_cnn(self, batch_size) -> None:
         self.set_batch_size(batch_size)
@@ -749,21 +747,7 @@ class CNNMapping(Mapping):
         # self.write_pulse_no = torch.zeros(batch_size, *self.shape, device=self.mem_v.device)
         self.norm_ratio_pos = torch.zeros(batch_size, device=self.norm_ratio.device)
         self.norm_ratio_neg = torch.zeros(batch_size, device=self.norm_ratio.device)
-        # self.batch_interval = 1 + self.memristor_luts[self.device_name]['total_no'] * self.shape[0] + self.shape[1]
-        mem_t_matrix = (self.batch_interval * torch.arange(self.batch_size, device=self.mem_t.device))
-        self.mem_t[:, :, :] = mem_t_matrix.view(-1, 1, 1)
-        mem_wr_t_matrix = (self.write_batch_interval * torch.arange(self.batch_size, device=self.mem_wr_t.device))
-        self.mem_wr_t[:, :, :] = mem_wr_t_matrix.view(-1, 1, 1)
 
-        self.mem_pos_pos.mem_t = self.mem_t.clone()
-        self.mem_neg_pos.mem_t = self.mem_t.clone()
-        self.mem_pos_neg.mem_t = self.mem_t.clone()
-        self.mem_neg_neg.mem_t = self.mem_t.clone()
-        
-        self.mem_pos_pos.mem_wr_t = self.mem_wr_t.clone()
-        self.mem_neg_pos.mem_wr_t = self.mem_wr_t.clone()
-        self.mem_pos_neg.mem_wr_t = self.mem_wr_t.clone()
-        self.mem_neg_neg.mem_wr_t = self.mem_wr_t.clone()
 
     def mapping_write_cnn(self, target_x):
         # Memristor reset first
@@ -875,17 +859,6 @@ class CNNMapping(Mapping):
 
         return nearest_pulse_no
 
-
-    def mem_t_update(self) -> None:
-        self.mem_pos_pos.mem_t += self.batch_interval * (self.batch_size - 1)
-        self.mem_neg_pos.mem_t += self.batch_interval * (self.batch_size - 1)
-        self.mem_pos_neg.mem_t += self.batch_interval * (self.batch_size - 1)
-        self.mem_neg_neg.mem_t += self.batch_interval * (self.batch_size - 1)
-        
-        self.mem_pos_pos.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
-        self.mem_neg_pos.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
-        self.mem_pos_neg.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
-        self.mem_neg_neg.mem_wr_t += self.write_batch_interval * (self.batch_size - 1)
 
     def update_SAF_mask(self) -> None:
         self.mem_pos_pos.update_SAF_mask()
