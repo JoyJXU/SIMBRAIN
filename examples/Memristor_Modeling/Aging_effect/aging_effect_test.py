@@ -14,25 +14,25 @@ def main():
         dict = json.load(f)
     file = "../../../memristor_data/aging_effect.xlsx"
     exp = AgingEffect(file, dict)
-    Aging_k_off_1, Aging_k_on_1 = exp.fitting_equation1()
-    Aging_k_off_2, b_off, Aging_k_on_2, b_on = exp.fitting_equation2()
+    Aging_off_1, Aging_on_1 = exp.fitting_equation1()
+    Aging_off_2, b_off, Aging_on_2, b_on = exp.fitting_equation2()
     dict.update(
         {
-            'Aging_k_off': Aging_k_off_2,
-            'Aging_k_on': Aging_k_on_2
+            'Aging_k_off': Aging_off_2,
+            'Aging_k_on':  Aging_on_2
         }
     )
 
     # Output
     print('Equation 1:')
     df = pd.DataFrame(
-        {'value': [Aging_k_off_1, Aging_k_on_1]},
+        {'value': [Aging_off_1,  Aging_on_1]},
         index=['Aging_off_1', 'Aging_on_1']
     )
     print(df)
     print('Equation 2:')
     df = pd.DataFrame(
-        {'value': [Aging_k_off_2, Aging_k_on_2]},
+        {'value': [Aging_off_2,  Aging_on_2]},
         index=['Aging_off_2', 'Aging_on_2']
     )
     print(df)
@@ -47,7 +47,7 @@ def main():
     # ax1 = fig.add_subplot(221)
     # ax1.scatter(exp.CYCLE, exp.HCS, c='red', s=0.1)
     # exp.G_0 = exp.G_0_L
-    # ax1.semilogx(plot_x, exp.equation_1(plot_x, Aging_k_off_1))
+    # ax1.semilogx(plot_x, exp.equation_1(plot_x, Aging_off_1))
     # ax1.set_xlim(1e-3, 1e4)
     # ax1.set_xlabel('Time(s) * 10^3')
     # ax1.set_ylabel('Conductance(S)')
@@ -56,7 +56,7 @@ def main():
     # ax2 = fig.add_subplot(222)
     # ax2.scatter(exp.CYCLE, exp.LCS, c='red', s=0.1)
     # exp.G_0 = exp.G_0_H
-    # ax2.semilogx(plot_x, exp.equation_1(plot_x, Aging_k_on_1))
+    # ax2.semilogx(plot_x, exp.equation_1(plot_x,  Aging_on_1))
     # ax2.set_xlim(1e-3, 1e4)
     # ax2.set_xlabel('Time(s) * 10^3')
     # ax2.set_ylabel('Conductance(S)')
@@ -64,14 +64,14 @@ def main():
     #
     # ax3 = fig.add_subplot(223)
     # ax3.scatter(exp.CYCLE, exp.HCS, c='red', s=0.1)
-    # ax3.semilogx(plot_x, exp.equation_2(plot_x, Aging_k_off_2, b_off))
+    # ax3.semilogx(plot_x, exp.equation_2(plot_x, Aging_off_2, b_off))
     # ax3.set_xlim(1e-3, 1e4)
     # ax3.set_xlabel('Time(s) * 10^3')
     # ax3.set_title('Aging effect G_off(equation 2)')
     #
     # ax4 = fig.add_subplot(224)
     # ax4.scatter(exp.CYCLE, exp.LCS, c='red', s=0.1)
-    # ax4.semilogx(plot_x, exp.equation_2(plot_x, Aging_k_on_2, b_on))
+    # ax4.semilogx(plot_x, exp.equation_2(plot_x,  Aging_on_2, b_on))
     # ax4.set_xlim(1e-3, 1e4)
     # ax4.set_xlabel('Time(s) * 10^3')
     # ax4.set_title('Aging effect G_on(equation 2)')
@@ -80,25 +80,27 @@ def main():
     fig = plt.figure(figsize=(15, 6))
     plot_x = np.logspace(-3, 4, 1000, base=10)
     ax1 = fig.add_subplot(121)
-    ax1.scatter(exp.CYCLE, exp.HCS, c='red', s=0.1)
     exp.G_0 = exp.G_0_L
-    ax1.semilogx(plot_x, exp.equation_1(plot_x, Aging_k_off_1))
-    ax1.semilogx(plot_x, exp.equation_2(plot_x, Aging_k_off_2, b_off))
+    ax1.semilogx(plot_x, np.exp(exp.equation_1_log(plot_x, Aging_off_1)))
+    ax1.semilogx(plot_x, exp.equation_2(plot_x, Aging_off_2, b_off))
+    ax1.scatter(exp.CYCLE, exp.HCS, c='red', s=0.1)
+    ax1.legend(['Equation 1', 'Equation 2'])
     ax1.set_xlim(1e-3, 1e4)
     ax1.set_xlabel('Time(s) * 10^3')
     ax1.set_ylabel('Conductance(S)')
-    ax1.set_title('Aging effect G_off(equation 1)')
+    ax1.set_title('Aging effect (G_off)')
 
     ax2 = fig.add_subplot(122)
-    ax2.scatter(exp.CYCLE, exp.LCS, c='red', s=0.1)
     exp.G_0 = exp.G_0_H
-    ax2.semilogx(plot_x, exp.equation_1(plot_x, Aging_k_on_1))
-    ax2.semilogx(plot_x, exp.equation_2(plot_x, Aging_k_on_2, b_on))
+    ax2.semilogx(plot_x, np.exp(exp.equation_1_log(plot_x,  Aging_on_1)))
+    ax2.semilogx(plot_x, exp.equation_2(plot_x,  Aging_on_2, b_on))
+    ax2.scatter(exp.CYCLE, exp.LCS, c='red', s=0.1)
+    ax2.legend(['Equation 1', 'Equation 2'])
     ax2.set_xlim(1e-3, 1e4)
     ax2.set_ylim(bottom=-1e-5, top=1.5e-4)
     ax2.set_xlabel('Time(s) * 10^3')
     ax2.set_ylabel('Conductance(S)')
-    ax2.set_title('Aging effect G_on(equation 1)')
+    ax2.set_title('Aging effect (G_on)')
 
     plt.tight_layout()
     plt.savefig("Aging Effect.png", dpi=300, bbox_inches='tight')

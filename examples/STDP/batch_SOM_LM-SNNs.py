@@ -11,7 +11,6 @@ import torch
 import argparse
 import numpy as np
 import math
-import json
 
 import sys
 sys.path.append('../')

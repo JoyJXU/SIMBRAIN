@@ -11,7 +11,6 @@ from simbrain.Fitting_Functions.variation_fitting import Variation
 from simbrain.Fitting_Functions.retention_loss_fitting import RetentionLoss
 from simbrain.Fitting_Functions.aging_effect_fitting import AgingEffect
 from simbrain.Fitting_Functions.stuck_at_fault_fitting import StuckAtFault
-import matplotlib.pyplot as plt
 
 
 class MemristorFitting(object):
@@ -41,9 +40,6 @@ class MemristorFitting(object):
         self.mem_size = my_memristor['mem_size']
         self.fitting_record = my_memristor
 
-        if self.mem_size is None:
-            raise Exception("Error! Missing mem_size.")
-
     def copy_data(self, root, ref, obj, data_file):
         shutil.copy(
             root + ref + data_file,
@@ -55,6 +51,14 @@ class MemristorFitting(object):
         for file in os.listdir(path):
             if file.endswith('.xlsx'):
                 os.remove(path + '/' + file)
+
+    def check_required_data(self, v_off, v_on, delta_t, duty_ratio):
+        if self.mem_size is None:
+            raise Exception("Error! Missing mem_size data!")
+        if None in [v_on, v_off]:
+            raise Exception("Error! Missing v_on/v_off data!")
+        if None in [delta_t, duty_ratio]:
+            raise Exception("Error! Missing pulse time data!")
 
     def mem_fitting(self):
         # %% Obtain memristor parameters
@@ -105,16 +109,10 @@ class MemristorFitting(object):
         saf_path = "/saf_data.xlsx"
 
         self.delete_data(root, obj)
+        self.check_required_data(v_off, v_on, delta_t, duty_ratio)
 
         # Fitting process
         print("Start Memristor Fitting:\n")
-
-        if self.mem_size is None:
-            raise Exception("miss mem_size data!")
-        if None in [v_on, v_off]:
-            raise Exception("miss v_on/v_off data!")
-        if None in [delta_t, duty_ratio]:
-            raise Exception("miss pulse time data!")
 
         # %% Pre-deployment SAF
         if self.stuck_at_fault in [1, 2]:
@@ -171,11 +169,10 @@ class MemristorFitting(object):
         else:
             raise Exception("Error! Missing data files.\nFailed to update G_off, G_on.")
 
-        if None not in [G_off, G_on]:
-            pass
-        else:
+        if None in [G_off, G_on]:
             G_off = np.mean(G_off_variation)
             G_on = np.mean(G_on_variation)
+
         mem_info.update(
             {
                 "G_off": G_off,
@@ -215,7 +212,7 @@ class MemristorFitting(object):
         if None not in [alpha_off, alpha_on]:
             pass
         elif not os.path.isfile(root + ref + iv_curve_path):
-            print("Warning! Missing required parameters.\nDefault value is 5.")
+            print("Warning! Missing data files.\nDefault alpha is 5.")
             mem_info.update(
                 {
                     "alpha_off": 5,
@@ -224,7 +221,7 @@ class MemristorFitting(object):
             )
         else:
             self.copy_data(root, ref, obj, iv_curve_path)
-            alpha_off, alpha_on = IVCurve(root + obj + iv_curve_path, mem_info).fitting()
+            alpha_off, alpha_on = IVCurve(root + obj + iv_curve_path, mem_info).fitting(loss_option='rrmse_euclidean')
             mem_info.update(
                 {
                     "alpha_off": alpha_off,
@@ -240,7 +237,7 @@ class MemristorFitting(object):
         else:
             self.copy_data(root, ref, obj, conductance_path)
             conductance_temp = Conductance(root + obj + conductance_path, mem_info)
-            P_off, P_on, k_off, k_on, V_write_pos = conductance_temp.fitting()
+            P_off, P_on, k_off, k_on, V_write_pos = conductance_temp.fitting(loss_option='rmse')
             mem_info.update(
                 {
                     "P_off": P_off,
@@ -251,9 +248,15 @@ class MemristorFitting(object):
                 }
             )
 
-            P_off_variation, P_on_variation = conductance_temp.mult_P_fitting(G_off_variation, G_on_variation)
-
         V_write_lut = V_write_pos
+
+        if self.d2d_variation in [1, 3] or self.c2c_variation:
+            try:
+                self.copy_data(root, ref, obj, conductance_path)
+                conductance_temp = Conductance(root + obj + conductance_path, mem_info)
+                P_off_variation, P_on_variation = conductance_temp.mult_P_fitting(G_off_variation, G_on_variation)
+            except:
+                raise Exception("Error! Failed to calculate the Variation.")
 
         # %% D2D variation nonlinearity
         if self.d2d_variation in [1, 3]:
@@ -263,7 +266,14 @@ class MemristorFitting(object):
                 raise Exception("Error! Missing data files.\nFailed to update Poff_sigma, Pon_sigma.")
             else:
                 print("Device to Device Variation(Non-linearity) calculating...")
-                self.copy_data(root, ref, obj, conductance_path)
+                if os.path.isfile(root + obj + conductance_path):
+                    P_off_variation, P_on_variation = conductance_temp.mult_P_fitting(G_off_variation, G_on_variation,
+                                                                                      loss_option='rmse')
+                else:
+                    self.copy_data(root, ref, obj, conductance_path)
+                    conductance_temp = Conductance(root + obj + conductance_path, mem_info)
+                    P_off_variation, P_on_variation = conductance_temp.mult_P_fitting(G_off_variation, G_on_variation,
+                                                                                      loss_option='rmse')
                 variation_temp = Variation(
                     root + obj + conductance_path,
                     G_off_variation,
@@ -291,7 +301,16 @@ class MemristorFitting(object):
                 try:
                     sigma_relative, sigma_absolute = variation_temp.c2c_fitting(cluster_option='ew')
                 except:
-                    self.copy_data(root, ref, obj, conductance_path)
+                    if os.path.isfile(root + obj + conductance_path):
+                        P_off_variation, P_on_variation = conductance_temp.mult_P_fitting(G_off_variation,
+                                                                                          G_on_variation,
+                                                                                          loss_option='rmse')
+                    else:
+                        self.copy_data(root, ref, obj, conductance_path)
+                        conductance_temp = Conductance(root + obj + conductance_path, mem_info)
+                        P_off_variation, P_on_variation = conductance_temp.mult_P_fitting(G_off_variation,
+                                                                                          G_on_variation,
+                                                                                          loss_option='rmse')
                     variation_temp = Variation(
                         root + obj + conductance_path,
                         G_off_variation,
@@ -370,18 +389,12 @@ class MemristorFitting(object):
 
     def mem_info_update(self, mem_info):
         self.fitting_record = mem_info
-        with open('../../simbrain/Parameter_files/memristor_device_info.json', 'r') as f:
+        json.dumps(self.fitting_record, indent=4, separators=(',', ':'))
+        with open('../../memristor_device_info.json', 'r') as f:
             memristor_info_dict = json.load(f)
         memristor_info_dict['mine'] = self.fitting_record
-        with open('../../simbrain/Parameter_files/memristor_device_info.json', 'w') as f:
+        with open('../../memristor_device_info.json', 'w') as f:
             json.dump(memristor_info_dict, f, indent=2)
-        # TODO: Use Parameter_files folder instead of root.
-        # json.dumps(self.fitting_record, indent=4, separators=(',', ':'))
-        # with open('../../memristor_device_info.json', 'r') as f:
-        #     memristor_info_dict = json.load(f)
-        # memristor_info_dict['mine'] = self.fitting_record
-        # with open('../../memristor_device_info.json', 'w') as f:
-        #     json.dump(memristor_info_dict, f, indent=2)
 
     def mem_lut_update(self, mem_info, V_write_lut):
         v_off = mem_info['v_off']
@@ -431,17 +444,11 @@ class MemristorFitting(object):
             'conductance': lut_conductance[0:best_states_num + 1]
         }
 
-        with open('../../simbrain/Parameter_files/memristor_lut.pkl', 'rb') as f:
+        with open('../../memristor_lut.pkl', 'rb') as f:
             mem_lut = pickle.load(f)
         mem_lut['mine'] = mine_lut
-        with open('../../simbrain/Parameter_files/memristor_lut.pkl', 'wb') as f:
+        with open('../../memristor_lut.pkl', 'wb') as f:
             pickle.dump(mem_lut, f)
-        # # TODO: Use Parameter_files folder instead of root.
-        # with open('../../memristor_lut.pkl', 'rb') as f:
-        #     mem_lut = pickle.load(f)
-        # mem_lut['mine'] = mine_lut
-        # with open('../../memristor_lut.pkl', 'wb') as f:
-        #     pickle.dump(mem_lut, f)
 
     def lut_state_generate(self, V_write, mem_info, x_init):
         J1 = 1

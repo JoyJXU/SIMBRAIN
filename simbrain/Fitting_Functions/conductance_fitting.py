@@ -59,39 +59,40 @@ class Conductance(object):
         self.batch_nums = int(self.device_nums / self.batch_size) + 1
 
         # Initialize parameters
-        self.k_off = 1
-        self.k_on = -1
-        self.P_off = 1
-        self.P_on = 1
-        self.k_off_devices = torch.ones(self.device_nums)
-        self.k_on_devices = torch.ones(self.device_nums)
-        self.P_off_devices = torch.ones(self.device_nums)
-        self.P_on_devices = torch.ones(self.device_nums)
+        self.k_off = dictionary['k_off']
+        self.k_on = dictionary['k_on']
+        self.P_off = dictionary['k_off']
+        self.P_on = dictionary['k_on']
+        if None in [self.k_off, self.k_on, self.P_off, self.P_on]:
+            self.k_off = 1
+            self.k_on = -1
+            self.P_off = 1
+            self.P_on = 1
         self.loss = 1
 
     def set_batch_size(self, k_off_nums, k_on_nums, P_off_nums, P_on_nums):
         # Modify the batch size according to your system memory size
         available_mem = np.array(psutil.virtual_memory().available, dtype=np.int64)
         mem_cost = self.batch_size * (self.points_r * k_off_nums * P_off_nums + self.points_d * k_on_nums * P_on_nums) * 2
-        while mem_cost * 2 >= available_mem:
+        while mem_cost * 4 >= available_mem:
             self.batch_size = np.int64(self.batch_size / 2)
             self.batch_nums = int(self.device_nums / self.batch_size) + 1
             mem_cost = self.batch_size * (self.points_r * k_off_nums * P_off_nums + self.points_d * k_on_nums * P_on_nums) * 2
-            if self.batch_size == 1 and mem_cost * 2 >= available_mem:
+            if self.batch_size == 1 and mem_cost * 4 >= available_mem:
                 raise Exception("Error! Out of memory!")
 
         # Modify the batch size according to your VRAM size
         if torch.cuda.is_available():
             total_mem = torch.cuda.get_device_properties(torch.cuda.current_device()).total_memory
-            while mem_cost * 2 >= total_mem:
+            while mem_cost * 4 >= total_mem:
                 self.batch_size = np.int64(self.batch_size / 2)
                 self.batch_nums = int(self.device_nums / self.batch_size) + 1
                 mem_cost = self.batch_size * (self.points_r * k_off_nums * P_off_nums + self.points_d * k_on_nums * P_on_nums) * 2
-                if self.batch_size == 1 and mem_cost * 2 >= available_mem:
+                if self.batch_size == 1 and mem_cost * 4 >= available_mem:
                     raise Exception("Error! Out of memory!")
 
     @timer
-    def fitting(self, loss_option='rmse'):
+    def fitting(self, loss_option='rrmse_range'):
         """
         Calculate parameters k and P for the baseline model.
         """
@@ -171,25 +172,28 @@ class Conductance(object):
                 mem_x_r[i + 1] = torch.where(mem_x_r[i + 1] < 0, 0, mem_x_r[i + 1])
                 mem_x_r[i + 1] = torch.where(mem_x_r[i + 1] > 1, 1, mem_x_r[i + 1])
             mem_x_r_T = mem_x_r.permute(2, 3, 1, 0).cpu()
-            # mem_c_r = self.G_off * mem_x_r_T + self.G_on * (1 - mem_x_r_T)
             del mem_x_r
-            # TODO: Add a fitting indicator: diff / diff_percent
-            # c_r_diff_percent = (mem_c_r - conductance_r) / conductance_r
-            # c_r_diff = (mem_c_r - conductance_r)
             if loss_option == 'rmse':
                 x_r_diff = mem_x_r_T - x_r
-            elif loss_option == 'rrmse':
-                x_r_diff = (mem_x_r_T - x_r) / x_r
+                INDICATOR_r += torch.sum(torch.sum(x_r_diff * x_r_diff, dim=3), dim=2)
+            elif loss_option == 'rrmse_range':
+                x_r_diff = mem_x_r_T - x_r
+                INDICATOR_r += torch.sum(torch.sum(x_r_diff * x_r_diff, dim=3), dim=2)
+            elif loss_option == 'rrmse_mean':
+                x_r_diff = mem_x_r_T - x_r
+                INDICATOR_r += torch.sum(torch.sum(x_r_diff * x_r_diff, dim=3), dim=2)
+            elif loss_option == 'rrmse_euclidean':
+                x_r_diff = mem_x_r_T - x_r
+                INDICATOR_r += torch.sum(torch.sum(x_r_diff * x_r_diff, dim=3), dim=2)
+            elif loss_option == 'rrmse_percent':
+                mem_c_r = self.G_off * mem_x_r_T + self.G_on * (1 - mem_x_r_T)
+                del mem_x_r_T
+                torch.cuda.empty_cache()
+                c_r_diff_percent = (mem_c_r - conductance_r) / conductance_r
+                INDICATOR_r += torch.sum(torch.sum(c_r_diff_percent * c_r_diff_percent, dim=3), dim=2)
+                del c_r_diff_percent
+                torch.cuda.empty_cache()
 
-            INDICATOR_r_i = torch.sqrt(torch.sum(x_r_diff * x_r_diff, dim=3) / self.points_r).permute(2, 0, 1)
-            for i in range(self.batch_size):
-                min_index = torch.argmin(INDICATOR_r_i[i])
-                min_x_r = min_index // P_off_nums
-                min_y_r = min_index % P_off_nums
-                self.k_off_devices[start_index + i] = k_off_list[min_x_r]
-                self.P_off_devices[start_index + i] = P_off_list[min_y_r]
-            INDICATOR_r += torch.sum(torch.sum(x_r_diff * x_r_diff, dim=3) / (self.points_r + self.points_d), dim=2)
-            del mem_x_r_T, x_r_diff, INDICATOR_r_i
             torch.cuda.empty_cache()
             gc.collect()
 
@@ -212,36 +216,73 @@ class Conductance(object):
                 mem_x_d[i + 1] = torch.where(mem_x_d[i + 1] < 0, 0, mem_x_d[i + 1])
                 mem_x_d[i + 1] = torch.where(mem_x_d[i + 1] > 1, 1, mem_x_d[i + 1])
             mem_x_d_T = mem_x_d.permute(2, 3, 1, 0).cpu()
-            # mem_c_d = self.G_off * mem_x_d_T + self.G_on * (1 - mem_x_d_T)
             del mem_x_d
-            # RRMSE
-            # c_d_diff_percent = (mem_c_d - conductance_d) / conductance_d
-            # RMSE
-            # c_d_diff = (mem_c_d - conductance_d)
             if loss_option == 'rmse':
                 x_d_diff = mem_x_d_T - x_d
-            elif loss_option == 'rrmse':
-                x_d_diff = (mem_x_d_T - x_d) / x_d
+                INDICATOR_d += torch.sum(torch.sum(x_d_diff * x_d_diff, dim=3), dim=2)
+            elif loss_option == 'rrmse_range':
+                x_d_diff = mem_x_d_T - x_d
+                INDICATOR_d += torch.sum(torch.sum(x_d_diff * x_d_diff, dim=3), dim=2)
+            elif loss_option == 'rrmse_mean':
+                x_d_diff = mem_x_d_T - x_d
+                INDICATOR_d += torch.sum(torch.sum(x_d_diff * x_d_diff, dim=3), dim=2)
+            elif loss_option == 'rrmse_euclidean':
+                x_d_diff = mem_x_d_T - x_d
+                INDICATOR_d += torch.sum(torch.sum(x_d_diff * x_d_diff, dim=3), dim=2)
+            elif loss_option == 'rrmse_percent':
+                mem_c_d = self.G_off * mem_x_d_T + self.G_on * (1 - mem_x_d_T)
+                del mem_x_d_T
+                torch.cuda.empty_cache()
+                c_d_diff_percent = (mem_c_d - conductance_d) / conductance_d
+                INDICATOR_d += torch.sum(torch.sum(c_d_diff_percent * c_d_diff_percent, dim=3), dim=2)
+                del c_d_diff_percent
+                torch.cuda.empty_cache()
 
-            INDICATOR_d_i = torch.sqrt(torch.sum(x_d_diff * x_d_diff, dim=3) / self.points_d).permute(2, 0, 1)
-            for i in range(self.batch_size):
-                min_index = torch.argmin(INDICATOR_d_i[i])
-                min_x_r = min_index // P_on_nums
-                min_y_r = min_index % P_on_nums
-                self.k_on_devices[start_index + i] = k_on_list[min_x_r]
-                self.P_on_devices[start_index + i] = P_on_list[min_y_r]
-            INDICATOR_d += torch.sum(torch.sum(x_d_diff * x_d_diff, dim=3) / (self.points_r + self.points_d), dim=2)
-            del mem_x_d_T, x_d_diff, INDICATOR_d_i
             torch.cuda.empty_cache()
             gc.collect()
 
         INDICATOR_r = INDICATOR_r.cpu()
         INDICATOR_d = INDICATOR_d.cpu()
-        self.loss_r += torch.sqrt(INDICATOR_r * (self.points_r + self.points_d) / self.points_r / self.device_nums)
-        self.loss_d += torch.sqrt(INDICATOR_d * (self.points_r + self.points_d) / self.points_d / self.device_nums)
-        self.loss = torch.min(torch.sqrt(
-            (torch.min(INDICATOR_r) + torch.min(INDICATOR_d)) / self.device_nums
-        ))
+        current_r = torch.tensor(
+            np.array(self.data[:])[self.start_point_r: self.start_point_r + self.points_r, 2:].T,
+            dtype=torch.float32
+        )
+        current_d = torch.tensor(
+            np.array(self.data[:])[self.start_point_d: self.start_point_d + self.points_d, 2:].T,
+            dtype=torch.float32
+        )
+        conductance_r = current_r / self.read_voltage
+        conductance_d = current_d / self.read_voltage
+        x_r = (conductance_r - self.G_on) / (self.G_off - self.G_on)
+        x_d = (conductance_d - self.G_on) / (self.G_off - self.G_on)
+        x = torch.cat((x_r, x_d), dim=1)
+        if loss_option == 'rmse':
+            self.loss_r += torch.sqrt(INDICATOR_r / self.points_r / self.device_nums)
+            self.loss_d += torch.sqrt(INDICATOR_d / self.points_d / self.device_nums)
+            self.loss = torch.min(torch.sqrt(
+                (torch.min(INDICATOR_r) + torch.min(INDICATOR_d)) / (self.points_r + self.points_d) / self.device_nums))
+        elif loss_option == 'rrmse_range':
+            self.loss_r += torch.sqrt(INDICATOR_r / self.points_r / self.device_nums) / (torch.max(x_r) - torch.min(x_r))
+            self.loss_d += torch.sqrt(INDICATOR_d / self.points_d / self.device_nums) / (torch.max(x_d) - torch.min(x_d))
+            self.loss = torch.min(torch.sqrt(
+                (torch.min(INDICATOR_r) + torch.min(INDICATOR_d)) / (self.points_r + self.points_d) / self.device_nums)
+            ) / (torch.max(x) - torch.min(x))
+        elif loss_option == 'rrmse_mean':
+            self.loss_r += torch.sqrt(INDICATOR_r / self.points_r / self.device_nums) / torch.mean(x_r)
+            self.loss_d += torch.sqrt(INDICATOR_d / self.points_d / self.device_nums) / torch.mean(x_d)
+            self.loss = torch.min(torch.sqrt((torch.min(INDICATOR_r) + torch.min(INDICATOR_d)) / (
+                        self.points_r + self.points_d) / self.device_nums)) / torch.mean(x)
+        elif loss_option == 'rrmse_euclidean':
+            self.loss_r += torch.sqrt(INDICATOR_r / torch.sum(x_r * x_r) / self.points_r / self.device_nums)
+            self.loss_d += torch.sqrt(INDICATOR_d / torch.sum(x_d * x_d) / self.points_d / self.device_nums)
+            self.loss = torch.min(torch.sqrt(
+                (torch.min(INDICATOR_r / torch.sum(x_r * x_r)) + torch.min(INDICATOR_d / torch.sum(x_d * x_d)))
+                / (self.points_r + self.points_d) / self.device_nums))
+        elif loss_option == 'rrmse_percent':
+            self.loss_r += torch.sqrt(INDICATOR_r / self.points_r / self.device_nums)
+            self.loss_d += torch.sqrt(INDICATOR_d / self.points_d / self.device_nums)
+            self.loss = torch.min(torch.sqrt(
+                (torch.min(INDICATOR_r) + torch.min(INDICATOR_d)) / (self.points_r + self.points_d) / self.device_nums))
         min_x_r = (torch.argmin(self.loss_r) // P_off_nums).item()
         min_y_r = (torch.argmin(self.loss_r) % P_off_nums).item()
         min_x_d = (torch.argmin(self.loss_d) // P_on_nums).item()
@@ -250,8 +291,6 @@ class Conductance(object):
         self.k_on = k_on_list[min_x_d].item()
         self.P_off = P_off_list[min_y_r].item()
         self.P_on = P_on_list[min_y_d].item()
-        self.k_off_devices = self.k_off_devices.cpu()
-        self.P_off_devices = self.P_off_devices.cpu()
 
         del k_off_list, k_on_list, P_off_list, P_on_list, V_write_r, V_write_d, INDICATOR_r, INDICATOR_d
         torch.cuda.empty_cache()
@@ -259,7 +298,7 @@ class Conductance(object):
         return self.P_off, self.P_on, self.k_off, self.k_on, self.V_write[0]
 
     @timer
-    def mult_P_fitting(self, G_off_variation: np.array, G_on_variation: np.array):
+    def mult_P_fitting(self, G_off_variation: np.array, G_on_variation: np.array, loss_option='rrmse_range'):
         """
         Calculate the list of P from multiple devices for variation fitting.
 
@@ -338,9 +377,24 @@ class Conductance(object):
                                                                             self.device_nums).permute(1, 2, 0)
                 * (1 - mem_x_r_T)
         )
-        # c_r_diff_percent = (mem_c_r - conductance_r) / conductance_r
-        c_r_diff = (mem_c_r - conductance_r)
-        INDICATOR_r = torch.sqrt(torch.sum(c_r_diff * c_r_diff, dim=2) / self.points_r).T
+        if loss_option == 'rmse':
+            c_r_diff = (mem_c_r - conductance_r)
+            INDICATOR_r = torch.sqrt(torch.sum(c_r_diff * c_r_diff, dim=2) / self.points_r).T
+        elif loss_option == 'rrmse_range':
+            c_r_diff = (mem_c_r - conductance_r)
+            INDICATOR_r = torch.sqrt(torch.sum(c_r_diff * c_r_diff, dim=2) / self.points_r).T / (
+                        torch.max(conductance_r) - torch.min(conductance_r))
+        elif loss_option == 'rrmse_mean':
+            c_r_diff = (mem_c_r - conductance_r)
+            INDICATOR_r = torch.sqrt(torch.sum(c_r_diff * c_r_diff, dim=2) / self.points_r).T / torch.mean(
+                conductance_r)
+        elif loss_option == 'rrmse_euclidean':
+            c_r_diff = (mem_c_r - conductance_r)
+            INDICATOR_r = torch.sqrt(
+                torch.sum(c_r_diff * c_r_diff, dim=2) / torch.sum(conductance_r * conductance_r) / self.points_r).T
+        elif loss_option == 'rrmse_percent':
+            c_r_diff_percent = (mem_c_r - conductance_r) / conductance_r
+            INDICATOR_r = torch.sqrt(torch.sum(c_r_diff_percent * c_r_diff_percent, dim=2) / self.points_r).T
         P_off_variation = P_off_list[torch.argmin(INDICATOR_r, dim=1)].cpu().numpy()
 
         mem_x_d = torch.zeros([self.points_d, self.device_nums, P_on_nums])
@@ -369,11 +423,24 @@ class Conductance(object):
                                                                             self.device_nums).permute(1, 2, 0)
                 * (1 - mem_x_d_T)
         )
-        # RRMSE
-        # c_d_diff_percent = (mem_c_d - conductance_d) / conductance_d
-        # RMSE
-        c_d_diff = (mem_c_d - conductance_d)
-        INDICATOR_d = torch.sqrt(torch.sum(c_d_diff * c_d_diff, dim=2) / self.points_d).T
+        if loss_option == 'rmse':
+            c_d_diff = (mem_c_d - conductance_d)
+            INDICATOR_d = torch.sqrt(torch.sum(c_d_diff * c_d_diff, dim=2) / self.points_d).T
+        elif loss_option == 'rrmse_range':
+            c_d_diff = (mem_c_d - conductance_d)
+            INDICATOR_d = torch.sqrt(torch.sum(c_d_diff * c_d_diff, dim=2) / self.points_d).T / (
+                        torch.max(conductance_r) - torch.min(conductance_r))
+        elif loss_option == 'rrmse_mean':
+            c_d_diff = (mem_c_d - conductance_d)
+            INDICATOR_d = torch.sqrt(torch.sum(c_d_diff * c_d_diff, dim=2) / self.points_d).T / torch.mean(
+                conductance_d)
+        elif loss_option == 'rrmse_euclidean':
+            c_d_diff = (mem_c_d - conductance_d)
+            INDICATOR_d = torch.sqrt(
+                torch.sum(c_d_diff * c_d_diff, dim=2) / torch.sum(conductance_d * conductance_d) / self.points_d).T
+        elif loss_option == 'rrmse_percent':
+            c_d_diff_percent = (mem_c_d - conductance_d) / conductance_d
+            INDICATOR_d = torch.sqrt(torch.sum(c_d_diff_percent * c_d_diff_percent, dim=2) / self.points_d).T
         P_on_variation = P_on_list[torch.argmin(INDICATOR_d, dim=1)].cpu().numpy()
 
         torch.cuda.empty_cache()

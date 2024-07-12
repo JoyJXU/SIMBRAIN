@@ -27,13 +27,4 @@ def full_fitting(device_structure, batch_interval):
     print('Before update:\n', json.dumps(diff_1, indent=4, separators=(',', ':')))
     print('After update:\n', json.dumps(diff_2, indent=4, separators=(',', ':')))
 
-    # TODO: choose one
-    # memristor_device_info.json has been updated in memristor_fit.py, so does fitting_record.json need to be retained?
-    # We have:
-    # memristor_device_info.json and pkl
-    # simbrain/Parameter_files/memristor_device_info.json and pkl
-    # memristor_data/fitting_record.json
-    with open("../../memristor_data/fitting_record.json", "w") as f:
-        json.dump(fitting_record, f, indent=2)
-
     return sim_params

@@ -56,17 +56,22 @@ class IVCurve(object):
         self.P_off = dictionary['P_off']
         self.P_on = dictionary['P_on']
 
-        self.duty_ratio = dictionary['duty_ratio']
-
-        # Default parameters
-        if None in [self.P_off, self.P_on]:
-            self.P_off = 1
-            self.P_on = 1
-
         # Read data
         self.voltage = np.array(data['Excitation Voltage(V)'])
         self.current = np.array(data['Current Response(A)'])
-        self.delta_t = data['Time(s)'][1] - data['Time(s)'][0]
+
+        if data['Time(s)'][:2].isnull().any():
+            self.delta_t = 0.1
+        else:
+            self.delta_t = data['Time(s)'][1] - data['Time(s)'][0]
+
+        if None in [self.G_off, self.G_on]:
+            self.G_off = (1 + 0.12) * np.max(np.where(self.voltage > 0, self.current / self.voltage, 0))
+            self.G_on = (1 - 0.12) * np.min(np.where(self.voltage < 0, self.current / self.voltage, 1))
+
+        if None in [self.P_off, self.P_on]:
+            self.P_off = 1
+            self.P_on = 1
 
     def Memristor_conductance_model(
             self,
@@ -88,12 +93,12 @@ class IVCurve(object):
             if V_write[i + 1] > self.v_off and V_write[i + 1] > 0:
                 delta_x = self.k_off * ((V_write[i + 1] / self.v_off - 1) ** alpha_off) * J1 * (
                         (1 - internal_state[i]) ** self.P_off)
-                internal_state[i + 1] = internal_state[i] + self.delta_t * self.duty_ratio * delta_x
+                internal_state[i + 1] = internal_state[i] + self.delta_t * delta_x
 
             elif V_write[i + 1] < 0 and V_write[i + 1] < self.v_on:
                 delta_x = self.k_on * ((V_write[i + 1] / self.v_on - 1) ** alpha_on) * J1 * (
                         internal_state[i] ** self.P_on)
-                internal_state[i + 1] = internal_state[i] + self.delta_t * self.duty_ratio * delta_x
+                internal_state[i + 1] = internal_state[i] + self.delta_t * delta_x
 
             else:
                 delta_x = 0
@@ -103,7 +108,6 @@ class IVCurve(object):
                 internal_state[i + 1] = 0
             elif internal_state[i + 1] > 1:
                 internal_state[i + 1] = 1
-        # print(internal_state)
 
         # conductance calculation
         for i in range(points):
@@ -112,37 +116,39 @@ class IVCurve(object):
         return internal_state, conductance_fit
 
     @timer
-    def fitting(self):
+    def fitting(self, loss_option='rrmse_range'):
         if torch.cuda.is_available():
             device = torch.device("cuda")
         else:
             device = torch.device("cpu")
 
-        alpha_off_num = 10
-        alpha_on_num = 10
-        alpha_off_list = torch.arange(alpha_off_num) + 1
-        alpha_on_list = torch.arange(alpha_on_num) + 1
+        # Set parameters' range
+        J1 = 1
+        alpha_off_nums = 10
+        alpha_on_nums = 10
+        alpha_off_list = torch.arange(alpha_off_nums) + 1
+        alpha_on_list = torch.arange(alpha_on_nums) + 1
         alpha_off_list = alpha_off_list.to(device)
         alpha_on_list = alpha_on_list.to(device)
 
         if None in [self.k_off, self.k_on]:
-            k_off_num = 1000
-            k_on_num = 1000
-            k_off_list = torch.logspace(-4, 9, k_off_num, base=10)
-            k_on_list = -torch.logspace(-4, 9, k_on_num, base=10)
+            k_off_nums = 1000
+            k_on_nums = 1000
+            k_off_list = torch.logspace(-4, 9, k_off_nums, base=10)
+            k_on_list = -torch.logspace(-4, 9, k_on_nums, base=10)
         else:
-            k_off_num = 1
-            k_on_num = 1
+            k_off_nums = 1
+            k_on_nums = 1
             k_off_list = torch.tensor(self.k_off)
             k_on_list = torch.tensor(self.k_on)
         k_off_list = k_off_list.to(device)
         k_on_list = k_on_list.to(device)
 
+        zero_index = np.where(self.voltage == 0)
+        self.voltage = np.delete(self.voltage, zero_index)
+        self.current = np.delete(self.current, zero_index)
+
         V_write = self.voltage
-        # start_point_r = 0
-        # points_r = np.sum(V_write > 0)
-        # start_point_d = start_point_r + points_r
-        # points_d = np.sum(V_write < 0)
         if V_write[0] > 0:
             start_point_r = 0
             points_r = np.sum(V_write > 0)
@@ -168,21 +174,18 @@ class IVCurve(object):
         x_init_d = x_init_d if x_init_d > 0 else 0
         x_init_d = x_init_d if x_init_d < 1 else 1
 
-        J1 = 1
-
         # positive
-        mem_x_r = torch.zeros([points_r, alpha_off_num, k_off_num])
+        mem_x_r = torch.zeros([points_r, alpha_off_nums, k_off_nums])
         mem_x_r = mem_x_r.to(device)
-        mem_x_r[0] = x_init_r * torch.ones([alpha_off_num, k_off_num])
+        mem_x_r[0] = x_init_r * torch.ones([alpha_off_nums, k_off_nums])
         for j in range(points_r - 1):
             mem_x_r[j + 1] = torch.where(
                 V_write_r[j + 1] > self.v_off and V_write_r[j + 1] > 0,
-                k_off_list.expand(alpha_off_num, k_off_num)
-                * ((V_write_r[j + 1] / self.v_off - 1) ** alpha_off_list.expand(k_off_num, alpha_off_num).T)
+                k_off_list.expand(alpha_off_nums, k_off_nums)
+                * ((V_write_r[j + 1] / self.v_off - 1) ** alpha_off_list.expand(k_off_nums, alpha_off_nums).T)
                 * J1
                 * (1 - mem_x_r[j]) ** self.P_off
                 * self.delta_t
-                * self.duty_ratio
                 + mem_x_r[j],
                 mem_x_r[j]
             )
@@ -193,27 +196,40 @@ class IVCurve(object):
         mem_c_r = self.G_off * mem_x_r_T + self.G_on * (1 - mem_x_r_T)
         current_fit_r = mem_c_r * V_write_r
         current_r = current_r.to(device)
-        # RRMSE calculation
-        i_diff_percent = (current_fit_r - current_r) / current_r
-        INDICATOR_r = torch.sqrt(
-            torch.sum(i_diff_percent * i_diff_percent, dim=2)
-            / torch.dot(current_r, current_r)
-            / points_r
-        )
+
+        if loss_option == 'rmse':
+            i_diff = current_fit_r - current_r
+            INDICATOR_r = torch.sqrt(torch.sum(i_diff * i_diff, dim=2) / points_r)
+        elif loss_option == 'rrmse_range':
+            i_diff = current_fit_r - current_r
+            INDICATOR_r = torch.sqrt(torch.sum(i_diff * i_diff, dim=2) / points_r) / (
+                        torch.max(current_r) - torch.min(current_r))
+        elif loss_option == 'rrmse_mean':
+            i_diff = current_fit_r - current_r
+            INDICATOR_r = torch.sqrt(torch.sum(i_diff * i_diff, dim=2) / points_r) / torch.mean(current_r)
+        elif loss_option == 'rrmse_euclidean':
+            i_diff = current_fit_r - current_r
+            INDICATOR_r = torch.sqrt(torch.sum(i_diff * i_diff, dim=2) / torch.dot(current_r, current_r) / points_r)
+        elif loss_option == 'rrmse_percent':
+            i_diff_percent = (current_fit_r - current_r) / current_r
+            INDICATOR_r = torch.sqrt(torch.sum(i_diff_percent * i_diff_percent, dim=2) / points_r)
+        elif loss_option == 'rrmse_origin':
+            i_diff_percent = (current_fit_r - current_r) / current_r
+            INDICATOR_r = torch.sqrt(
+                torch.sum(i_diff_percent * i_diff_percent, dim=2) / torch.dot(current_r, current_r) / points_r)
 
         # negative
-        mem_x_d = torch.zeros([points_d, alpha_on_num, k_on_num])
+        mem_x_d = torch.zeros([points_d, alpha_on_nums, k_on_nums])
         mem_x_d = mem_x_d.to(device)
-        mem_x_d[0] = x_init_d * torch.ones([alpha_on_num, k_on_num])
+        mem_x_d[0] = x_init_d * torch.ones([alpha_on_nums, k_on_nums])
         for j in range(points_d - 1):
             mem_x_d[j + 1] = torch.where(
                 V_write_d[j + 1] < 0 and V_write_d[j + 1] < self.v_on,
-                k_on_list.expand(alpha_on_num, k_on_num)
-                * ((V_write_d[j + 1] / self.v_on - 1) ** alpha_on_list.expand(k_on_num, alpha_on_num).T)
+                k_on_list.expand(alpha_on_nums, k_on_nums)
+                * ((V_write_d[j + 1] / self.v_on - 1) ** alpha_on_list.expand(k_on_nums, alpha_on_nums).T)
                 * J1
                 * (1 - mem_x_d[j]) ** self.P_on
                 * self.delta_t
-                * self.duty_ratio
                 + mem_x_d[j],
                 mem_x_d[j],
             )
@@ -225,19 +241,35 @@ class IVCurve(object):
         current_fit_d = mem_c_d * V_write_d
         current_d = current_d.to(device)
         # RRMSE calculation
-        i_diff_percent = (current_fit_d - current_d) / current_d
-        INDICATOR_d = torch.sqrt(
-            torch.sum(i_diff_percent * i_diff_percent, dim=2)
-            / torch.dot(current_d, current_d)
-            / points_r
-        )
+        if loss_option == 'rmse':
+            i_diff = current_fit_d - current_d
+            INDICATOR_d = torch.sqrt(torch.sum(i_diff * i_diff, dim=2) / points_d)
+        elif loss_option == 'rrmse_range':
+            i_diff = current_fit_d - current_d
+            INDICATOR_d = torch.sqrt(torch.sum(i_diff * i_diff, dim=2) / points_d) / (
+                        torch.max(current_d) - torch.min(current_d))
+        elif loss_option == 'rrmse_mean':
+            i_diff = current_fit_d - current_d
+            INDICATOR_d = torch.sqrt(torch.sum(i_diff * i_diff, dim=2) / points_d) / torch.mean(torch.abs(current_d))
+        elif loss_option == 'rrmse_euclidean':
+            i_diff = (current_fit_d - current_d)
+            INDICATOR_d = torch.sqrt(torch.sum(i_diff * i_diff, dim=2) / torch.dot(current_d, current_d) / points_d)
+        elif loss_option == 'rrmse_percent':
+            i_diff_percent = (current_fit_d - current_d) / current_d
+            INDICATOR_d = torch.sqrt(torch.sum(i_diff_percent * i_diff_percent, dim=2) / points_d)
+        elif loss_option == 'rrmse_origin':
+            i_diff_percent = (current_fit_d - current_d) / current_d
+            INDICATOR_d = torch.sqrt(
+                torch.sum(i_diff_percent * i_diff_percent, dim=2) / torch.dot(current_d, current_d) / points_d)
 
+        self.loss_r = torch.min(INDICATOR_r)
+        self.loss_d = torch.min(INDICATOR_d)
         min_x = torch.argmin(INDICATOR_r)
         min_y = torch.argmin(INDICATOR_d)
-        self.alpha_off = alpha_off_list[min_x // k_off_num].item()
-        self.alpha_on = alpha_on_list[min_y // k_on_num].item()
-        self.k_off = k_off_list[min_x % k_off_num].item()
-        self.k_on = k_on_list[min_y % k_on_num].item()
+        self.alpha_off = alpha_off_list[min_x // k_off_nums].item()
+        self.alpha_on = alpha_on_list[min_y // k_on_nums].item()
+        self.k_off = k_off_list[min_x % k_off_nums].item()
+        self.k_on = k_on_list[min_y % k_on_nums].item()
 
         torch.cuda.empty_cache()
 

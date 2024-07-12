@@ -32,34 +32,50 @@ def main():
         }
     )
     file = "../../../memristor_data/conductance_deletehead.xlsx"
+    file_G = "../../../memristor_data/G_variation.xlsx"
 
-    data = pd.DataFrame(pd.read_excel(
-        file,
-        sheet_name=0,
-        header=None,
-        index_col=None,
-    ))
-    data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)'] + list(data.columns[2:] - 2)
+    if os.path.isfile(file_G):
+        data = pd.DataFrame(pd.read_excel(
+            file_G,
+            sheet_name='Sheet1',
+            header=None,
+            index_col=None
+        ))
+        data.columns = ['G_off', 'G_on']
+        device_nums = data.shape[0]
 
-    V_write = np.array(data['Pulse Voltage(V)'])
-    points_r = np.sum(V_write > 0)
-    points_d = np.sum(V_write < 0)
-    read_voltage = np.array(data['Read Voltage(V)'])[0]
+        G_off_list = np.array(data['G_off'])
+        G_on_list = np.array(data['G_on'])
+        G_off = np.mean(G_off_list)
+        G_on = np.mean(G_on_list)
+    else:
+        data = pd.DataFrame(pd.read_excel(
+            file,
+            sheet_name=0,
+            header=None,
+            index_col=None,
+        ))
+        data.columns = ['Pulse Voltage(V)', 'Read Voltage(V)'] + list(data.columns[2:] - 2)
 
-    device_nums = data.shape[1] - 2
-    G_off_list = np.zeros(device_nums)
-    G_on_list = np.zeros(device_nums)
+        V_write = np.array(data['Pulse Voltage(V)'])
+        points_r = np.sum(V_write > 0)
+        points_d = np.sum(V_write < 0)
+        read_voltage = np.array(data['Read Voltage(V)'])[0]
 
-    for i in range(device_nums):
-        G_off_list[i] = np.average(
-            data[i][points_r - 10:points_r] / read_voltage
-        )
-        G_on_list[i] = np.average(
-            data[i][points_r + points_d - 10:] / read_voltage
-        )
+        device_nums = data.shape[1] - 2
+        G_off_list = np.zeros(device_nums)
+        G_on_list = np.zeros(device_nums)
 
-    G_off = np.mean(G_off_list)
-    G_on = np.mean(G_on_list)
+        for i in range(device_nums):
+            G_off_list[i] = np.average(
+                data[i][points_r - 10:points_r] / read_voltage
+            )
+            G_on_list[i] = np.average(
+                data[i][points_r + points_d - 10:] / read_voltage
+            )
+
+        G_off = np.mean(G_off_list)
+        G_on = np.mean(G_on_list)
     dict.update(
         {
             'G_off': G_off,
@@ -92,8 +108,9 @@ def main():
             "alpha_on": alpha_on
         }
     )
+    loss = 'rmse'
     exp_0 = Conductance(file, dict)
-    P_off, P_on, k_off, k_on, _ = exp_0.fitting()
+    P_off, P_on, k_off, k_on, _ = exp_0.fitting(loss_option=loss)
     dict.update(
         {
             'k_off': k_off,
@@ -103,10 +120,10 @@ def main():
         }
     )
 
-    P_off_list, P_on_list = exp_0.mult_P_fitting(G_off_list, G_on_list)
+    P_off_list, P_on_list = exp_0.mult_P_fitting(G_off_list, G_on_list, loss_option=loss)
 
     exp = Variation(
-        "../../../memristor_data/conductance_deletehead.xlsx",
+        file,
         G_off_list,
         G_on_list,
         P_off_list,
@@ -136,7 +153,10 @@ def main():
     print('R_square:', exp.R_square)
     conductance = np.array(exp_0.data[:])[:, 2:] / exp_0.read_voltage
     x = (conductance - G_on) / (G_off - G_on)
-    rrmse = exp_0.loss / (np.max(x) - np.min(x))
+    if loss == 'rmse':
+        rrmse = exp_0.loss / (np.max(x) - np.min(x))
+    else:
+        rrmse = exp_0.loss
     print('RRMSE:', rrmse.item())
     with open("fitting_record.json", "w") as f:
         json.dump(dict, f, indent=2)
