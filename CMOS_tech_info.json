@@ -682,7 +682,8 @@
         "W_SENSE_MUX":9.0,
         "IR_DROP_TOLERANCE":0.1,
         "HEIGHT_WIDTH_RATIO_LIMIT":5,
-        "RATIO_READ_THRESHOLD_VS_VOLTAGE":0.2  
+        "RATIO_READ_THRESHOLD_VS_VOLTAGE":0.2  ,
+        "LINEAR_REGION_RATIO":0.20
     }   
     
 }

@@ -106,12 +106,6 @@ class Network(torch.nn.Module):
         self.sim_params = sim_params
         self.batch_size = batch_size
 
-        self.register_buffer("mem_current_step", torch.Tensor())
-        self.register_buffer("mem_step_matrix", torch.Tensor())
-
-        self.mem_current_step = torch.zeros(self.batch_size, device=self.mem_current_step.device)
-        self.mem_step_matrix = torch.arange(self.batch_size, device=self.mem_current_step.device)
-
         self.layers = {}
         self.connections = {}
         self.monitors = {}
@@ -370,18 +364,6 @@ class Network(torch.nn.Module):
         for l in self.layers:
             self.layers[l].update_SAF_mask()
 
-        # Print power results
-        if (self.sim_params['device_name'] != 'trace' and self.learning):
-            self.total_energy = 0
-            self.average_power = 0
-            for l in self.layers:
-                self.layers[l].transform.mem_array.total_energy_calculation()
-                self.sim_power = self.layers[l].transform.mem_array.power.sim_power
-                self.total_energy += self.sim_power['total_energy']
-                self.average_power += self.sim_power['average_power']
-            print("total_energy=", self.total_energy)
-            print("average_power=", self.average_power)
-
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
 
@@ -408,6 +390,7 @@ class Network(torch.nn.Module):
                     self.layers[l].forward(x=current_inputs[l])
                 else:
                     self.layers[l].forward(x=torch.zeros(self.layers[l].s.shape))
+
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
                 if clamp is not None:
@@ -448,6 +431,32 @@ class Network(torch.nn.Module):
         # Re-normalize connections.
         for c in self.connections:
             self.connections[c].normalize()
+
+        # Print power results
+        if (self.sim_params['device_name'] != 'trace' and self.learning and self.sim_params['hardware_estimation']):
+            self.total_energy = 0
+            self.average_power = 0
+            self.periph_total_energy = 0
+            self.periph_average_power = 0
+            for l in self.layers:
+                self.layers[l].transform.mem_array.total_energy_calculation()
+                self.layers[l].transform.DAC_module.DAC_energy_calculation(
+                    mem_t=self.layers[l].transform.mem_array.mem_t)
+                self.layers[l].transform.ADC_module.ADC_energy_calculation(
+                    mem_t=self.layers[l].transform.mem_array.mem_t)
+                self.sim_power = self.layers[l].transform.mem_array.power.sim_power
+                self.sim_DAC_module_power = self.layers[l].transform.DAC_module.DAC_module_power.sim_power
+                self.sim_ADC_module_power = self.layers[l].transform.ADC_module.ADC_module_power.sim_power
+                self.total_energy += self.sim_power['total_energy']
+                self.average_power += self.sim_power['average_power']
+                self.periph_total_energy += self.sim_DAC_module_power['DAC_total_energy'] + self.sim_ADC_module_power[
+                    'ADC_total_energy']
+                self.periph_average_power += self.sim_DAC_module_power['DAC_average_power'] + self.sim_ADC_module_power[
+                    'ADC_average_power']
+            print("total_energy=", self.total_energy)
+            print("average_power=", self.average_power)
+            print("periph_total_energy=", self.periph_total_energy)
+            print("periph_average_power=", self.periph_average_power)
 
 
     def reset_state_variables(self) -> None:

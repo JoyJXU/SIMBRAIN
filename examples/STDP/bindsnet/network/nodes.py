@@ -151,6 +151,9 @@ class Nodes(torch.nn.Module):
                 -self.dt / self.tc_trace
             )  # Spike trace decay (per timestep).
 
+            if (self.device_name != 'trace' and self.learning == True):
+                self.transform.voltage_generation(self.trace_decay, plot=False)
+
 
     def set_batch_size(self, batch_size) -> None:
         # language=rst
