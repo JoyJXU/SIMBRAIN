@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from time import time as t
 
-sys.path.append('../../')
+sys.path.append('../')
 
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import PoissonEncoder, poisson
@@ -26,7 +26,7 @@ from bindsnet.models import IncreasingInhibitionNetwork
 from bindsnet.network.monitors import Monitor
 from bindsnet.utils import get_square_weights, get_square_assignments
 from bindsnet.evaluation import all_activity, proportion_weighting, assign_labels
-
+from Memristor_Modeling.full_fitting_flow import full_fitting
 
 # %% Argument
 parser = argparse.ArgumentParser()
@@ -50,21 +50,6 @@ parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
-parser.add_argument("--memristor_device", type=str, default='ideal') # trace: original trace
-parser.add_argument("--c2c_variation", type=bool, default=False)
-parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
-parser.add_argument("--stuck_at_fault", type=bool, default=False)
-parser.add_argument("--retention_loss", type=bool, default=False)
-parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
-parser.add_argument("--input_bit", type=int, default=1)
-parser.add_argument("--ADC_precision", type=int, default=16)
-parser.add_argument("--ADC_setting", type=int, default=4)  # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
-parser.add_argument("--ADC_rounding_function", type=str, default='floor')  # floor or round
-parser.add_argument("--wire_width", type=int, default=200) # In practice, wire_width shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
-parser.add_argument("--CMOS_technode", type=int, default=32)
-parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
-parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--hardware_estimation", type=int, default=False)
 
 parser.set_defaults(plot=False, gpu=True)
 
@@ -89,15 +74,6 @@ update_interval = args.update_interval
 plot = args.plot
 gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
-sim_params = {'device_structure': args.memristor_structure, 'device_name': args.memristor_device,
-              'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
-              'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
-              'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
-              'batch_interval': args.time*2+1, 'write_batch_interval':args.time+1,
-              'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
-              'ADC_setting': args.ADC_setting,'ADC_rounding_function': args.ADC_rounding_function,
-              'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
-              'hardware_estimation': args.hardware_estimation}
 
 # %% Sets up Gpu use
 os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
@@ -121,6 +97,9 @@ if n_workers == -1:
 
 n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
+
+# %% Obtain memristor parameters
+sim_params = full_fitting(args.memristor_structure, args.time*2+1, args.time+1)
 
 # %% Multiple test
 out_root = 'Accuracy_Results_dynamic_train.txt'
@@ -368,7 +347,8 @@ for test_cnt in range(multiple_test_no):
             network.train(mode=True)
             if (sim_params['device_name'] != 'trace' and network.learning):
                 for l in network.layers:
-                    network.layers[l].update_SAF_mask()
+                    if sim_params['stuck_at_fault'] == True:
+                        network.layers[l].update_SAF_mask()
                 network.mem_t_update()
             total_capacity = epoch * args.n_train + (step + 1) * train_batch_size
         if signal_break >= patience:
