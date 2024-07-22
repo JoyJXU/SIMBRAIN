@@ -3,14 +3,13 @@ import json
 from simbrain.memristor_fit import MemristorFitting
 
 
-def full_fitting(device_structure, batch_interval, write_batch_interval):
+def full_fitting(device_structure, batch_interval):
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
     print(root)
     with open(root + "/memristor_data/sim_params.json") as f:
         sim_params = json.load(f)
     sim_params['device_structure'] = device_structure
     sim_params['batch_interval'] = batch_interval
-    sim_params['write_batch_interval'] = write_batch_interval
     
     with open(root + "/memristor_data/my_memristor.json") as f:
         my_memristor = json.load(f)

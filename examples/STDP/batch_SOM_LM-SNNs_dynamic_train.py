@@ -19,7 +19,7 @@ from tqdm import tqdm
 from time import time as t
 
 sys.path.append('../')
-
+sys.path.append('../../')
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import PoissonEncoder, poisson
 from bindsnet.models import IncreasingInhibitionNetwork
@@ -49,7 +49,7 @@ parser.add_argument("--update_inhibation_weights", type=int, default=500)
 parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
-parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
+parser.add_argument("--memristor_structure", type=str, default='STDP_crossbar') # trace or crossbar 
 
 parser.set_defaults(plot=False, gpu=True)
 
@@ -76,7 +76,7 @@ gpu = args.gpu
 update_inhibation_weights = args.update_inhibation_weights
 
 # %% Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # torch.manual_seed(seed)
@@ -99,7 +99,7 @@ n_sqrt = int(np.ceil(np.sqrt(n_neurons)))
 start_intensity = intensity
 
 # %% Obtain memristor parameters
-sim_params = full_fitting(args.memristor_structure, args.time*2+1, args.time+1)
+sim_params = full_fitting(args.memristor_structure, args.time)
 
 # %% Multiple test
 out_root = 'Accuracy_Results_dynamic_train.txt'

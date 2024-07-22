@@ -103,7 +103,6 @@ class DAC_Module_Power(torch.nn.Module):
                                                                                                    widthPMOS=switch_matrix_read_width_tg_P,
                                                                                                    heightTransistorRegion=switch_matrix_read_height)
         self.switch_matrix_read_energy = 0
-        self.switch_matrix_read_energy_1 = 0
 
 
     def switch_matrix_row_write_initialize(self) -> None:
@@ -111,7 +110,6 @@ class DAC_Module_Power(torch.nn.Module):
         self.switch_matrix_row_write_cap_gateP = self.switch_matrix_read_cap_gateP
         self.switch_matrix_row_write_cap_tg_drain = self.switch_matrix_read_cap_tg_drain
         self.switch_matrix_row_write_energy = 0
-        self.switch_matrix_row_write_energy_1 = 0
 
 
     def switch_matrix_col_write_initialize(self) -> None:
@@ -146,9 +144,7 @@ class DAC_Module_Power(torch.nn.Module):
                                                                                                         widthPMOS=switch_matrix_col_write_width_tg_P,
                                                                                                         heightTransistorRegion=switch_matrix_col_write_height)
         self.switch_matrix_col_write_energy = 0
-        self.switch_matrix_col_write_energy_1 = 0
         self.switch_matrix_reset_energy = 0
-        self.switch_matrix_reset_energy_1 = 0
 
 
     def DFF_initialize(self) -> None:
@@ -169,12 +165,9 @@ class DAC_Module_Power(torch.nn.Module):
         self.DFF_energy = 0
 
     def switch_matrix_read_energy_calculation(self, activity_read, mem_v_shape) -> None:
-        read_times = mem_v_shape[0] * mem_v_shape[1] * self.input_bit
+        read_times = mem_v_shape[1] * mem_v_shape[2] * self.input_bit
         self.switch_matrix_read_energy += (self.switch_matrix_read_cap_tg_drain * 3) * self.read_v_amp * self.read_v_amp * activity_read * self.shape[0] * read_times
         self.switch_matrix_read_energy += (self.switch_matrix_read_cap_gateN + self.switch_matrix_read_cap_gateP) * self.vdd * self.vdd * activity_read * self.shape[0] * read_times
-        self.switch_matrix_read_energy_1 += (self.switch_matrix_read_cap_tg_drain * 3) * self.read_v_amp * self.read_v_amp * activity_read * self.shape[0] * read_times
-        self.switch_matrix_read_energy_1 += (self.switch_matrix_read_cap_gateN + self.switch_matrix_read_cap_gateP) * self.vdd * self.vdd * activity_read * self.shape[0] * read_times
-        self.DFF_read_energy += self.DFF_energy_calculation(DFF_num=self.shape[0], DFF_read=read_times)
         self.switch_matrix_read_energy += self.DFF_energy_calculation(DFF_num=self.shape[0], DFF_read=read_times)
 
 
@@ -186,21 +179,13 @@ class DAC_Module_Power(torch.nn.Module):
         self.switch_matrix_col_write_energy += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp_pos * mem_v_amp_pos * mem_pos_num
         self.switch_matrix_col_write_energy += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp_neg * mem_v_amp_neg * mem_neg_num
         self.switch_matrix_col_write_energy += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * (mem_neg_num + mem_pos_num)
-        self.switch_matrix_col_write_energy_1 += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp_pos * mem_v_amp_pos * mem_pos_num
-        self.switch_matrix_col_write_energy_1 += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp_neg * mem_v_amp_neg * mem_neg_num
-        self.switch_matrix_col_write_energy_1 += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * (mem_neg_num + mem_pos_num)
-        self.DFF_col_write_energy += self.DFF_energy_calculation(self.shape[1], self.shape[0]*self.batch_size)
         self.switch_matrix_col_write_energy += self.DFF_energy_calculation(self.shape[1], self.shape[0]*self.batch_size)
 
 
     def switch_matrix_row_write_energy_calculation(self, mem_v_amp) -> None:
-        self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_tg_drain * 3) * 1/2 * mem_v_amp * 1/2 * mem_v_amp * self.batch_size * (self.shape[0]-1) * self.shape[0]
+        self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_tg_drain * 3) * 1/2 * mem_v_amp * 1/2 * mem_v_amp * self.batch_size * (self.shape[0] - 1) * self.shape[0]
         self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[0]
         self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_gateN + self.switch_matrix_row_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[0] * self.shape[0]
-        self.switch_matrix_row_write_energy_1 += (self.switch_matrix_row_write_cap_tg_drain * 3) * 1/2 * mem_v_amp * 1/2 * mem_v_amp * self.batch_size * (self.shape[0]-1) * self.shape[0]
-        self.switch_matrix_row_write_energy_1 += (self.switch_matrix_row_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[0]
-        self.switch_matrix_row_write_energy_1 += (self.switch_matrix_row_write_cap_gateN + self.switch_matrix_row_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[0] * self.shape[0]
-        self.DFF_row_write_energy += self.DFF_energy_calculation(self.shape[0], self.shape[0]*self.batch_size)
         self.switch_matrix_row_write_energy += self.DFF_energy_calculation(self.shape[0], self.shape[0]*self.batch_size)
 
 
@@ -208,9 +193,6 @@ class DAC_Module_Power(torch.nn.Module):
         mem_v_amp = torch.min(mem_v)
         self.switch_matrix_reset_energy += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[1]
         self.switch_matrix_reset_energy += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[1]
-        self.switch_matrix_reset_energy_1 += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[1]
-        self.switch_matrix_reset_energy_1 += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[1]
-        self.DFF_energy_reset += self.DFF_energy_calculation(self.shape[1], self.batch_size)
         self.switch_matrix_reset_energy += self.DFF_energy_calculation(self.shape[1], self.batch_size)
 
 
@@ -241,17 +223,9 @@ class DAC_Module_Power(torch.nn.Module):
                                 self.switch_matrix_read_energy + self.switch_matrix_reset_energy
         self.DAC_average_power = self.DAC_total_energy / (torch.max(mem_t) * self.dt)
         self.sim_power = {'switch_matrix_reset_energy': self.switch_matrix_reset_energy,
-                          'switch_matrix_reset_energy_1': self.switch_matrix_reset_energy_1,
-                          'DFF_energy_reset': self.DFF_energy_reset,
                           'switch_matrix_col_write_energy': self.switch_matrix_col_write_energy,
-                          'switch_matrix_col_write_energy_1': self.switch_matrix_col_write_energy_1,
-                          'DFF_col_write_energy': self.DFF_col_write_energy,
                           'switch_matrix_row_write_energy': self.switch_matrix_row_write_energy,
-                          'switch_matrix_row_write_energy_1': self.switch_matrix_row_write_energy_1,
-                          'DFF_row_write_energy': self.DFF_row_write_energy,
                           'switch_matrix_read_energy': self.switch_matrix_read_energy,
-                          'switch_matrix_read_energy_1': self.switch_matrix_read_energy_1,
-                          'DFF_read_energy': self.DFF_read_energy,
                           'DAC_total_energy': self.DAC_total_energy,
                           'DAC_average_power': self.DAC_average_power}
 

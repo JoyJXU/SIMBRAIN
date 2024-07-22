@@ -38,16 +38,25 @@ class Mapping(torch.nn.Module):
         self.ADC_setting = sim_params['ADC_setting']
         self.ADC_rounding_function = sim_params['ADC_rounding_function']
 
-        if self.device_structure == 'trace':
+
+        if self.device_structure == 'STDP_crossbar':
+            self.shape = [1, 1]  # Shape of the memristor crossbar
+            for element in shape:
+                self.shape[0] *= element
+                self.shape[1] *= element
+            self.shape[0] = int(self.shape[0] ** (1/2))
+            self.shape[1] = int(self.shape[1] ** (1/2))
+            self.shape = tuple(self.shape)
+        elif self.device_structure == 'trace':
             self.shape = [1, 1]  # Shape of the memristor crossbar
             for element in shape:
                 self.shape[1] *= element
             self.shape = tuple(self.shape)
-        elif self.device_structure in {'crossbar'}:
+        elif self.device_structure == 'crossbar':
             self.shape = shape
         else:
             raise Exception("Only trace and crossbar architecture are supported!")
-        
+            
         self.register_buffer("mem_v", torch.Tensor())
         self.register_buffer("mem_x_read", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
@@ -122,8 +131,12 @@ class STDPMapping(Mapping):
                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
         self.ADC_module = ADC_Module(sim_params=sim_params, shape=self.shape,
                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
-        self.batch_interval = sim_params['batch_interval']
-        self.write_batch_interval = sim_params['write_batch_interval']
+        if self.device_structure == 'STDP_crossbar':
+            self.batch_interval = sim_params['batch_interval'] * self.shape[0] * 3 + 1 
+            self.write_batch_interval = sim_params['batch_interval'] + 1
+        elif self.device_structure == 'trace':
+            self.batch_interval = sim_params['batch_interval'] * 2 + 1
+            self.write_batch_interval = sim_params['batch_interval'] + 1
 
         self.register_buffer("mem_v_read", torch.Tensor())
         self.register_buffer("x", torch.Tensor())
@@ -186,7 +199,6 @@ class STDPMapping(Mapping):
                            'wire_width': self.sim_params['wire_width'],
                            'input_bit': self.sim_params['input_bit'],
                            'batch_interval': self.sim_params['batch_interval'],
-                           'write_batch_interval': self.sim_params['write_batch_interval'],
                            'CMOS_technode': self.sim_params['CMOS_technode'],
                            'ADC_precision': self.sim_params['ADC_precision'],
                            'ADC_setting': self.sim_params['ADC_setting'],
@@ -270,24 +282,37 @@ class STDPMapping(Mapping):
 
 
     def mapping_write_stdp(self, s):
-        if self.device_structure == 'trace':
+        if self.device_structure == 'STDP_crossbar':
+            write_time = 2
+            if s.dim() == 4:
+                self.s = s.squeeze()
+            elif s.dim() == 2:
+                self.s = s.view(s.shape[0], self.shape[0], self.shape[1])
+        elif self.device_structure == 'trace':
+            write_time = 1
             if s.dim() == 4:
                 self.s = s.flatten(2, 3)
             elif s.dim() == 2:
-                self.s = torch.unsqueeze(s, 1)
+                self.s = torch.unsqueeze(s, 1)            
         
         # nn to mem
         self.mem_v = self.s.float()
         self.mem_v[self.mem_v == 0] = self.vneg
         self.mem_v[self.mem_v == 1] = self.vpos      
 
-        self.DAC_module.DAC_write(mem_v=self.mem_v, mem_v_amp=None)
-        mem_c = self.mem_array.memristor_write(mem_v=self.mem_v)
+        self.DAC_module.DAC_write(mem_v=self.mem_v, mem_v_amp=[self.vpos, self.vneg])
+
+        mem_c = self.mem_array.memristor_write(mem_v=self.mem_v, write_time=write_time, mem_v_amp=[self.vpos, self.vneg])
         
         # mem to nn
         self.x = (mem_c - self.Gon) * self.trans_ratio
 
-        if self.device_structure == 'trace':
+        if self.device_structure == 'STDP_crossbar':
+            if s.dim() == 4:
+                self.x = self.x.unsqueeze(1)
+            elif s.dim() == 2:
+                self.x = self.x.flatten(1, 2)
+        elif self.device_structure == 'trace':
             if s.dim() == 4:
                 self.x = self.x.reshape(s.size(0), s.size(1), s.size(2), s.size(3))
             elif s.dim() == 2:
@@ -297,32 +322,37 @@ class STDPMapping(Mapping):
 
 
     def mapping_read_stdp(self, s):
-        if self.device_structure == 'trace':
+        if self.device_structure == 'STDP_crossbar':
+            if s.dim() == 4:
+                s = s.squeeze()
+            elif s.dim() == 2:
+                s = s.view(s.shape[0], int(s.shape[1] ** (1/2)), int(s.shape[1] ** (1/2)))
+        elif self.device_structure == 'trace':
             if s.dim() == 4:
                 s = s.flatten(2, 3)
             elif s.dim() == 2:
-                s = torch.unsqueeze(s, 1)
+                s = torch.unsqueeze(s, 1)    
 
-        # Read Voltage generation
-        # For every batch, read is not necessary when there is no spike s
-        s_sum = torch.sum(s, dim=2).squeeze()
+        s_sum = torch.sum(s, dim=(1,2))
         s_sum = torch.unsqueeze(s_sum, 1)
 
         self.mem_v_read.zero_()
-        self.mem_v_read[0, s_sum.bool()] = 1
-
-        self.mem_v_read = self.DAC_module.DAC_read(mem_v=self.mem_v_read, sgn=None)
-
-        mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read)
-
-        mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i,
-                                             total_wire_resistance=self.mem_array.total_wire_resistance,
-                                             high_cut_ratio=1)
-
+        self.mem_v_read[0, s_sum.bool(), :] = 1
+        mem_i_total = torch.empty(self.mem_v_read.shape[1], self.mem_v_read.shape[2], self.shape[0]*self.shape[1], device=self.mem_v_read.device)
+        for i in range(self.mem_v_read.shape[3]):
+            per_mem_v_read = self.mem_v_read.clone()
+            per_mem_v_read[:, :, :, :i] = 0
+            per_mem_v_read[:, :, :, i+1:] = 0
+            per_mem_v_read = self.DAC_module.DAC_read(mem_v=per_mem_v_read, sgn=None)
+            mem_i = self.mem_array.memristor_read(mem_v=per_mem_v_read)
+            mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i,
+                                                 total_wire_resistance=self.mem_array.total_wire_resistance,
+                                                 high_cut_ratio=1)
+            mem_i_total[:, :, i*self.shape[1]:(i+1)*self.shape[1]] = mem_i
         # current to trace
-        self.mem_x_read = (mem_i/self.v_read - self.Gon) * self.trans_ratio
+        self.mem_x_read = (mem_i_total/self.v_read - self.Gon) * self.trans_ratio
 
-        self.mem_x_read[~s_sum.bool()] = 0
+        self.mem_x_read[~s_sum.bool(), :] = 0
 
         return self.mem_x_read
 
@@ -335,6 +365,7 @@ class STDPMapping(Mapping):
         v_reset = self.memristor_luts[self.device_name]['V_reset']
         self.mem_v.fill_(v_reset)       
         # Adopt large negative pulses to reset the memristor array
+        self.DAC_module.DAC_reset(mem_v=self.mem_v)        
         self.mem_array.memristor_reset(mem_v=self.mem_v)
 
 
@@ -487,8 +518,8 @@ class MLPMapping(Mapping):
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
-            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)
-            self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
+            self.mem_pos_pos.memristor_write(mem_v=self.mem_v, write_time=1, mem_v_amp=[write_voltage])
+            self.mem_neg_pos.memristor_write(mem_v=self.mem_v, write_time=1, mem_v_amp=[write_voltage])
 
         # Negative weight write
         matrix_neg = torch.relu(target_x * -1)
@@ -500,8 +531,8 @@ class MLPMapping(Mapping):
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < self.write_pulse_no) * write_voltage
-            self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
-            self.mem_neg_neg.memristor_write(mem_v=self.mem_v)
+            self.mem_pos_neg.memristor_write(mem_v=self.mem_v, write_time=1, mem_v_amp=[write_voltage])
+            self.mem_neg_neg.memristor_write(mem_v=self.mem_v, write_time=1, mem_v_amp=[write_voltage])
 
 
     def mapping_read_mlp(self, target_v):
@@ -779,8 +810,8 @@ class CNNMapping(Mapping):
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
-            self.mem_pos_pos.memristor_write(mem_v=self.mem_v)
-            self.mem_neg_pos.memristor_write(mem_v=self.mem_v)
+            self.mem_pos_pos.memristor_write(mem_v=self.mem_v, write_time=1, mem_v_amp=[write_voltage])
+            self.mem_neg_pos.memristor_write(mem_v=self.mem_v, write_time=1, mem_v_amp=[write_voltage])
 
         # Negative weight write
         matrix_neg = torch.relu(target_x * -1)
@@ -792,8 +823,8 @@ class CNNMapping(Mapping):
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
-            self.mem_pos_neg.memristor_write(mem_v=self.mem_v)
-            self.mem_neg_neg.memristor_write(mem_v=self.mem_v)
+            self.mem_pos_neg.memristor_write(mem_v=self.mem_v, wirte_time=1, mem_v_amp=[write_voltage])
+            self.mem_neg_neg.memristor_write(mem_v=self.mem_v, write_time=1, mem_v_amp=[write_voltage])
 
 
     def mapping_read_cnn(self, target_v):

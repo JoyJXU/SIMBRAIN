@@ -7,11 +7,11 @@
   "aging_effect": 0,
   "CMOS_technode": 32,
   "wire_width": 200,
-  "input_bit": 8,
+  "input_bit": 1,
   "ADC_precision": 8,
   "ADC_rounding_function":"floor",
   "ADC_setting": 4,
   "device_roadmap":"HP",
   "temperature":300,
-  "hardware_estimation":false
+  "hardware_estimation":true
 }
