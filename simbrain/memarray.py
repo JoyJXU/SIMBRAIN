@@ -308,7 +308,7 @@ class MemristorArray(torch.nn.Module):
         return self.mem_c
 
 
-    def memristor_read(self, mem_v: torch.Tensor):
+    def memristor_read(self, mem_v: torch.Tensor, read_time: int):
         # language=rst
         """
         Memristor read operation for a single simulation step.
@@ -333,6 +333,9 @@ class MemristorArray(torch.nn.Module):
         # mem_array shape: [batchsize, array_row, array_column],
         # output_i shape: [input_bit, batchsize, read_no=1, array_column]
         self.mem_i = torch.matmul(mem_v * v_read, mem_c)
+        mem_c_1 = mem_c.unsqueeze(0).unsqueeze(2)
+        mem_v_1 = mem_v.unsqueeze(-1).expand_as(mem_c_1)
+        mem_i_1 = mem_v_1 * mem_c_1
         
         # Non-idealities
         mem_info = self.memristor_info_dict[self.device_name]
@@ -346,8 +349,8 @@ class MemristorArray(torch.nn.Module):
         Aging_off = mem_info['Aging_off']
 
         if self.retention_loss:
-            self.mem_loss_time += self.dt * mem_v.shape[0] * mem_v.shape[2]
-            self.mem_loss_dt.fill_(self.dt * mem_v.shape[0] * mem_v.shape[2])
+            self.mem_loss_time += self.dt * mem_v.shape[0] * mem_v.shape[2] * read_time
+            self.mem_loss_dt.fill_(self.dt * mem_v.shape[0] * mem_v.shape[2] * read_time)
             self.mem_x -= self.mem_x * self.mem_loss_dt * retention_loss_tau_reciprocal ** retention_loss_beta * \
                           retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
             self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
@@ -374,12 +377,12 @@ class MemristorArray(torch.nn.Module):
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
 
         # mem_t update according to the sequential read
-        self.mem_t += mem_v.shape[0] * mem_v.shape[2]
+        self.mem_t += mem_v.shape[0] * mem_v.shape[2] * read_time
 
         if self.hardware_estimation:
             self.power.read_energy_calculation(mem_v_bool=mem_v, mem_c=self.mem_c, total_wire_resistance=self.total_wire_resistance)
 
-        return self.mem_i
+        return self.mem_i, mem_i_1
 
 
     def memristor_reset(self, mem_v: torch.Tensor):

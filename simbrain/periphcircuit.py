@@ -184,12 +184,12 @@ class ADC_Module(torch.nn.Module):
             self.ADC_module_power.set_batch_size(batch_size=self.batch_size)
 
 
-    def ADC_read(self, mem_i_sequence, total_wire_resistance, high_cut_ratio) -> None:
+    def ADC_read(self, mem_i_sequence, mem_c, high_cut_ratio) -> None:
         # Initial mem_i
-        mem_i = torch.zeros(self.batch_size, mem_i_sequence.shape[2], self.shape[1], device=mem_i_sequence.device)
+        mem_i = torch.zeros(mem_i_sequence.size()[1:], device=mem_i_sequence.device)
 
         # calculate the theoretical max and min
-        mem_i_max = high_cut_ratio * torch.sum(self.read_v_amp/(1/self.Goff + total_wire_resistance), dim=0)
+        mem_i_max = high_cut_ratio * torch.sum(self.read_v_amp/mem_c, dim=0)
         mem_i_min = 0
         mem_i_step = (mem_i_max - mem_i_min) / (2**self.ADC_precision)
         mem_i_index = (mem_i_sequence - mem_i_min) / mem_i_step
