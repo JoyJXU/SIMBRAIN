@@ -13,5 +13,5 @@
   "ADC_setting": 4,
   "device_roadmap":"HP",
   "temperature":300,
-  "hardware_estimation":false
+  "hardware_estimation":true
 }

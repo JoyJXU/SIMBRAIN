@@ -49,7 +49,7 @@ parser.add_argument("--update_inhibation_weights", type=int, default=500)
 parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
-parser.add_argument("--memristor_structure", type=str, default='trace') # trace or crossbar 
+parser.add_argument("--memristor_structure", type=str, default='STDP_crossbar') # trace or crossbar 
 
 parser.set_defaults(plot=False, gpu=True)
 
@@ -255,33 +255,6 @@ for test_cnt in range(multiple_test_no):
                 if (step * train_batch_size) % update_interval == 0:
                     # Convert the array of labels into a tensor
                     label_tensor = torch.tensor(labels, device=device)
-
-
-                    # Get network predictions.
-                    all_activity_pred = all_activity(
-                        spikes=spike_record, assignments=assignments, n_labels=n_classes
-                    )
-                    proportion_pred = proportion_weighting(
-                        spikes=spike_record,
-                        assignments=assignments,
-                        proportions=proportions,
-                        n_labels=n_classes,
-                    )
-    
-                    # TODO: Compute network accuracy according to available classification strategies.
-                    accuracy["all"].append(
-                        100
-                        * torch.sum(label_tensor.long() == all_activity_pred).item()
-                        / len(label_tensor)
-                    )
-                    accuracy["proportion"].append(
-                        100
-                        * torch.sum(label_tensor.long() == proportion_pred).item()
-                        / len(label_tensor)
-                    )
-    
-                    tqdm.write("%.2f"% (accuracy["all"][-1],))
-
 
                     # Assign labels to excitatory layer neurons.
                     assignments, proportions, rates = assign_labels(

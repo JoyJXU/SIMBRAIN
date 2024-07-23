@@ -336,7 +336,7 @@ class STDPMapping(Mapping):
             self.mem_v_read = self.DAC_module.DAC_read(mem_v=self.mem_v_read, sgn=None)
             _, mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read, read_time=self.shape[0])
             mem_i = torch.reshape(mem_i,(mem_i.shape[0], mem_i.shape[1], mem_i.shape[2], mem_i.shape[3]*mem_i.shape[4]))
-            ADC_mem_c = 1 / (self.Goff + self.mem_array.total_wire_resistance)
+            ADC_mem_c = 1 / (1 / self.Goff + self.mem_array.total_wire_resistance)
             ADC_mem_c = torch.reshape(ADC_mem_c, (1, ADC_mem_c.shape[0]*ADC_mem_c.shape[1]))
             mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i,
                                                  mem_c=ADC_mem_c,
@@ -357,7 +357,7 @@ class STDPMapping(Mapping):
             self.mem_v_read = self.DAC_module.DAC_read(mem_v=self.mem_v_read, sgn=None)
         
             mem_i, _ = self.mem_array.memristor_read(mem_v=self.mem_v_read, read_time=1)
-            ADC_mem_c = 1 / (self.Goff + self.mem_array.total_wire_resistance)
+            ADC_mem_c = 1 / (1 / self.Goff + self.mem_array.total_wire_resistance)
             mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i,
                                                  mem_c=ADC_mem_c,
                                                  high_cut_ratio=1)
@@ -562,18 +562,18 @@ class MLPMapping(Mapping):
         mem_i_sequence_neg_neg, _ = self.mem_neg_neg.memristor_read(mem_v=v_read_neg, read_time=1)
 
         if self.ADC_setting == 4:
-            ADC_mem_c_pos_pos = 1 / (self.Goff + self.mem_pos_pos.total_wire_resistance)
-            ADC_mem_c_neg_pos = 1 / (self.Goff + self.mem_neg_pos.total_wire_resistance)
-            ADC_mem_c_pos_neg = 1 / (self.Goff + self.mem_pos_neg.total_wire_resistance)
-            ADC_mem_c_neg_neg = 1 / (self.Goff + self.mem_neg_neg.total_wire_resistance)
+            ADC_mem_c_pos_pos = 1 / (1 / self.Goff + self.mem_pos_pos.total_wire_resistance)
+            ADC_mem_c_neg_pos = 1 / (1 / self.Goff + self.mem_neg_pos.total_wire_resistance)
+            ADC_mem_c_pos_neg = 1 / (1 / self.Goff + self.mem_pos_neg.total_wire_resistance)
+            ADC_mem_c_neg_neg = 1 / (1 / self.Goff + self.mem_neg_neg.total_wire_resistance)
             mem_i_pos_pos = self.ADC_module_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, mem_c=ADC_mem_c_pos_pos, high_cut_ratio=1/self.ADC_setting)
             mem_i_neg_pos = self.ADC_module_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, mem_c=ADC_mem_c_neg_pos, high_cut_ratio=1/self.ADC_setting)
             mem_i_pos_neg = self.ADC_module_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, mem_c=ADC_mem_c_pos_neg, high_cut_ratio=1/self.ADC_setting)
             mem_i_neg_neg = self.ADC_module_neg_neg.ADC_read(mem_i_sequence=mem_i_sequence_neg_neg, mem_c=ADC_mem_c_neg_neg, high_cut_ratio=1/self.ADC_setting)
             mem_i = mem_i_pos_pos - mem_i_neg_pos - mem_i_pos_neg + mem_i_neg_neg
         elif self.ADC_setting == 2:
-            ADC_mem_c_pos = 1 / (self.Goff + self.mem_pos_pos.total_wire_resistance)
-            ADC_mem_c_neg = 1 / (self.Goff + self.mem_pos_neg.total_wire_resistance)           
+            ADC_mem_c_pos = 1 / (1 / self.Goff + self.mem_pos_pos.total_wire_resistance)
+            ADC_mem_c_neg = 1 / (1 / self.Goff + self.mem_pos_neg.total_wire_resistance)           
             mem_i_sequence_pos = mem_i_sequence_pos_pos + mem_i_sequence_neg_neg
             mem_i_pos = self.ADC_module_pos.ADC_read(mem_i_sequence_pos, mem_c=ADC_mem_c_pos, high_cut_ratio=1/self.ADC_setting)
             mem_i_sequence_neg = mem_i_sequence_neg_pos + mem_i_sequence_pos_neg
@@ -860,10 +860,10 @@ class CNNMapping(Mapping):
         mem_i_sequence_neg_neg, _ = self.mem_neg_neg.memristor_read(mem_v=v_read_neg, read_time=1)
 
         if self.ADC_setting == 4:
-            ADC_mem_c_pos_pos = 1 / (self.Goff + self.mem_pos_pos.total_wire_resistance)
-            ADC_mem_c_neg_pos = 1 / (self.Goff + self.mem_neg_pos.total_wire_resistance)
-            ADC_mem_c_pos_neg = 1 / (self.Goff + self.mem_pos_neg.total_wire_resistance)
-            ADC_mem_c_neg_neg = 1 / (self.Goff + self.mem_neg_neg.total_wire_resistance)
+            ADC_mem_c_pos_pos = 1 / (1 / self.Goff + self.mem_pos_pos.total_wire_resistance)
+            ADC_mem_c_neg_pos = 1 / (1 / self.Goff + self.mem_neg_pos.total_wire_resistance)
+            ADC_mem_c_pos_neg = 1 / (1 / self.Goff + self.mem_pos_neg.total_wire_resistance)
+            ADC_mem_c_neg_neg = 1 / (1 / self.Goff + self.mem_neg_neg.total_wire_resistance)
             mem_i_pos_pos = self.ADC_module_pos_pos.ADC_read(mem_i_sequence=mem_i_sequence_pos_pos, mem_c=ADC_mem_c_pos_pos, high_cut_ratio=2/self.ADC_setting)
             mem_i_neg_pos = self.ADC_module_neg_pos.ADC_read(mem_i_sequence=mem_i_sequence_neg_pos, mem_c=ADC_mem_c_neg_pos, high_cut_ratio=2/self.ADC_setting)
             mem_i_pos_neg = self.ADC_module_pos_neg.ADC_read(mem_i_sequence=mem_i_sequence_pos_neg, mem_c=ADC_mem_c_pos_neg, high_cut_ratio=2/self.ADC_setting)

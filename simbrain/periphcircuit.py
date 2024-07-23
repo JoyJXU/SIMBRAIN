@@ -189,7 +189,7 @@ class ADC_Module(torch.nn.Module):
         mem_i = torch.zeros(mem_i_sequence.size()[1:], device=mem_i_sequence.device)
 
         # calculate the theoretical max and min
-        mem_i_max = high_cut_ratio * torch.sum(self.read_v_amp/mem_c, dim=0)
+        mem_i_max = high_cut_ratio * torch.sum(self.read_v_amp*mem_c, dim=0)
         mem_i_min = 0
         mem_i_step = (mem_i_max - mem_i_min) / (2**self.ADC_precision)
         mem_i_index = (mem_i_sequence - mem_i_min) / mem_i_step
