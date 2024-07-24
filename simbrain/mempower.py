@@ -131,7 +131,7 @@ class Power(torch.nn.Module):
                 selected_mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
                 selected_mem_r = selected_mem_r + total_wire_resistance.unsqueeze(0)
                 selected_mem_c = 1.0 / selected_mem_r
-                self.selected_write_energy = (mem_v * mem_v * self.dr * self.dt * selected_mem_c)
+                self.selected_write_energy = ((V_write - mem_v_1) * (V_write - mem_v_1) * self.dr * self.dt * selected_mem_c)
     
                 # half selected write energy
                 r_after = 1.0 / mem_c

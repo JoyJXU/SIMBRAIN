@@ -327,20 +327,19 @@ class STDPMapping(Mapping):
                 s = s.squeeze()
             elif s.dim() == 2:
                 s = s.view(s.shape[0], int(s.shape[1] ** (1/2)), int(s.shape[1] ** (1/2)))
-            s_sum = torch.sum(s, dim=(1,2))
-            s_sum = torch.unsqueeze(s_sum, 1)
+            s_sum = torch.sum(s, dim=(1,2)).unsqueeze(1)
     
-            self.mem_v_read.zero_()
+            self.mem_v_read.fill_(0)
             self.mem_v_read[0, s_sum.bool(), :] = 1   
             
             self.mem_v_read = self.DAC_module.DAC_read(mem_v=self.mem_v_read, sgn=None)
             _, mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read, read_time=self.shape[0])
-            mem_i = torch.reshape(mem_i,(mem_i.shape[0], mem_i.shape[1], mem_i.shape[2], mem_i.shape[3]*mem_i.shape[4]))
+            mem_i = mem_i.flatten(3,4)
             ADC_mem_c = 1 / (1 / self.Goff + self.mem_array.total_wire_resistance)
-            ADC_mem_c = torch.reshape(ADC_mem_c, (1, ADC_mem_c.shape[0]*ADC_mem_c.shape[1]))
+            ADC_mem_c = ADC_mem_c.flatten(0,1).unsqueeze(0)
             mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i,
-                                                 mem_c=ADC_mem_c,
-                                                 high_cut_ratio=1)            
+                                                  mem_c=ADC_mem_c,
+                                                  high_cut_ratio=1)            
         
         elif self.device_structure == 'trace':
             if s.dim() == 4:
@@ -366,7 +365,7 @@ class STDPMapping(Mapping):
         self.mem_x_read = (mem_i/self.v_read - self.Gon) * self.trans_ratio
         self.mem_x_read[~s_sum.bool()] = 0     
             
-        return self.mem_x_read
+        return self.mem_x_read  #self.mem_array.mem_x.flatten(1,2).unsqueeze(1)
 
 
     def reset_memristor_variables(self) -> None:

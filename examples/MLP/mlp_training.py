@@ -35,7 +35,7 @@ misc.logger.init(args.logdir, 'train_log')
 print = misc.logger.info
 
 # %% Obtain memristor parameters
-sim_params = full_fitting(args.memristor_structure, None, None)
+sim_params = full_fitting(args.memristor_structure, None)
 
 # logger
 misc.ensure_dir(args.logdir)
@@ -45,7 +45,7 @@ for k, v in args.__dict__.items():
 print("========================================")
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
+os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

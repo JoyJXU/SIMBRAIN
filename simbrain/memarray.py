@@ -332,11 +332,15 @@ class MemristorArray(torch.nn.Module):
         # mem_v shape: [input_bit, batchsize, read_no=1, array_row],
         # mem_array shape: [batchsize, array_row, array_column],
         # output_i shape: [input_bit, batchsize, read_no=1, array_column]
-        self.mem_i = torch.matmul(mem_v * v_read, mem_c)
-        mem_c_1 = mem_c.unsqueeze(0).unsqueeze(2)
-        mem_v_1 = mem_v.unsqueeze(-1).expand_as(mem_c_1)
-        mem_i_1 = mem_v_1 * mem_c_1
-        
+
+        if self.device_structure == 'STDP_crossbar':       
+            mem_c_1 = mem_c.unsqueeze(0).unsqueeze(2).expand(mem_v.shape[0], mem_v.shape[1], mem_v.shape[2], self.shape[0], self.shape[1])
+            mem_v_1 = mem_v.unsqueeze(-1).expand_as(mem_c_1)
+            mem_i_1 = v_read * mem_v_1 * mem_c_1
+        else:
+            mem_i_1 = 0
+            self.mem_i = torch.matmul(mem_v * v_read, mem_c)
+
         # Non-idealities
         mem_info = self.memristor_info_dict[self.device_name]
         v_off = mem_info['v_off']

@@ -39,7 +39,7 @@ else:
 print("Running on Device = ", device)
 
 # %% Obtain memristor parameters
-sim_params = full_fitting(args.memristor_structure, None, None)
+sim_params = full_fitting(args.memristor_structure, None)
 
 t_begin = time.time()
 

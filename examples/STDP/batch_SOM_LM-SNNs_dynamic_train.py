@@ -136,7 +136,7 @@ for test_cnt in range(multiple_test_no):
     out = open(out_root, 'a')
 
     # %% Enable test while training
-    init_num = 100000 # start capacity (number of training patterns)
+    init_num = 10000 # start capacity (number of training patterns)
     signal_break = 0
     tmp_acc = 0
     best_acc = 0
@@ -241,6 +241,9 @@ for test_cnt in range(multiple_test_no):
 
             network.train(mode=True)
 
+            # %% Update
+            network.reset_state_variables()  # Reset state variables.
+
             # Get next input sample.
             inputs = {"X": batch["encoded_image"].transpose(0, 1).to(device)}
 
@@ -283,8 +286,7 @@ for test_cnt in range(multiple_test_no):
                 0)
             ].copy_(temp_spikes, non_blocking=True)
 
-            # %% Update
-            network.reset_state_variables()  # Reset state variables.
+
             pbar.set_description_str("Train progress: ")
             pbar.update()
             init_batch_sign = False

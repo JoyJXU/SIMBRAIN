@@ -30,7 +30,7 @@ parser.add_argument("--memristor_structure", type=str, default='crossbar') # tra
 args = parser.parse_args()
 
 # %% Obtain memristor parameters
-sim_params = full_fitting(args.memristor_structure, None, None)
+sim_params = full_fitting(args.memristor_structure, None)
     
 def train(epoch):
     print('\nEpoch: %d' % epoch)
