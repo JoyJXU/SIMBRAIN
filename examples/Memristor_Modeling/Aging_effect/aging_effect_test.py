@@ -18,8 +18,8 @@ def main():
     Aging_off_2, Aging_on_2 = exp.fitting_equation2()
     dict.update(
         {
-            'Aging_k_off': Aging_off_2,
-            'Aging_k_on':  Aging_on_2
+            'Aging_off': Aging_off_2,
+            'Aging_on':  Aging_on_2
         }
     )
 
@@ -78,15 +78,14 @@ def main():
 
     # Two subgraphs
     fig = plt.figure(figsize=(15, 6))
-    plot_x = np.logspace(-3, 4, 1000, base=10)
+    plot_x = np.logspace(-3, -0.3, 1000, base=10)
     ax1 = fig.add_subplot(121)
     exp.G_0 = exp.G_off_init
     ax1.semilogx(plot_x, np.exp(exp.equation_1_log(plot_x, Aging_off_1)))
     ax1.semilogx(plot_x, exp.equation_2(plot_x, Aging_off_2))
     ax1.scatter(exp.mem_t, exp.G_off, c='red', s=0.1)
     ax1.legend(['Equation 1', 'Equation 2'])
-    ax1.set_xlim(1e-3, 1e4)
-    ax1.set_xlabel('Time(s) * 10^3')
+    ax1.set_xlabel('Time(s)')
     ax1.set_ylabel('Conductance(S)')
     ax1.set_title('Aging effect (G_off)')
 
@@ -96,9 +95,7 @@ def main():
     ax2.semilogx(plot_x, exp.equation_2(plot_x,  Aging_on_2))
     ax2.scatter(exp.mem_t, exp.G_on, c='red', s=0.1)
     ax2.legend(['Equation 1', 'Equation 2'])
-    ax2.set_xlim(1e-3, 1e4)
-    ax2.set_ylim(bottom=-1e-5, top=1.5e-4)
-    ax2.set_xlabel('Time(s) * 10^3')
+    ax2.set_xlabel('Time(s)')
     ax2.set_ylabel('Conductance(S)')
     ax2.set_title('Aging effect (G_on)')
 

@@ -215,7 +215,12 @@ class STDPMapping(Mapping):
         v_off = mem_info['v_off']
         alpha_off = mem_info['alpha_off']
         v_pos = v_off * (math.pow(1 / (dt * k_off), 1.0 / alpha_off) + 1)
-
+        
+        if self.device_structure == 'STDP_crossbar':
+            write_time = 2
+        elif self.device_structure == 'trace':
+            write_time = 1
+            
         if mem_info['P_on'] == 1:
             k_on = mem_info['k_on']
             v_on = mem_info['v_on']
@@ -234,7 +239,7 @@ class STDPMapping(Mapping):
                 mem_s = torch.tensor(spike[t], dtype=torch.float64)
                 mem_v = v_tensor if mem_s == 0 else torch.tensor(v_pos).expand(n_test)
 
-                mem_c = test_array.memristor_write(mem_v=mem_v.unsqueeze(1).unsqueeze(2))
+                mem_c = test_array.memristor_write(mem_v=mem_v.unsqueeze(1).unsqueeze(2), write_time=write_time, mem_v_amp=[0,0])
                 test_x[t + 1] = (mem_c - self.Gon) * self.trans_ratio
 
             # Compare results
@@ -260,7 +265,7 @@ class STDPMapping(Mapping):
                 mem_v[mem_v == 0] = v_neg
                 mem_v[mem_v == 1] = v_pos
 
-                mem_c = test_array.memristor_write(mem_v=mem_v)
+                mem_c = test_array.memristor_write(mem_v=mem_v, write_time=write_time, mem_v_amp=[0,0])
 
                 # mem to nn
                 temp_x = (mem_c - self.Gon) * self.trans_ratio
@@ -840,7 +845,7 @@ class CNNMapping(Mapping):
         # Memristor programming using multiple identical pulses (up to 400)
         for t in range(total_wr_cycle):
             self.mem_v = ((counter * t) < write_pulse_no) * write_voltage
-            self.mem_pos_neg.memristor_write(mem_v=self.mem_v, wirte_time=1, mem_v_amp=[write_voltage])
+            self.mem_pos_neg.memristor_write(mem_v=self.mem_v, write_time=1, mem_v_amp=[write_voltage])
             self.mem_neg_neg.memristor_write(mem_v=self.mem_v, write_time=1, mem_v_amp=[write_voltage])
 
 

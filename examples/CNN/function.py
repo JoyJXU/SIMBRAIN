@@ -46,6 +46,8 @@ class MemConv2dFunction(Function):
 
         # Unfold the input tensor to extract patches
         unfolded_input = torch.nn.functional.unfold(input_padded, (kernel_size, kernel_size), stride=stride)
+        # print ("unfolded_input",unfolded_input.size())
+        # print ("kernel_size",kernel_size)
 
         # Reshape input to the memristor array input
         input_reshape = unfolded_input.transpose(1, 2)

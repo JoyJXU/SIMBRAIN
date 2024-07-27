@@ -166,9 +166,16 @@ class MemristorFitting(object):
             device_nums = data.shape[1] - 2
             G_off_variation = np.zeros(device_nums)
             G_on_variation = np.zeros(device_nums)
+            G_on_num = int(points_d / 20)  + 1
+            G_off_num = int(points_r / 20) + 1
+        
             for i in range(device_nums):
-                G_off_variation[i] = np.average(data[i][points_r - 10:points_r] / read_voltage)
-                G_on_variation[i] = np.average(data[i][points_r + points_d - 10:] / read_voltage)
+                G_off_variation[i] = np.average(
+                    data[i][points_r - G_off_num:points_r] / read_voltage
+                )
+                G_on_variation[i] = np.average(
+                    data[i][points_r + points_d - G_on_num:] / read_voltage
+                ) 
         else:
             raise Exception("Error! Missing data files.\nFailed to update G_off, G_on.")
 
@@ -224,11 +231,21 @@ class MemristorFitting(object):
             )
         else:
             self.copy_data(root, ref, obj, iv_curve_path)
-            alpha_off, alpha_on = IVCurve(root + obj + iv_curve_path, mem_info).fitting(loss_option='rrmse_euclidean')
+            G_off_tmp = 6.3315e-3
+            G_on_tmp = 1.3088e-3
+            mem_info.update(
+                {             
+                    "G_off": G_off_tmp,
+                    "G_on": G_on_tmp
+                }
+            )
+            alpha_off, alpha_on = IVCurve(root + obj + iv_curve_path, mem_info).fitting(loss_option='rrmse_percent')
             mem_info.update(
                 {
                     "alpha_off": alpha_off,
-                    "alpha_on": alpha_on
+                    "alpha_on": alpha_on,
+                    "G_off": G_off,
+                    "G_on": G_on
                 }
             )
 

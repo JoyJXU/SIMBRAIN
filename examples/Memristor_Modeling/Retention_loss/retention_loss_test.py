@@ -13,18 +13,18 @@ def main():
         dict = json.load(f)
     file = "../../../reference_memristor_data/retention_loss.xlsx"
     exp = RetentionLoss(file)
-    tau, beta = exp.fitting()
+    tau_reciprocal, beta = exp.fitting()
     dict.update(
         {
-            "retention_loss_tau": tau,
+            "retention_loss_tau_reciprocal": tau_reciprocal,
             "retention_loss_beta": beta
         }
     )
 
     # Output
     df = pd.DataFrame(
-        {'value': [tau, beta]},
-        index=['retention_loss_tau', 'retention_loss_beta']
+        {'value': [tau_reciprocal, beta]},
+        index=['retention_loss_tau_reciprocal', 'retention_loss_beta']
     )
     print(df)
     with open("fitting_record.json", "w") as f:
@@ -33,7 +33,7 @@ def main():
     # Plot
     fig = plt.figure(figsize=(8, 6))
     plt.scatter(exp.time * exp.delta_t, exp.conductance, c='r')
-    plt.plot(exp.time * exp.delta_t, exp.retention_loss(exp.time, tau, beta), c='b')
+    plt.plot(exp.time * exp.delta_t, exp.retention_loss(exp.time, tau_reciprocal, beta), c='b')
     plt.xlabel("Time (s)")
     plt.ylabel("Conductance (S)")
     plt.title("Retention Loss")

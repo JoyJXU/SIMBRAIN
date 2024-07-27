@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
-
+from scipy.optimize import fsolve
 
 def timer(func):
     def func_wrapper(*args, **kwargs):
@@ -38,31 +38,49 @@ class RetentionLoss(object):
         self.w_init = self.conductance[0]
         self.points = len(self.time)
 
-    def retention_loss(self, time, tau_reciprocal, beta):
-        internal_state = np.zeros(400)
+    def retention_loss(self, time, k, beta):
+        internal_state = np.zeros(self.points)
         internal_state[0] = self.w_init
 
         for i in range(self.points - 1):
-            internal_state[i + 1] = internal_state[i] - self.delta_t * beta * tau_reciprocal ** beta * internal_state[i] * (
+            internal_state[i + 1] = internal_state[i] - self.delta_t * k * internal_state[i] * (
                     (time[i]) ** (beta - 1))
 
         return internal_state
+    
+    def rentention_loss_1(self, time, tau_reciprocal):
+        internal_state = np.zeros(self.points)
+        internal_state[0] = self.w_init
+
+        for i in range(self.points - 1):
+            internal_state[i + 1] = internal_state[i] - self.delta_t * tau_reciprocal * internal_state[i] * time[i]
+
+        return internal_state
+            
+
+    def equation(self, tau_reciprocal):
+        return self.beta * np.power(tau_reciprocal, self.beta) - self.k
+
 
     @timer
     def fitting(self):
-        w_init_list = self.conductance[0] * (1 + np.random.uniform(-0.1, 0.1, 100))
-        tau_reciprocal_list = np.zeros(100)
-        beta_list = np.zeros(100)
-        for i in range(100):
-            self.w_init = w_init_list[i]
+        self.w_init = self.conductance[0] * 1.002
+        params, pconv = curve_fit(
+            self.retention_loss,
+            self.time,
+            self.conductance
+        )
+        # print(params, pconv)
+        k, beta = params[0], params[1]
+        if k > 0:
+            tau_reciprocal = np.power(k/beta, 1/beta) 
+        else:
             params, pconv = curve_fit(
                 self.retention_loss,
                 self.time,
                 self.conductance
             )
-            tau_reciprocal_list[i], beta_list[i] = params[0], params[1]
-        tau_reciprocal = np.mean(tau_reciprocal_list)
-        beta = np.mean(beta_list)
-        # tau = 0.012478, beta = 1.066
-        self.w_init = self.conductance[0]
+            tau_reciprocal = params[0]
+            beta = 1            
+
         return tau_reciprocal, beta

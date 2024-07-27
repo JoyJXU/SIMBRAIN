@@ -152,7 +152,7 @@ class Conductance(object):
             x_r = (conductance_r - self.G_on) / (self.G_off - self.G_on)
             x_d = (conductance_d - self.G_on) / (self.G_off - self.G_on)
             x_init_r = x_r[:, 0]
-            x_init_d = x_d[:, 0]
+            x_init_d = torch.tensor(1.0) #x_d[:, 0]
 
             mem_x_r = torch.zeros([self.points_r, self.batch_size, k_off_nums, P_off_nums], device=device)
             mem_x_r[0] = x_init_r.expand(k_off_nums, self.batch_size).expand(P_off_nums, k_off_nums,

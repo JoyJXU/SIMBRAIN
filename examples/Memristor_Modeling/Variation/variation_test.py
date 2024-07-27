@@ -14,7 +14,7 @@ from simbrain.Fitting_Functions.variation_fitting import Variation
 def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
     # Fit
-    with open("dict.json") as f:
+    with open("../../../memristor_data/my_memristor.json") as f:
         dict = json.load(f)
     dict.update(
         {

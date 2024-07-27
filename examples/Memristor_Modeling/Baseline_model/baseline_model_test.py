@@ -23,8 +23,8 @@ def main():
         dict = json.load(f)
     dict.update(
         {
-            'v_off': 1.5,
-            'v_on': -1.5,
+            'v_off': 0.2,
+            'v_on': -0.2,
             'G_off': None,
             'G_on': None,
             'alpha_off': None,
@@ -33,7 +33,7 @@ def main():
             'k_on': None,
             'P_off': None,
             'P_on': None,
-            'delta_t': 20 * 1e-3,
+            'delta_t': 100 * 1e-3,
             "duty_ratio": 0.5
         }
     )
@@ -66,29 +66,35 @@ def main():
         device_nums = data.shape[1] - 2
         G_off_list = np.zeros(device_nums)
         G_on_list = np.zeros(device_nums)
-
+        G_on_num = int(points_d / 20)  + 1
+        G_off_num = int(points_r / 20) + 1
+    
         for i in range(device_nums):
             G_off_list[i] = np.average(
-                data[i][points_r - 10:points_r] / read_voltage
+                data[i][points_r - G_off_num:points_r] / read_voltage
             )
             G_on_list[i] = np.average(
-                data[i][points_r + points_d - 10:] / read_voltage
-            )
+                data[i][points_r + points_d - G_on_num:] / read_voltage
+            ) 
 
         G_off = np.mean(G_off_list)
         G_on = np.mean(G_on_list)
-
+    
+    G_off_temp = 6.3315e-3
+    G_on_temp = 1.3088e-3
     dict.update(
         {
             'v_off': 0.2,
             'v_on': -0.2,
+            'G_off': G_off_temp,
+            'G_on': G_on_temp,
         }
     )
 
     if os.path.isfile(file_iv):
         print('Going through IV curve fitting process')
         # loss_list = ['rmse', 'rrmse_range', 'rrmse_mean', 'rrmse_euclidean', 'rrmse_percent']
-        loss_list = ['rrmse_euclidean']
+        loss_list = ['rrmse_percent']
         for loss in loss_list:
             exp_1 = IVCurve(file_iv, dict)
             alpha_off, alpha_on = exp_1.fitting(loss_option=loss)
@@ -109,8 +115,8 @@ def main():
             'G_on': G_on,
             "alpha_off": alpha_off,
             "alpha_on": alpha_on,
-            'v_off': 1.5,
-            'v_on': -1.5,
+            'v_off': 0.2,
+            'v_on': -0.2,
         }
     )
 
@@ -158,7 +164,7 @@ def main():
             loss = 'rmse'
             P_off_list, P_on_list = exp_2.mult_P_fitting(G_off_list, G_on_list, loss_option=loss)
             x_init_r = np.array(x_r)[0]
-            x_init_d = np.array(x_d)[0]
+            x_init_d = 1 #np.array(x_d)[0]
             mem_x_r = np.zeros([exp_2.points_r, exp_2.device_nums])
             mem_x_d = np.zeros([exp_2.points_d, exp_2.device_nums])
             mem_x_r[0] = x_init_r
@@ -197,7 +203,7 @@ def main():
             x_r = (conductance_r - exp_2.G_on) / (exp_2.G_off - exp_2.G_on)
             x_d = (conductance_d - exp_2.G_on) / (exp_2.G_off - exp_2.G_on)
             x_init_r = x_r[0]
-            x_init_d = x_d[0]
+            x_init_d = 1 #x_d[0]
             mem_x_r = np.zeros(exp_2.points_r)
             mem_x_d = np.zeros(exp_2.points_d)
             mem_x_r[0] = np.average(x_init_r)
