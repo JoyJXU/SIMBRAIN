@@ -160,8 +160,8 @@ class MemristorArray(torch.nn.Module):
             self.Pon_d2d = torch.zeros(*self.shape, device=self.Pon_d2d.device)
             self.Poff_d2d = torch.zeros(*self.shape, device=self.Poff_d2d.device)
             # Add d2d variation
-            self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma * P_on)
-            self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma * P_off)
+            self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma)
+            self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma)
             # Clipping
             self.Pon_d2d = torch.clamp(self.Pon_d2d, min=0)
             self.Poff_d2d = torch.clamp(self.Poff_d2d, min=0)
