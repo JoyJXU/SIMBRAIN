@@ -21,11 +21,10 @@ parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--rep", type=int, default=10)
 parser.add_argument("--batch_size", type=int, default=100)
 parser.add_argument('--data_root', default='data/', help='folder to save the model')
-parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
+parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace or crossbar
 args = parser.parse_args()
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [1]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -47,50 +46,51 @@ t_begin = time.time()
 print('==> Preparing data..')
 test_loader = dataset.get(batch_size=args.batch_size, data_root=args.data_root, num_workers=1, train=False, val=True)
 
-# Network Model
-# model = mlp.mlp_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=True,)
-model = mlp.mem_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=True, mem_device=sim_params)
-
-# Area print
-if sim_params['hardware_estimation']:
-    total_area = 0
-    for layer_name, layer in model.layers.items():
-        if isinstance(layer, Mem_Linear):
-            layer.crossbar.total_area_calculation()
-            total_area += layer.crossbar.sim_area['sim_total_area']
-    print("total area=", total_area, " m2")
-
-# Memristor write
-print('==> Write Memristor..')
-start_time = time.time()
-for layer_name, layer in model.layers.items():
-    if isinstance(layer, Mem_Linear):
-        layer.mem_update()
-        if sim_params['stuck_at_fault'] == True:
-            layer.crossbar.update_SAF_mask()
-end_time = time.time()
-exe_time = end_time - start_time
-print("Execution time: ", exe_time)
-
-if sim_params['hardware_estimation']:
-    # print write power results
-    total_energy = 0  
-    average_power = 0
-    for layer_name, layer in model.layers.items():
-        if isinstance(layer, Mem_Linear):
-            layer.crossbar.total_energy_calculation()
-            sim_power = layer.crossbar.sim_power
-            total_energy += sim_power['total_energy']
-            average_power += sim_power['average_power']
-    print("\ttotal_write_energy=", total_energy)
-    print("\taverage_write_power=", average_power)
-
-model.to(device)
-
 # Repeated Experiment
 print('==> Read Memristor..')
 out_root = 'MLP_inference_results.txt'
+
 for test_cnt in range(args.rep):
+    # Network Model
+    # model = mlp.mlp_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=True,)
+    model = mlp.mem_mnist(input_dims=784, n_hiddens=[256, 256], n_class=10, pretrained=True, mem_device=sim_params)
+
+    # Area print
+    if sim_params['hardware_estimation']:
+        total_area = 0
+        for layer_name, layer in model.layers.items():
+            if isinstance(layer, Mem_Linear):
+                layer.crossbar.total_area_calculation()
+                total_area += layer.crossbar.sim_area['sim_total_area']
+        print("total area=", total_area, " m2")
+
+    # Memristor write
+    print('==> Write Memristor..')
+    start_time = time.time()
+    for layer_name, layer in model.layers.items():
+        if isinstance(layer, Mem_Linear):
+            layer.mem_update()
+            if sim_params['stuck_at_fault'] == True:
+                layer.crossbar.update_SAF_mask()
+    end_time = time.time()
+    exe_time = end_time - start_time
+    print("Execution time: ", exe_time)
+
+    if sim_params['hardware_estimation']:
+        # print write power results
+        total_energy = 0
+        average_power = 0
+        for layer_name, layer in model.layers.items():
+            if isinstance(layer, Mem_Linear):
+                layer.crossbar.total_energy_calculation()
+                sim_power = layer.crossbar.sim_power
+                total_energy += sim_power['total_energy']
+                average_power += sim_power['average_power']
+        print("\ttotal_write_energy=", total_energy)
+        print("\taverage_write_power=", average_power)
+
+    model.to(device)
+
     # Reset Dataset
     test_loader.idx = 0
 

@@ -20,6 +20,7 @@ from time import time as t
 
 sys.path.append('../')
 sys.path.append('../../')
+
 from bindsnet.datasets import MNIST
 from bindsnet.encoding import PoissonEncoder, poisson
 from bindsnet.models import IncreasingInhibitionNetwork
@@ -49,7 +50,7 @@ parser.add_argument("--update_inhibation_weights", type=int, default=500)
 parser.add_argument("--plot_interval", type=int, default=250)
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
-parser.add_argument("--memristor_structure", type=str, default='STDP_crossbar') # trace or crossbar 
+parser.add_argument("--memristor_structure", type=str, default='STDP_crossbar') # trace or crossbar
 
 parser.set_defaults(plot=False, gpu=True)
 
@@ -136,7 +137,7 @@ for test_cnt in range(multiple_test_no):
     out = open(out_root, 'a')
 
     # %% Enable test while training
-    init_num = 10000 # start capacity (number of training patterns)
+    init_num = 100000 # start capacity (number of training patterns)
     signal_break = 0
     tmp_acc = 0
     best_acc = 0
@@ -241,9 +242,6 @@ for test_cnt in range(multiple_test_no):
 
             network.train(mode=True)
 
-            # %% Update
-            network.reset_state_variables()  # Reset state variables.
-
             # Get next input sample.
             inputs = {"X": batch["encoded_image"].transpose(0, 1).to(device)}
 
@@ -286,7 +284,8 @@ for test_cnt in range(multiple_test_no):
                 0)
             ].copy_(temp_spikes, non_blocking=True)
 
-
+            # %% Update
+            network.reset_state_variables()  # Reset state variables.
             pbar.set_description_str("Train progress: ")
             pbar.update()
             init_batch_sign = False

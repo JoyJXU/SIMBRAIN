@@ -65,6 +65,7 @@ class DAC_Module(torch.nn.Module):
             if self.sim_params['hardware_estimation']:
                 self.DAC_module_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v_shape=mem_v.shape)
             return mem_v
+
         else:
             # mem_v shape [write_batch_size, read_batch_size, row_no]
             # increase one dimension of the input by input_bit
@@ -157,7 +158,7 @@ class ADC_Module(torch.nn.Module):
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.read_v_amp = self.memristor_info_dict[self.device_name]['v_read']
         self.device_structure = sim_params['device_structure']
-        
+
         if self.sim_params['hardware_estimation']:
             if self.ADC_rounding_function == 'floor':
                 self.ADC_module_power = ADC_Module_Power(sim_params=self.sim_params,
@@ -203,7 +204,7 @@ class ADC_Module(torch.nn.Module):
 
         # Shift add to get the output current
         for i in range(self.input_bit):
-            mem_i += mem_i_sequence[i, :, :, :] * 2 ** i
+            mem_i += mem_i_sequence_quantized[i, :, :, :] * 2 ** i
 
         if self.sim_params['hardware_estimation']:
             self.ADC_module_power.SarADC_energy_calculation(mem_i_sequence=mem_i_sequence)

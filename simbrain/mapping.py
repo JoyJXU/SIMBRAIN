@@ -38,7 +38,6 @@ class Mapping(torch.nn.Module):
         self.ADC_setting = sim_params['ADC_setting']
         self.ADC_rounding_function = sim_params['ADC_rounding_function']
 
-
         if self.device_structure == 'STDP_crossbar':
             self.shape = [1, 1]  # Shape of the memristor crossbar
             for element in shape:
@@ -56,7 +55,7 @@ class Mapping(torch.nn.Module):
             self.shape = shape
         else:
             raise Exception("Only trace and crossbar architecture are supported!")
-            
+        
         self.register_buffer("mem_v", torch.Tensor())
         self.register_buffer("mem_x_read", torch.Tensor())
         self.register_buffer("mem_t", torch.Tensor())
@@ -131,8 +130,9 @@ class STDPMapping(Mapping):
                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
         self.ADC_module = ADC_Module(sim_params=sim_params, shape=self.shape,
                                         CMOS_tech_info_dict=self.CMOS_tech_info_dict, memristor_info_dict=self.memristor_info_dict)
+
         if self.device_structure == 'STDP_crossbar':
-            self.batch_interval = sim_params['batch_interval'] * self.shape[0] * 3 + 1 
+            self.batch_interval = sim_params['batch_interval'] * self.shape[0] * 3 + 1
             self.write_batch_interval = sim_params['batch_interval'] + 1
         elif self.device_structure == 'trace':
             self.batch_interval = sim_params['batch_interval'] * 2 + 1
@@ -215,12 +215,12 @@ class STDPMapping(Mapping):
         v_off = mem_info['v_off']
         alpha_off = mem_info['alpha_off']
         v_pos = v_off * (math.pow(1 / (dt * k_off), 1.0 / alpha_off) + 1)
-        
+
         if self.device_structure == 'STDP_crossbar':
             write_time = 2
         elif self.device_structure == 'trace':
             write_time = 1
-            
+
         if mem_info['P_on'] == 1:
             k_on = mem_info['k_on']
             v_on = mem_info['v_on']
@@ -298,7 +298,7 @@ class STDPMapping(Mapping):
             if s.dim() == 4:
                 self.s = s.flatten(2, 3)
             elif s.dim() == 2:
-                self.s = torch.unsqueeze(s, 1)            
+                self.s = torch.unsqueeze(s, 1)
         
         # nn to mem
         self.mem_v = self.s.float()
@@ -333,44 +333,42 @@ class STDPMapping(Mapping):
             elif s.dim() == 2:
                 s = s.view(s.shape[0], int(s.shape[1] ** (1/2)), int(s.shape[1] ** (1/2)))
             s_sum = torch.sum(s, dim=(1,2)).unsqueeze(1)
-    
+
             self.mem_v_read.fill_(0)
-            self.mem_v_read[0, s_sum.bool(), :] = 1   
-            
+            self.mem_v_read[0, s_sum.bool(), :] = 1
+
             self.mem_v_read = self.DAC_module.DAC_read(mem_v=self.mem_v_read, sgn=None)
             _, mem_i = self.mem_array.memristor_read(mem_v=self.mem_v_read, read_time=self.shape[0])
             mem_i = mem_i.flatten(3,4)
             ADC_mem_c = 1 / (1 / self.Goff + self.mem_array.total_wire_resistance)
-            ADC_mem_c = ADC_mem_c.flatten(0,1).unsqueeze(0)
-            mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i,
-                                                  mem_c=ADC_mem_c,
-                                                  high_cut_ratio=1)            
-        
+            ADC_mem_c = ADC_mem_c.flatten(0, 1).unsqueeze(0)
+            mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i, mem_c=ADC_mem_c, high_cut_ratio=1)
+
         elif self.device_structure == 'trace':
             if s.dim() == 4:
                 s = s.flatten(2, 3)
             elif s.dim() == 2:
-                s = torch.unsqueeze(s, 1)    
+                s = torch.unsqueeze(s, 1)
 
+            # Read Voltage generation
+            # For every batch, read is not necessary when there is no spike s
             s_sum = torch.sum(s, dim=2).squeeze()
             s_sum = torch.unsqueeze(s_sum, 1)
-        
+
             self.mem_v_read.zero_()
             self.mem_v_read[0, s_sum.bool()] = 1
-        
+
             self.mem_v_read = self.DAC_module.DAC_read(mem_v=self.mem_v_read, sgn=None)
-        
+
             mem_i, _ = self.mem_array.memristor_read(mem_v=self.mem_v_read, read_time=1)
             ADC_mem_c = 1 / (1 / self.Goff + self.mem_array.total_wire_resistance)
-            mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i,
-                                                 mem_c=ADC_mem_c,
-                                                 high_cut_ratio=1)
-        
+            mem_i = self.ADC_module.ADC_read(mem_i_sequence=mem_i, mem_c=ADC_mem_c, high_cut_ratio=1)
+
         # current to trace
         self.mem_x_read = (mem_i/self.v_read - self.Gon) * self.trans_ratio
-        self.mem_x_read[~s_sum.bool()] = 0     
-            
-        return self.mem_x_read  #self.mem_array.mem_x.flatten(1,2).unsqueeze(1)
+        self.mem_x_read[~s_sum.bool()] = 0
+
+        return self.mem_x_read
 
 
     def reset_memristor_variables(self) -> None:
@@ -381,7 +379,7 @@ class STDPMapping(Mapping):
         v_reset = self.memristor_luts[self.device_name]['V_reset']
         self.mem_v.fill_(v_reset)       
         # Adopt large negative pulses to reset the memristor array
-        self.DAC_module.DAC_reset(mem_v=self.mem_v)        
+        self.DAC_module.DAC_reset(mem_v=self.mem_v)
         self.mem_array.memristor_reset(mem_v=self.mem_v)
 
 
@@ -577,7 +575,7 @@ class MLPMapping(Mapping):
             mem_i = mem_i_pos_pos - mem_i_neg_pos - mem_i_pos_neg + mem_i_neg_neg
         elif self.ADC_setting == 2:
             ADC_mem_c_pos = 1 / (1 / self.Goff + self.mem_pos_pos.total_wire_resistance)
-            ADC_mem_c_neg = 1 / (1 / self.Goff + self.mem_pos_neg.total_wire_resistance)           
+            ADC_mem_c_neg = 1 / (1 / self.Goff + self.mem_pos_neg.total_wire_resistance)
             mem_i_sequence_pos = mem_i_sequence_pos_pos + mem_i_sequence_neg_neg
             mem_i_pos = self.ADC_module_pos.ADC_read(mem_i_sequence_pos, mem_c=ADC_mem_c_pos, high_cut_ratio=1/self.ADC_setting)
             mem_i_sequence_neg = mem_i_sequence_neg_pos + mem_i_sequence_pos_neg

@@ -46,14 +46,10 @@ class mem_VGG(nn.Module):
         self.classifier = Mem_Linear(512, 10, mem_device)
 
     def forward(self, x):
-        # Print the size after each layer
-        for layer in self.features:
-            x = layer(x)
-            print(f"Layer: {layer.__class__.__name__}, Output size: {x.size()}")
-        
-        x = x.view(x.size(0), -1)
-        x = self.classifier(x)
-        return x
+        out = self.features(x)
+        out = out.view(out.size(0), -1)
+        out = self.classifier(out)
+        return out
 
     def _make_layers(self, cfg, mem_device):
         layers = []

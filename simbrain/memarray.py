@@ -160,8 +160,8 @@ class MemristorArray(torch.nn.Module):
             self.Pon_d2d = torch.zeros(*self.shape, device=self.Pon_d2d.device)
             self.Poff_d2d = torch.zeros(*self.shape, device=self.Poff_d2d.device)
             # Add d2d variation
-            self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma * P_on)
-            self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma * P_off)
+            self.Pon_d2d.normal_(mean=P_on, std=Pon_sigma)
+            self.Poff_d2d.normal_(mean=P_off, std=Poff_sigma)
             # Clipping
             self.Pon_d2d = torch.clamp(self.Pon_d2d, min=0)
             self.Poff_d2d = torch.clamp(self.Poff_d2d, min=0)
@@ -333,7 +333,7 @@ class MemristorArray(torch.nn.Module):
         # mem_array shape: [batchsize, array_row, array_column],
         # output_i shape: [input_bit, batchsize, read_no=1, array_column]
 
-        if self.device_structure == 'STDP_crossbar':       
+        if self.device_structure == 'STDP_crossbar':
             mem_c_1 = mem_c.unsqueeze(0).unsqueeze(2).expand(mem_v.shape[0], mem_v.shape[1], mem_v.shape[2], self.shape[0], self.shape[1])
             mem_v_1 = mem_v.unsqueeze(-1).expand_as(mem_c_1)
             mem_i_1 = v_read * mem_v_1 * mem_c_1

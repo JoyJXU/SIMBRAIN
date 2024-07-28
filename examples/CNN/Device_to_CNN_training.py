@@ -13,6 +13,7 @@ import torch.optim as optim
 
 import os
 import sys
+sys.path.append('../../')
 sys.path.append('../')
 
 from vgg import VGG, mem_VGG
@@ -23,15 +24,15 @@ parser = argparse.ArgumentParser(description='Memristor-based PyTorch CIFAR10 Tr
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
 parser.add_argument("--rep", type=int, default=10)
-parser.add_argument("--train_batch_size", type=int, default=2)
-parser.add_argument("--test_batch_size", type=int, default=3)
+parser.add_argument("--train_batch_size", type=int, default=200)
+parser.add_argument("--test_batch_size", type=int, default=100)
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, crossbar
 args = parser.parse_args()
 
 # %% Obtain memristor parameters
 sim_params = full_fitting(args.memristor_structure, None)
-    
+
 def train(epoch):
     print('\nEpoch: %d' % epoch)
     net.train()
@@ -104,7 +105,6 @@ def test(epoch):
 
 if __name__ == '__main__':
     # Sets up Gpu use
-    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
     seed = args.seed
     gpu = args.gpu
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -117,7 +117,6 @@ if __name__ == '__main__':
             gpu = False
     print("Running on Device = ", device)
 
-    
     best_acc = 0
     start_epoch = 0
 

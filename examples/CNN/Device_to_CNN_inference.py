@@ -13,7 +13,9 @@ from collections import OrderedDict
 
 import os
 import sys
+sys.path.append('../../')
 sys.path.append('../')
+
 
 from vgg import VGG, mem_VGG
 from module import *
@@ -28,7 +30,6 @@ parser.add_argument("--memristor_structure", type=str, default='crossbar') # tra
 args = parser.parse_args()
 
 # Sets up Gpu use
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [0]))
 seed = args.seed
 gpu = args.gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -173,7 +174,7 @@ for test_cnt in range(args.rep):
         print("total_write_energy=" + str(total_write_energy))
         print("total_reset_energy=" + str(total_reset_energy))
         print("average_power=" + str(average_power))
-    
+
     out_txt = 'Accuracy:' + str(acc) + '\n'
     out.write(out_txt)
     out.close()
