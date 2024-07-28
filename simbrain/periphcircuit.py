@@ -60,7 +60,7 @@ class DAC_Module(torch.nn.Module):
 
 
     def DAC_read(self, mem_v, sgn) -> None:
-        if self.device_structure == 'trace':
+        if self.device_structure in {'trace', 'STDP_crossbar'}:
             activity_read = torch.nonzero(mem_v).size(0) / mem_v.numel()
             if self.sim_params['hardware_estimation']:
                 self.DAC_module_power.switch_matrix_read_energy_calculation(activity_read=activity_read, mem_v_shape=mem_v.shape)
@@ -102,9 +102,16 @@ class DAC_Module(torch.nn.Module):
         if self.sim_params['hardware_estimation']:
             if self.device_structure == 'trace':
                 self.DAC_module_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v)
-            elif self.device_structure in {'crossbar', 'mimo'}:
+            elif self.device_structure == 'crossbar':
                 self.DAC_module_power.switch_matrix_row_write_energy_calculation(mem_v_amp=mem_v_amp)
                 self.DAC_module_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v)
+            elif self.device_structure == 'STDP_crossbar':
+                self.DAC_module_power.switch_matrix_row_write_energy_calculation(mem_v_amp=mem_v_amp[0])
+                mem_v_pos = torch.where(mem_v>0, 0, mem_v_amp[0])
+                self.DAC_module_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v_pos)
+                self.DAC_module_power.switch_matrix_row_write_energy_calculation(mem_v_amp=mem_v_amp[1])
+                mem_v_neg = torch.where(mem_v<0, 0, mem_v_amp[1])
+                self.DAC_module_power.switch_matrix_col_write_energy_calculation(mem_v=mem_v_neg)
             else:
                 raise Exception("Only trace, mimo and crossbar architecture are supported!")
 
@@ -150,6 +157,7 @@ class ADC_Module(torch.nn.Module):
         self.device_name = sim_params['device_name']
         self.Goff = self.memristor_info_dict[self.device_name]['G_off']
         self.read_v_amp = self.memristor_info_dict[self.device_name]['v_read']
+        self.device_structure = sim_params['device_structure']
 
         if self.sim_params['hardware_estimation']:
             if self.ADC_rounding_function == 'floor':
@@ -177,12 +185,12 @@ class ADC_Module(torch.nn.Module):
             self.ADC_module_power.set_batch_size(batch_size=self.batch_size)
 
 
-    def ADC_read(self, mem_i_sequence, total_wire_resistance, high_cut_ratio) -> None:
+    def ADC_read(self, mem_i_sequence, mem_c, high_cut_ratio) -> None:
         # Initial mem_i
-        mem_i = torch.zeros(self.batch_size, mem_i_sequence.shape[2], self.shape[1], device=mem_i_sequence.device)
+        mem_i = torch.zeros(mem_i_sequence.size()[1:], device=mem_i_sequence.device)
 
         # calculate the theoretical max and min
-        mem_i_max = high_cut_ratio * torch.sum(self.read_v_amp/(1/self.Goff + total_wire_resistance), dim=0)
+        mem_i_max = high_cut_ratio * torch.sum(self.read_v_amp*mem_c, dim=0)
         mem_i_min = 0
         mem_i_step = (mem_i_max - mem_i_min) / (2**self.ADC_precision)
         mem_i_index = (mem_i_sequence - mem_i_min) / mem_i_step
@@ -200,7 +208,8 @@ class ADC_Module(torch.nn.Module):
 
         if self.sim_params['hardware_estimation']:
             self.ADC_module_power.SarADC_energy_calculation(mem_i_sequence=mem_i_sequence)
-            self.ADC_module_power.shift_add_energy_calculation(mem_i_sequence=mem_i_sequence)
+            if self.device_structure == 'crossbar':
+                self.ADC_module_power.shift_add_energy_calculation(mem_i_sequence=mem_i_sequence)
 
         return mem_i
 

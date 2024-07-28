@@ -215,7 +215,7 @@ class MemristorArray(torch.nn.Module):
             self.power.set_batch_size(batch_size=self.batch_size)
 
 
-    def memristor_write(self, mem_v: torch.Tensor):
+    def memristor_write(self, mem_v: torch.Tensor, write_time: int, mem_v_amp):
         # language=rst
         """
         Memristor write operation for a single simulation step.
@@ -241,8 +241,8 @@ class MemristorArray(torch.nn.Module):
         Aging_on = mem_info['Aging_on']
         Aging_off = mem_info['Aging_off']
 
-        self.mem_t += self.shape[0]
-        self.mem_wr_t += self.shape[0]
+        self.mem_t += self.shape[0] * write_time
+        self.mem_wr_t += 1
         self.mem_c_pre = self.mem_c.clone()
         # print(self.mem_t)
         if self.d2d_variation in [1, 3]:
@@ -268,10 +268,10 @@ class MemristorArray(torch.nn.Module):
         # Retention Loss
         if self.retention_loss:
             self.mem_v_threshold = torch.where((mem_v > v_on) & (mem_v < v_off), torch.zeros_like(mem_v), torch.ones_like(mem_v))
-            self.mem_loss_time[self.mem_v_threshold == 0] += self.dt
-            self.mem_loss_time[self.mem_v_threshold == 1] = (1 - self.dr) * self.dt
-            self.mem_loss_dt[self.mem_v_threshold == 0] = self.dt
-            self.mem_loss_dt[self.mem_v_threshold == 1] = (1 - self.dr) * self.dt
+            self.mem_loss_time[self.mem_v_threshold == 0] += self.dt * self.shape[0] * write_time
+            self.mem_loss_time[self.mem_v_threshold == 1] = (self.shape[0] * write_time - self.dr) * self.dt
+            self.mem_loss_dt[self.mem_v_threshold == 0] = self.dt * self.shape[0] * write_time
+            self.mem_loss_dt[self.mem_v_threshold == 1] = (self.shape[0] * write_time - self.dr) * self.dt
             self.mem_x -= self.mem_x * self.mem_loss_dt * (retention_loss_tau_reciprocal ** retention_loss_beta) * \
                           retention_loss_beta * (self.mem_loss_time ** (retention_loss_beta - 1))
             self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
@@ -303,12 +303,12 @@ class MemristorArray(torch.nn.Module):
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
         
         if self.hardware_estimation:
-            self.power.write_energy_calculation(mem_v=mem_v, mem_c=self.mem_c, mem_c_pre=self.mem_c_pre, total_wire_resistance=self.total_wire_resistance)
+            self.power.write_energy_calculation(mem_v=mem_v, mem_v_amp=mem_v_amp, mem_c=self.mem_c, mem_c_pre=self.mem_c_pre, total_wire_resistance=self.total_wire_resistance)
         
         return self.mem_c
 
 
-    def memristor_read(self, mem_v: torch.Tensor):
+    def memristor_read(self, mem_v: torch.Tensor, read_time: int):
         # language=rst
         """
         Memristor read operation for a single simulation step.
@@ -332,7 +332,14 @@ class MemristorArray(torch.nn.Module):
         # mem_v shape: [input_bit, batchsize, read_no=1, array_row],
         # mem_array shape: [batchsize, array_row, array_column],
         # output_i shape: [input_bit, batchsize, read_no=1, array_column]
-        self.mem_i = torch.matmul(mem_v * v_read, mem_c)
+
+        if self.device_structure == 'STDP_crossbar':
+            mem_c_1 = mem_c.unsqueeze(0).unsqueeze(2).expand(mem_v.shape[0], mem_v.shape[1], mem_v.shape[2], self.shape[0], self.shape[1])
+            mem_v_1 = mem_v.unsqueeze(-1).expand_as(mem_c_1)
+            mem_i_1 = v_read * mem_v_1 * mem_c_1
+        else:
+            mem_i_1 = 0
+            self.mem_i = torch.matmul(mem_v * v_read, mem_c)
 
         # Non-idealities
         mem_info = self.memristor_info_dict[self.device_name]
@@ -346,8 +353,8 @@ class MemristorArray(torch.nn.Module):
         Aging_off = mem_info['Aging_off']
 
         if self.retention_loss:
-            self.mem_loss_time += self.dt * mem_v.shape[0] * mem_v.shape[2]
-            self.mem_loss_dt.fill_(self.dt * mem_v.shape[0] * mem_v.shape[2])
+            self.mem_loss_time += self.dt * mem_v.shape[0] * mem_v.shape[2] * read_time
+            self.mem_loss_dt.fill_(self.dt * mem_v.shape[0] * mem_v.shape[2] * read_time)
             self.mem_x -= self.mem_x * self.mem_loss_dt * retention_loss_tau_reciprocal ** retention_loss_beta * \
                           retention_loss_beta * self.mem_loss_time ** (retention_loss_beta - 1)
             self.mem_x = torch.clamp(self.mem_x, min=0, max=1)
@@ -374,12 +381,12 @@ class MemristorArray(torch.nn.Module):
             self.mem_c = G_off * self.x2 + G_on * (1 - self.x2)
 
         # mem_t update according to the sequential read
-        self.mem_t += mem_v.shape[0] * mem_v.shape[2]
+        self.mem_t += mem_v.shape[0] * mem_v.shape[2] * read_time
 
         if self.hardware_estimation:
             self.power.read_energy_calculation(mem_v_bool=mem_v, mem_c=self.mem_c, total_wire_resistance=self.total_wire_resistance)
 
-        return self.mem_i
+        return self.mem_i, mem_i_1
 
 
     def memristor_reset(self, mem_v: torch.Tensor):
