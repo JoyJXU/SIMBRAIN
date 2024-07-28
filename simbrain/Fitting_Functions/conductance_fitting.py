@@ -349,7 +349,7 @@ class Conductance(object):
         V_write_r = V_write_r.to(device)
         V_write_d = V_write_d.to(device)
         x_init_r = x_r[:, 0]
-        x_init_d = x_d[:, 0]
+        x_init_d = torch.tensor(1.0)#x_d[:, 0]
 
         mem_x_r = torch.zeros([self.points_r, self.device_nums, P_off_nums])
         mem_x_r[0] = x_init_r.expand(P_off_nums, self.device_nums).T

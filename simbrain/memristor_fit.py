@@ -105,7 +105,7 @@ class MemristorFitting(object):
         obj = "/memristor_data"
 
         G_th_path = "/G_variation.xlsx"
-        iv_curve_path = "/iv_curve.xlsx"
+        iv_curve_path = "/iv_c.xlsx"
         conductance_path = "/conductance_deletehead.xlsx"
         retention_loss_path = "/retention_loss.xlsx"
         aging_effect_path = "/aging_effect.xlsx"

@@ -18,8 +18,8 @@ def main():
         dict = json.load(f)
     dict.update(
         {
-            'v_off': 1.5,
-            'v_on': -1.5,
+            'v_off': 0.2,
+            'v_on': -0.2,
             'G_off': None,
             'G_on': None,
             'alpha_off': None,
@@ -28,7 +28,7 @@ def main():
             'k_on': None,
             'P_off': None,
             'P_on': None,
-            'delta_t': 20 * 1e-3,
+            'delta_t': 100 * 1e-3,
             'duty_ratio': 0.5
         }
     )
@@ -66,14 +66,16 @@ def main():
         device_nums = data.shape[1] - 2
         G_off_list = np.zeros(device_nums)
         G_on_list = np.zeros(device_nums)
-
+        G_on_num = int(points_d / 20)  + 1
+        G_off_num = int(points_r / 20) + 1
+    
         for i in range(device_nums):
             G_off_list[i] = np.average(
-                data[i][points_r - 10:points_r] / read_voltage
+                data[i][points_r - G_off_num:points_r] / read_voltage
             )
             G_on_list[i] = np.average(
-                data[i][points_r + points_d - 10:] / read_voltage
-            )
+                data[i][points_r + points_d - G_on_num:] / read_voltage
+            ) 
 
         G_off = np.mean(G_off_list)
         G_on = np.mean(G_on_list)
@@ -102,7 +104,7 @@ def main():
         }
     )
 
-    alpha_off, alpha_on = 5, 5
+    alpha_off, alpha_on = 2, 1
     dict.update(
         {
             "alpha_off": alpha_off,

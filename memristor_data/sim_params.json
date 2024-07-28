@@ -1,6 +1,6 @@
 {
   "device_name": "mine",
-  "c2c_variation": false,
+  "c2c_variation": true,
   "d2d_variation": 0,
   "stuck_at_fault": false,
   "retention_loss": true,
