@@ -36,7 +36,7 @@ parser.add_argument("--ADC_setting", type=int, default=4)  # 2:two memristor cro
 parser.add_argument("--ADC_rounding_function", type=str, default='floor')  # floor or round
 parser.add_argument("--wire_width", type=int, default=200) # In practice, wire_width shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
 parser.add_argument("--CMOS_technode", type=int, default=45)
-parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
+parser.add_argument("--device_roadmap", type=str, default='HP')  # HP: High Performance or LP: Low Power
 parser.add_argument("--temperature", type=int, default=300)
 parser.add_argument("--hardware_estimation", type=int, default=False)
 args = parser.parse_args()
@@ -61,7 +61,7 @@ sim_params = {'device_structure': args.memristor_structure, 'device_name': args.
               'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
               'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
               'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
-              'ADC_setting': args.ADC_setting,'ADC_rounding_function': args.ADC_rounding_function,
+              'ADC_setting': args.ADC_setting, 'ADC_rounding_function': args.ADC_rounding_function,
               'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
               'hardware_estimation': args.hardware_estimation}
 
@@ -135,7 +135,6 @@ for test_cnt in range(args.rep):
         if args.stuck_at_fault == True:
             net.classifier.crossbar.update_SAF_mask()
 
-
     net = net.to(device)
 
     # Evaluate
@@ -160,7 +159,7 @@ for test_cnt in range(args.rep):
             # progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
             #              % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-    acc = 100.*correct/total
+    acc = 100. * correct / total
     print('Accuracy Results:' + str(acc))
 
     if sim_params['hardware_estimation']:
