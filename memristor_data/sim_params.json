@@ -1,10 +1,10 @@
 {
   "device_name": "mine",
   "c2c_variation": true,
-  "d2d_variation": 0,
+  "d2d_variation": 1,
   "stuck_at_fault": false,
-  "retention_loss": true,
-  "aging_effect": 2,
+  "retention_loss": false,
+  "aging_effect": 0,
   "CMOS_technode": 32,
   "wire_width": 200,
   "input_bit": 1,

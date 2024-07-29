@@ -23,8 +23,8 @@ def main():
         dict = json.load(f)
     dict.update(
         {
-            'v_off': 0.2,
-            'v_on': -0.2,
+            'v_off': 1.5,
+            'v_on': -1.5,
             'G_off': None,
             'G_on': None,
             'alpha_off': None,
@@ -33,7 +33,7 @@ def main():
             'k_on': None,
             'P_off': None,
             'P_on': None,
-            'delta_t': 100 * 1e-3,
+            'delta_t': 20 * 1e-3,
             "duty_ratio": 0.5
         }
     )
@@ -115,8 +115,8 @@ def main():
             'G_on': G_on,
             "alpha_off": alpha_off,
             "alpha_on": alpha_on,
-            'v_off': 0.2,
-            'v_on': -0.2,
+            'v_off': 1.5,
+            'v_on': -1.5,
         }
     )
 
@@ -203,7 +203,7 @@ def main():
             x_r = (conductance_r - exp_2.G_on) / (exp_2.G_off - exp_2.G_on)
             x_d = (conductance_d - exp_2.G_on) / (exp_2.G_off - exp_2.G_on)
             x_init_r = x_r[0]
-            x_init_d = 1 #x_d[0]
+            x_init_d = x_d[0] #1
             mem_x_r = np.zeros(exp_2.points_r)
             mem_x_d = np.zeros(exp_2.points_d)
             mem_x_r[0] = np.average(x_init_r)

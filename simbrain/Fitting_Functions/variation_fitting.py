@@ -125,12 +125,12 @@ class Variation(object):
 
     @timer
     def d2d_P_fitting(self):
-        P_off_cal = (self.P_off_variation - self.P_off) / self.P_off
-        P_on_cal = (self.P_on_variation - self.P_on) / self.P_on
+        P_off_cal = (self.P_off_variation - self.P_off)
+        P_on_cal = (self.P_on_variation - self.P_on)
         Poff_mu_noise, Poff_sigma = norm.fit(P_off_cal)
-        Poff_mu = self.P_off * (1 + Poff_mu_noise)
+        Poff_mu = self.P_off + Poff_mu_noise
         Pon_mu_noise, Pon_sigma = norm.fit(P_on_cal)
-        Pon_mu = self.P_on * (1 + Pon_mu_noise)
+        Pon_mu = self.P_on + Pon_mu_noise
 
         return Poff_mu, Poff_sigma, Pon_mu, Pon_sigma
 

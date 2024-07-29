@@ -18,8 +18,8 @@ def main():
         dict = json.load(f)
     dict.update(
         {
-            'v_off': 0.2,
-            'v_on': -0.2,
+            'v_off': 1.5,
+            'v_on': -1.5,
             'G_off': None,
             'G_on': None,
             'alpha_off': None,
@@ -28,7 +28,7 @@ def main():
             'k_on': None,
             'P_off': None,
             'P_on': None,
-            'delta_t': 100 * 1e-3,
+            'delta_t': 20 * 1e-3,
             'duty_ratio': 0.5
         }
     )
@@ -104,7 +104,7 @@ def main():
         }
     )
 
-    alpha_off, alpha_on = 2, 1
+    alpha_off, alpha_on = 5, 5
     dict.update(
         {
             "alpha_off": alpha_off,
@@ -116,6 +116,8 @@ def main():
     P_off, P_on, k_off, k_on, _, _ = exp_0.fitting(loss_option=loss)
     dict.update(
         {
+            "P_off": P_off,
+            "P_on": P_on,
             'k_off': k_off,
             'k_on': k_on
         }
