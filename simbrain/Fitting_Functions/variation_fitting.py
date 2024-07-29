@@ -151,8 +151,8 @@ class Variation(object):
         x_total = np.concatenate((x_r, x_d)).T.flatten()
 
         # Conductance from models
-        x_init_r = np.mean(x_r[0])
-        x_init_d = np.mean(x_d[0])
+        x_init_r = np.max([0, np.mean(x_r[0])])
+        x_init_d = np.min([1, np.mean(x_d[0])])
         best_mem_x_r = []
         best_mem_x_d = []
         for i in range(self.device_nums):

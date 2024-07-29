@@ -163,8 +163,8 @@ def main():
             J1 = 1
             loss = 'rmse'
             P_off_list, P_on_list = exp_2.mult_P_fitting(G_off_list, G_on_list, loss_option=loss)
-            x_init_r = np.array(x_r)[0]
-            x_init_d = 1 #np.array(x_d)[0]
+            x_init_r = np.maximum(np.zeros_like(np.array(x_r)[0]), np.array(x_r)[0])
+            x_init_d = np.minimum(np.ones_like(np.array(x_d)[0]), np.array(x_d)[0])
             mem_x_r = np.zeros([exp_2.points_r, exp_2.device_nums])
             mem_x_d = np.zeros([exp_2.points_d, exp_2.device_nums])
             mem_x_r[0] = x_init_r
